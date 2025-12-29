@@ -75,7 +75,7 @@ export const SemesterGrid: React.FC<SemesterGridProps> = ({ data, onEdit, onDele
                       </div>
                       
                       {/* Actions */}
-                      <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex space-x-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                         <button 
                           onClick={() => onOpenDetail(semester.id, course)}
                           className="p-1.5 rounded-full hover:bg-black/10 text-current"
