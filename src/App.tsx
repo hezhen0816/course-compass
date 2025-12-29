@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Course, CourseCategory, GenEdDimension } from './types';
 import { INITIAL_SEMESTERS } from './constants';
 import { useAuth } from './hooks/useAuth';
@@ -9,6 +9,8 @@ import { Sidebar } from './components/Sidebar';
 import { SemesterGrid } from './components/SemesterGrid';
 import { CourseModal } from './components/CourseModal';
 import { SettingsModal } from './components/SettingsModal';
+import { CourseDetailModal } from './components/CourseDetailModal';
+import { OnboardingModal } from './components/OnboardingModal';
 
 export default function NTUSTCoursePlanner() {
   const { session, loading: authLoading } = useAuth();
@@ -19,8 +21,26 @@ export default function NTUSTCoursePlanner() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<{ semesterId: string, course: Course } | null>(null);
+  
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailCourse, setDetailCourse] = useState<{ semesterId: string, course: Course } | null>(null);
+
   const [activeSemesterId, setActiveSemesterId] = useState<string>('1-1');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  // Check for first visit
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding) {
+      setIsOnboardingOpen(true);
+    }
+  }, []);
+
+  const handleCloseOnboarding = () => {
+    setIsOnboardingOpen(false);
+    localStorage.setItem('hasSeenOnboarding', 'true');
+  };
 
   // --- Computed Stats ---
   const stats = useMemo(() => {
@@ -85,6 +105,11 @@ export default function NTUSTCoursePlanner() {
     setIsModalOpen(true);
   };
 
+  const handleOpenDetail = (semesterId: string, course: Course) => {
+    setDetailCourse({ semesterId, course });
+    setIsDetailOpen(true);
+  };
+
   const handleDelete = (semesterId: string, courseId: string) => {
     if (!window.confirm('確定要刪除這門課程嗎？')) return;
     setData(prev => ({
@@ -120,6 +145,22 @@ export default function NTUSTCoursePlanner() {
     });
 
     setIsModalOpen(false);
+  };
+
+  const handleSaveDetail = (updatedCourse: Course) => {
+    if (!detailCourse) return;
+    
+    setData(prev => {
+      const newSemesters = prev.semesters.map(s => {
+        if (s.id !== detailCourse.semesterId) return s;
+        return {
+          ...s,
+          courses: s.courses.map(c => c.id === updatedCourse.id ? updatedCourse : c)
+        };
+      });
+      return { ...prev, semesters: newSemesters };
+    });
+    setIsDetailOpen(false);
   };
 
   const handleSaveSettings = (newTargets: any) => {
@@ -279,6 +320,7 @@ export default function NTUSTCoursePlanner() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onImport={parseAndImportData}
         onReset={resetData}
+        onOpenHelp={() => setIsOnboardingOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -289,6 +331,7 @@ export default function NTUSTCoursePlanner() {
             onEdit={handleEdit} 
             onDelete={handleDelete} 
             onAdd={handleOpenAdd} 
+            onOpenDetail={handleOpenDetail}
           />
         </div>
       </main>
@@ -300,11 +343,26 @@ export default function NTUSTCoursePlanner() {
         editingCourse={editingCourse ? editingCourse.course : null}
       />
 
+      {detailCourse && (
+        <CourseDetailModal
+          isOpen={isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          course={detailCourse.course}
+          semesterId={detailCourse.semesterId}
+          onSave={handleSaveDetail}
+        />
+      )}
+
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
         onSave={handleSaveSettings}
         initialSettings={data.targets}
+      />
+
+      <OnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={handleCloseOnboarding}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Info } from 'lucide-react';
 import type { AppData, Course, CourseCategory } from '../types';
 import { CATEGORY_LABELS } from '../constants';
 
@@ -8,9 +8,10 @@ interface SemesterGridProps {
   onEdit: (semesterId: string, course: Course) => void;
   onDelete: (semesterId: string, courseId: string) => void;
   onAdd: (semesterId: string) => void;
+  onOpenDetail: (semesterId: string, course: Course) => void;
 }
 
-export const SemesterGrid: React.FC<SemesterGridProps> = ({ data, onEdit, onDelete, onAdd }) => {
+export const SemesterGrid: React.FC<SemesterGridProps> = ({ data, onEdit, onDelete, onAdd, onOpenDetail }) => {
   
   const getCategoryColor = (cat: CourseCategory) => {
     switch (cat) {
@@ -75,6 +76,13 @@ export const SemesterGrid: React.FC<SemesterGridProps> = ({ data, onEdit, onDele
                       
                       {/* Actions */}
                       <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => onOpenDetail(semester.id, course)}
+                          className="p-1.5 rounded-full hover:bg-black/10 text-current"
+                          title="課程詳細資訊"
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
                         <button 
                           onClick={() => onEdit(semester.id, course)}
                           className="p-1.5 rounded-full hover:bg-black/10 text-current"

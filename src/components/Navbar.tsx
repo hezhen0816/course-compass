@@ -1,5 +1,5 @@
 import React from 'react';
-import { GraduationCap, Settings, Upload, LogOut, CircleHelp } from 'lucide-react';
+import { GraduationCap, Settings, Upload, LogOut, CircleHelp, BookOpen } from 'lucide-react';
 import { supabase } from '../supabase';
 
 interface NavbarProps {
@@ -8,9 +8,10 @@ interface NavbarProps {
   onOpenSettings: () => void;
   onImport: (html: string) => void;
   onReset: () => void;
+  onOpenHelp: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ userEmail, syncStatus, onOpenSettings, onImport }) => {
+export const Navbar: React.FC<NavbarProps> = ({ userEmail, syncStatus, onOpenSettings, onImport, onOpenHelp }) => {
   
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,6 +69,13 @@ export const Navbar: React.FC<NavbarProps> = ({ userEmail, syncStatus, onOpenSet
                 title="匯入說明"
               >
                 <CircleHelp className="w-5 h-5" />
+              </button>
+              <button
+                onClick={onOpenHelp}
+                className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                title="功能導覽"
+              >
+                <BookOpen className="w-5 h-5" />
               </button>
             </div>
             <button

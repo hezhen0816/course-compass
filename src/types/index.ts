@@ -11,6 +11,23 @@ export type CourseCategory =
 
 export type GenEdDimension = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'None';
 
+export interface GradingItem {
+  id: string;
+  name: string;
+  weight: number;
+  score?: number;
+}
+
+export interface CourseDetails {
+  professor?: string;
+  email?: string;
+  location?: string;
+  time?: string;
+  link?: string;
+  gradingPolicy: GradingItem[];
+  notes?: string;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -18,6 +35,7 @@ export interface Course {
   category: CourseCategory;
   dimension?: GenEdDimension; // For General Education
   grade?: string;
+  details?: CourseDetails;
 }
 
 export interface Semester {
