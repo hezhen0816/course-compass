@@ -24,8 +24,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
       color: "bg-blue-50"
     },
     {
-      title: "快速匯入成績",
-      description: "不用手動輸入！只要從學校成績查詢系統下載網頁 (.html)，點擊右上角的「匯入成績」即可一鍵同步所有課程。",
+      title: "快速匯入課程",
+      description: "支援兩種匯入方式！成績查詢系統 (含成績資訊) 或選課清單 (快速規劃)。只要下載網頁 (.html)，點擊右上角的「匯入成績」即可一鍵同步所有課程。",
       icon: <Upload className="w-16 h-16 text-green-500" />,
       color: "bg-green-50"
     },

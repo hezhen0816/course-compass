@@ -64,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({ userEmail, syncStatus, onOpenSet
                 />
               </label>
               <button
-                onClick={() => alert('匯入說明：\n1. 前往臺科大成績查詢系統 (https://stuinfosys.ntust.edu.tw/StuScoreQueryServ/StuScoreQuery)\n2. 在頁面上點擊右鍵，選擇「另存新檔」或「網頁儲存為...」\n3. 下載 .html 檔案\n4. 點擊「匯入成績」按鈕並選擇該檔案即可匯入課程資料')}
+                onClick={() => alert('匯入說明：\n\n【成績查詢系統】(建議 - 包含成績資訊):\n1. 前往臺科大成績查詢系統 (https://stuinfosys.ntust.edu.tw/StuScoreQueryServ/StuScoreQuery)\n2. 在頁面上點擊右鍵，選擇「另存新檔」或「網頁儲存為...」\n3. 下載 .html 檔案並上傳\n\n【選課清單】(快速選課規劃):\n1. 前往臺科大選課系統 (/ChooseList/D03/D03)\n2. 在頁面上點擊右鍵，選擇「另存新檔」或「網頁儲存為...」\n3. 下載 .html 檔案並上傳\n\n兩種格式都支援！選擇適合您的匯入方式。')}
                 className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
                 title="匯入說明"
               >

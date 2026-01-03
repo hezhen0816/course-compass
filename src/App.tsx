@@ -11,6 +11,7 @@ import { CourseModal } from './components/CourseModal';
 import { SettingsModal } from './components/SettingsModal';
 import { CourseDetailModal } from './components/CourseDetailModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { parseCourselistHTML } from './utils/parseCourselist';
 
 export default function NTUSTCoursePlanner() {
   const { session, loading: authLoading } = useAuth();
@@ -188,118 +189,157 @@ export default function NTUSTCoursePlanner() {
   }
 
   const parseAndImportData = (html: string) => {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    
-    const tables = doc.querySelectorAll('table');
-    let targetTable: Element | null = null;
-    
-    for (const table of tables) {
-      if (table.textContent?.includes('課程名稱') && table.textContent?.includes('學分數')) {
-        targetTable = table;
-        break;
-      }
-    }
-  
-    if (!targetTable) {
-      alert('找不到成績列表，請確認上傳的檔案是否正確 (需包含歷年學業成績列表)');
-      return;
-    }
-  
-    const rows = targetTable.querySelectorAll('tbody tr');
-    const newCourses: { semesterId: string, course: Course }[] = [];
-    let minYear = 999;
-  
-    rows.forEach((row: Element) => {
-      const cells = row.querySelectorAll('td');
-      if (cells.length < 8) return;
-      const semStr = cells[1].textContent?.trim() || ''; 
-      if (semStr.length === 4) {
-        const y = parseInt(semStr.substring(0, 3));
-        if (y < minYear) minYear = y;
-      }
-    });
-  
-    if (minYear === 999) {
-       minYear = 114; 
-    }
-  
-    rows.forEach((row: Element) => {
-      const cells = row.querySelectorAll('td');
-      if (cells.length < 8) return;
-  
-      const semStr = cells[1].textContent?.trim() || '';
-      const code = cells[2].textContent?.trim() || '';
-      const name = cells[3].textContent?.trim() || '';
-      const creditsStr = cells[4].textContent?.trim() || '0';
-      const grade = cells[5].textContent?.trim() || '';
-      const dimensionStr = cells[7].textContent?.trim() || '';
-  
-      if (!semStr || !name) return;
-  
-      const y = parseInt(semStr.substring(0, 3));
-      const s = parseInt(semStr.substring(3, 4));
-      const gradeLevel = y - minYear + 1;
-      const semesterId = `${gradeLevel}-${s}`;
-  
-      let category: CourseCategory = 'unclassified'; 
-      let dimension: GenEdDimension = 'None';
-  
-      if (dimensionStr) {
-          category = 'gen_ed';
-          const dimChar = dimensionStr.charAt(0).toUpperCase();
-          if (['A','B','C','D','E','F'].includes(dimChar)) {
-              dimension = dimChar as GenEdDimension;
-          }
-      } else if (code.startsWith('PE') || name.includes('體育')) {
-          category = 'pe';
-      } else if (name.includes('國文') || name.includes('中文')) {
-          category = 'chinese';
-      } else if (name.includes('英文') || name.includes('English')) {
-          category = 'english';
-      } else if (name.includes('社會實踐')) {
-          category = 'social';
-      }
-  
-      // 修正：加入 isNaN 檢查，若解析失敗則預設為 0
-      let credits = parseFloat(creditsStr);
-      if (isNaN(credits)) credits = 0;
+    try {
+      // 先嘗試解析為選課清單格式
+      try {
+        const newCourses = parseCourselistHTML(html);
+        
+        if (newCourses.length === 0) {
+          alert('未找到可匯入的課程資料');
+          return;
+        }
 
-      const course: Course = {
-          id: code || Date.now().toString() + Math.random(),
-          name: name,
-          credits: credits,
-          category: category,
-          dimension: dimension,
-          grade: grade
-      };
-  
-      newCourses.push({ semesterId, course });
-    });
-  
-    if (newCourses.length === 0) {
-        alert('未找到可匯入的課程資料');
-        return;
-    }
-
-    setData(prev => {
-        const newSemesters = prev.semesters.map(sem => {
+        setData(prev => {
+          const newSemesters = prev.semesters.map(sem => {
             const coursesToAdd = newCourses
               .filter(nc => nc.semesterId === sem.id)
               .map(nc => nc.course);
             
             const existingNames = new Set(sem.courses.map(c => c.name));
             const uniqueCoursesToAdd = coursesToAdd.filter(c => !existingNames.has(c.name));
-  
+
             return {
-                ...sem,
-                courses: [...sem.courses, ...uniqueCoursesToAdd]
+              ...sem,
+              courses: [...sem.courses, ...uniqueCoursesToAdd]
             };
+          });
+          return { ...prev, semesters: newSemesters };
         });
-        return { ...prev, semesters: newSemesters };
-    });
+
+        alert(`成功匯入 ${newCourses.length} 門課程！`);
+        return;
+      } catch (courselistError) {
+        // 如果選課清單解析失敗，嘗試成績列表格式
+        console.log('選課清單解析失敗，嘗試成績列表格式...');
+      }
+
+      // 回退到原有的成績查詢系統 HTML 格式
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      const tables = doc.querySelectorAll('table');
+      let targetTable: Element | null = null;
+      
+      for (const table of tables) {
+        if (table.textContent?.includes('課程名稱') && table.textContent?.includes('學分數')) {
+          targetTable = table;
+          break;
+        }
+      }
     
-    alert(`成功匯入 ${newCourses.length} 門課程！`);
+      if (!targetTable) {
+        alert('找不到成績列表或選課清單，請確認上傳的檔案是否正確 (需包含歷年學業成績列表或選課清單)');
+        return;
+      }
+    
+      const rows = targetTable.querySelectorAll('tbody tr');
+      const newCourses: { semesterId: string, course: Course }[] = [];
+      let minYear = 999;
+    
+      rows.forEach((row: Element) => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 8) return;
+        const semStr = cells[1].textContent?.trim() || ''; 
+        if (semStr.length === 4) {
+          const y = parseInt(semStr.substring(0, 3));
+          if (y < minYear) minYear = y;
+        }
+      });
+    
+      if (minYear === 999) {
+         minYear = 114; 
+      }
+    
+      rows.forEach((row: Element) => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 8) return;
+    
+        const semStr = cells[1].textContent?.trim() || '';
+        const code = cells[2].textContent?.trim() || '';
+        const name = cells[3].textContent?.trim() || '';
+        const creditsStr = cells[4].textContent?.trim() || '0';
+        const grade = cells[5].textContent?.trim() || '';
+        const dimensionStr = cells[7].textContent?.trim() || '';
+    
+        if (!semStr || !name) return;
+    
+        const y = parseInt(semStr.substring(0, 3));
+        const s = parseInt(semStr.substring(3, 4));
+        const gradeLevel = y - minYear + 1;
+        const semesterId = `${gradeLevel}-${s}`;
+    
+        let category: CourseCategory = 'unclassified'; 
+        let dimension: GenEdDimension = 'None';
+    
+        if (dimensionStr) {
+            category = 'gen_ed';
+            const dimChar = dimensionStr.charAt(0).toUpperCase();
+            if (['A','B','C','D','E','F'].includes(dimChar)) {
+                dimension = dimChar as GenEdDimension;
+            }
+        } else if (code.startsWith('PE') || name.includes('體育')) {
+            category = 'pe';
+        } else if (name.includes('國文') || name.includes('中文')) {
+            category = 'chinese';
+        } else if (name.includes('英文') || name.includes('English')) {
+            category = 'english';
+        } else if (name.includes('社會實踐')) {
+            category = 'social';
+        }
+    
+        // 修正：加入 isNaN 檢查，若解析失敗則預設為 0
+        let credits = parseFloat(creditsStr);
+        if (isNaN(credits)) credits = 0;
+
+        const course: Course = {
+            id: code || Date.now().toString() + Math.random(),
+            name: name,
+            credits: credits,
+            category: category,
+            dimension: dimension,
+            grade: grade
+        };
+    
+        newCourses.push({ semesterId, course });
+      });
+    
+      if (newCourses.length === 0) {
+          alert('未找到可匯入的課程資料');
+          return;
+      }
+
+      setData(prev => {
+          const newSemesters = prev.semesters.map(sem => {
+              const coursesToAdd = newCourses
+                .filter(nc => nc.semesterId === sem.id)
+                .map(nc => nc.course);
+              
+              const existingNames = new Set(sem.courses.map(c => c.name));
+              const uniqueCoursesToAdd = coursesToAdd.filter(c => !existingNames.has(c.name));
+    
+              return {
+                  ...sem,
+                  courses: [...sem.courses, ...uniqueCoursesToAdd]
+              };
+          });
+          return { ...prev, semesters: newSemesters };
+      });
+      
+      alert(`成功匯入 ${newCourses.length} 門課程！`);
+    } catch (error) {
+      console.error('匯入失敗:', error);
+      alert('匯入失敗，請確認檔案格式是否正確');
+    }
   };
 
   // 修改載入判斷：如果是訪客模式，就不需要等待 dataLoading (因為沒有雲端資料要載入)
