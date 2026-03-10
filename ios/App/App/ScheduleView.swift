@@ -11,10 +11,11 @@ struct ScheduleView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                pageHeader
                 VStack(alignment: .leading, spacing: 10) {
                     Text("本週課表")
                         .font(.title3.weight(.bold))
-                    Text(store.lastSyncedAt == nil ? "以單日時間軸呈現，保留 iPhone 直向閱讀節奏。" : "已改為顯示後端同步後的最新課表快照。")
+                    Text(store.lastSyncedAt == nil ? "以單日時間軸呈現，保留 iPhone 直向閱讀節奏。" : "顯示最近一次雲端同步完成後的課表資料。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -83,12 +84,18 @@ struct ScheduleView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 20)
+            .padding(.top, 8)
             .padding(.bottom, 32)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("課表")
-        .navigationBarTitleDisplayMode(.large)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var pageHeader: some View {
+        Text("課表")
+            .font(.system(size: 34, weight: .bold, design: .rounded))
+            .foregroundStyle(.primary)
+            .padding(.top, 4)
     }
 
     private func formatted(_ date: Date) -> String {

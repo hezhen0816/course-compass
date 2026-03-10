@@ -13,64 +13,67 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                pageHeader
                 headerCard
                 upcomingSection
                 todoSection
                 progressSnapshot
             }
             .padding(.horizontal, 20)
-            .padding(.top, 20)
+            .padding(.top, 8)
             .padding(.bottom, 32)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("首頁")
-        .navigationBarTitleDisplayMode(.large)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var pageHeader: some View {
+        Text("首頁")
+            .font(.system(size: 34, weight: .bold, design: .rounded))
+            .foregroundStyle(.primary)
+            .padding(.top, 4)
     }
 
     private var headerCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(store.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.82))
-                    Text(store.displayName)
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text(formattedDate)
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-                Spacer()
-                Image(systemName: "iphone.gen3.radiowaves.left.and.right")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.95))
-                    .padding(12)
-                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-
+        VStack(alignment: .leading, spacing: 18) {
             if let nextCourse = store.nextUpcomingCourse {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(formattedDate)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+
                     Text("下一堂課")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.82))
+                        .foregroundStyle(.white.opacity(0.78))
+
                     Text(nextCourse.title)
-                        .font(.title3.weight(.bold))
+                        .font(.title2.weight(.bold))
                         .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     HStack(spacing: 10) {
-                        Label(nextCourse.timeLabel, systemImage: "clock.fill")
-                        Label(nextCourse.room, systemImage: "mappin.and.ellipse")
+                        heroMetaPill(systemImage: "clock.fill", text: nextCourse.timeLabel)
+                        heroMetaPill(systemImage: "mappin.and.ellipse", text: nextCourse.room)
                     }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.92))
-                    Text(nextCourse.note)
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.82))
+
+                    if let countdownText = countdownText(for: nextCourse) {
+                        Text(countdownText)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                    }
                 }
-                .padding(16)
-                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(formattedDate)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text("今天沒有剩餘課程，可以保留時間安排複習或作業。")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.84))
+                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(22)
         .background(
             LinearGradient(
@@ -78,55 +81,71 @@ struct HomeView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 30, style: .continuous)
         )
     }
 
     private var upcomingSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "今日課程", subtitle: "只顯示今天的課程與提醒")
+            sectionHeader(title: "今日課程", subtitle: "只顯示今天尚未結束的課程與提醒")
 
             if store.todayUpcomingCourses.isEmpty {
                 ContentUnavailableView(
-                    "今天沒有課",
+                    "今天沒有剩餘課程",
                     systemImage: "sun.max",
-                    description: Text("今天不顯示其他日期的課程。")
+                    description: Text("今天已經結束的課不會再顯示，也不會顯示其他日期的課程。")
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.top, 12)
             } else {
                 ForEach(store.todayUpcomingCourses) { course in
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(startTimeText(for: course))
+                                .font(.title3.weight(.bold))
+                                .monospacedDigit()
+                            Text(endTimeText(for: course))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
                             Text(course.weekday.fullTitle)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.indigo)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.indigo.opacity(0.12), in: Capsule())
-                            Spacer()
-                            Text(course.timeLabel)
-                                .font(.caption.weight(.medium))
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        .frame(width: 76, alignment: .leading)
 
-                        Text(course.title)
-                            .font(.headline)
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(alignment: .top, spacing: 12) {
+                                Text(course.title)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer()
+                                Circle()
+                                    .fill(courseAccentColor(for: course))
+                                    .frame(width: 10, height: 10)
+                                    .padding(.top, 6)
+                            }
 
-                        Text(course.subtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            Text(course.subtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
 
-                        HStack(spacing: 12) {
-                            Label(course.room, systemImage: "mappin.circle")
-                            Label(course.note, systemImage: "checklist")
+                            if let countdownText = countdownText(for: course) {
+                                Text(countdownText)
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(courseAccentColor(for: course))
+                            }
+
+                            HStack(spacing: 14) {
+                                metadataItem(systemImage: "mappin.and.ellipse", text: course.room)
+                                metadataItem(systemImage: "checklist", text: course.note)
+                            }
                         }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .padding(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
-                    .padding(18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
             }
         }
@@ -171,7 +190,7 @@ struct HomeView: View {
         let targets = store.plannerTargets
 
         return VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "學分摘要", subtitle: "原始學分規劃功能的精簡快照")
+            sectionHeader(title: "學分摘要", subtitle: "學分規劃的重點進度整理")
 
             VStack(alignment: .leading, spacing: 14) {
                 summaryRow(title: "總學分", current: progress.total, target: targets.total, tint: .blue)
@@ -206,6 +225,80 @@ struct HomeView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func heroMetaPill(systemImage: String, text: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.white.opacity(0.14), in: Capsule())
+    }
+
+    private func metadataItem(systemImage: String, text: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+    }
+
+    private func courseAccentColor(for course: UpcomingCourse) -> Color {
+        let currentMinutes = Calendar.current.component(.hour, from: Date()) * 60 + Calendar.current.component(.minute, from: Date())
+        let startMinutes = minutes(from: timeComponent(for: course, at: 0, fallbackHour: 9))
+        let endMinutes = minutes(from: timeComponent(for: course, at: 1, fallbackHour: 10))
+
+        if currentMinutes >= startMinutes && currentMinutes < endMinutes {
+            return .orange
+        }
+        return .indigo
+    }
+
+    private func startTimeText(for course: UpcomingCourse) -> String {
+        formattedTime(timeComponent(for: course, at: 0, fallbackHour: 9))
+    }
+
+    private func endTimeText(for course: UpcomingCourse) -> String {
+        formattedTime(timeComponent(for: course, at: 1, fallbackHour: 10))
+    }
+
+    private func timeComponent(for course: UpcomingCourse, at index: Int, fallbackHour: Int) -> DateComponents {
+        let label = course.timeLabel
+            .components(separatedBy: "-")
+            .dropFirst(index)
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "\(fallbackHour):00"
+        let parts = label.split(separator: ":")
+        let hour = Int(parts.first ?? Substring("\(fallbackHour)")) ?? fallbackHour
+        let minute = Int(parts.dropFirst().first ?? "0") ?? 0
+        return DateComponents(hour: hour, minute: minute)
+    }
+
+    private func formattedTime(_ components: DateComponents) -> String {
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        return String(format: "%02d:%02d", hour, minute)
+    }
+
+    private func minutes(from components: DateComponents) -> Int {
+        (components.hour ?? 0) * 60 + (components.minute ?? 0)
+    }
+
+    private func countdownText(for course: UpcomingCourse, now: Date = Date(), calendar: Calendar = .current) -> String? {
+        if let startDate = course.startDate(on: now, calendar: calendar),
+           let endDate = course.endDate(on: now, calendar: calendar) {
+            if now < startDate {
+                let minutes = max(1, Int(startDate.timeIntervalSince(now) / 60))
+                return "距離上課還有 \(minutes) 分鐘"
+            }
+
+            if now < endDate {
+                let minutes = max(1, Int(endDate.timeIntervalSince(now) / 60))
+                return "正在上課中，距離下課還有 \(minutes) 分鐘"
+            }
+        }
+
+        return nil
     }
 
     private func summaryRow(title: String, current: Double, target: Double, tint: Color) -> some View {

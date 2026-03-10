@@ -1,3 +1,4 @@
+import Security
 import SwiftUI
 
 private struct UserDataUpsertRequest: Encodable {
@@ -15,10 +16,32 @@ private struct UserDataUpsertRequest: Encodable {
 @MainActor
 final class AppSessionStore: ObservableObject {
     @Published var selectedTab: AppTab = .home
-    @Published var schoolAccount: String = "B11209001"
-    @Published var schoolPassword: String = "courseplanner"
-    @Published var backendBaseURL: String = "http://127.0.0.1:8000"
-    @Published var reminderMinutes: Int = 10
+    @Published var schoolAccount: String = "" {
+        didSet {
+            guard !isRestoringPersistedState else { return }
+            persistLocalPreferences()
+            queuePlannerSave()
+        }
+    }
+    @Published var schoolPassword: String = "" {
+        didSet {
+            guard !isRestoringPersistedState else { return }
+            persistSchoolPassword()
+        }
+    }
+    @Published var backendBaseURL: String = "http://127.0.0.1:8000" {
+        didSet {
+            guard !isRestoringPersistedState else { return }
+            persistLocalPreferences()
+            queuePlannerSave()
+        }
+    }
+    @Published var reminderMinutes: Int = 10 {
+        didSet {
+            guard !isRestoringPersistedState else { return }
+            persistLocalPreferences()
+        }
+    }
     @Published var syncState: ScheduleSyncState = .idle
     @Published var lastSyncedAt: Date?
     @Published var plannerTargets: PlannerTarget = .default
@@ -36,12 +59,20 @@ final class AppSessionStore: ObservableObject {
 
     private var authSession: SupabaseStoredSession?
     private var plannerSaveTask: Task<Void, Never>?
+    private var isRestoringPersistedState = false
 
     init() {
-        self.upcomingCourses = Self.demoUpcomingCourses()
+        let persistedScheduleSnapshot = Self.loadPersistedScheduleSnapshot()
+        self.upcomingCourses = persistedScheduleSnapshot.map {
+            Self.buildUpcomingCourses(from: $0.scheduleEntries)
+        } ?? Self.demoUpcomingCourses()
         self.todoItems = Self.demoTodoItems()
-        self.scheduleEntries = Self.demoScheduleEntries()
+        self.scheduleEntries = persistedScheduleSnapshot?.scheduleEntries ?? Self.demoScheduleEntries()
         self.plannerSemesters = Self.demoPlannerSemesters()
+        self.studentName = persistedScheduleSnapshot?.studentName ?? ""
+        self.subtitle = persistedScheduleSnapshot?.subtitle ?? "資料展示模式"
+        self.lastSyncedAt = persistedScheduleSnapshot?.lastSyncedAt
+        restoreLocalPreferences()
 
         Task {
             await restoreAuthSession()
@@ -68,8 +99,15 @@ final class AppSessionStore: ObservableObject {
     }
 
     var todayUpcomingCourses: [UpcomingCourse] {
-        let today = Weekday.currentWeekday()
-        return orderedUpcomingCourses.filter { $0.weekday == today }
+        let now = Date()
+        let today = Weekday.currentWeekday(from: now)
+        return upcomingCourses
+            .filter { $0.weekday == today && !$0.hasEnded(on: now) }
+            .sorted { lhs, rhs in
+                let lhsStart = lhs.startDate(on: now) ?? now
+                let rhsStart = rhs.startDate(on: now) ?? now
+                return lhsStart < rhsStart
+            }
     }
 
     var displayName: String {
@@ -129,7 +167,7 @@ final class AppSessionStore: ObservableObject {
 
     func signIn(email: String, password: String) async {
         guard isAuthConfigured else {
-            authErrorMessage = "尚未設定 Supabase iOS 登入參數"
+            authErrorMessage = "尚未完成雲端登入設定"
             return
         }
 
@@ -165,7 +203,7 @@ final class AppSessionStore: ObservableObject {
 
     func signUp(email: String, password: String) async {
         guard isAuthConfigured else {
-            authErrorMessage = "尚未設定 Supabase iOS 登入參數"
+            authErrorMessage = "尚未完成雲端登入設定"
             return
         }
 
@@ -195,7 +233,7 @@ final class AppSessionStore: ObservableObject {
                 try await establishAuthenticatedSession(from: payload, fallbackEmail: normalizedEmail)
                 authNoticeMessage = "註冊成功，已直接登入"
             } else {
-                authNoticeMessage = "註冊成功，請依 Supabase 設定完成信箱驗證後再登入"
+                authNoticeMessage = "註冊成功，請先完成信箱驗證後再登入"
             }
         } catch {
             authErrorMessage = error.localizedDescription
@@ -207,7 +245,7 @@ final class AppSessionStore: ObservableObject {
     func signOut() async {
         plannerSaveTask?.cancel()
 
-        if let authSession {
+        if authSession != nil {
             do {
                 let session = try await validSession(forceRefresh: false)
                 let endpoint = try makeURL(path: "/auth/v1/logout")
@@ -268,21 +306,27 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
-    func loadLatestScheduleSnapshot() async {
+    func loadLatestScheduleSnapshot(suppressErrors: Bool = false) async {
         let profileKey = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
         let baseURL = normalizedBackendBaseURL
 
         guard !profileKey.isEmpty else {
-            syncState = .failed("缺少學號，無法讀取快照")
+            if !suppressErrors {
+                syncState = .failed("缺少學號，無法更新課表")
+            }
             return
         }
 
         guard let endpoint = URL(string: "\(baseURL)/api/schedule/\(profileKey.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? profileKey)") else {
-            syncState = .failed("後端網址格式錯誤")
+            if !suppressErrors {
+                syncState = .failed("後端網址格式錯誤")
+            }
             return
         }
 
-        syncState = .syncing
+        if !suppressErrors {
+            syncState = .syncing
+        }
 
         do {
             let (data, response) = try await URLSession.shared.data(from: endpoint)
@@ -294,13 +338,15 @@ final class AppSessionStore: ObservableObject {
             apply(payload: payload)
             syncState = .synced
         } catch {
-            syncState = .failed(error.localizedDescription)
+            if !suppressErrors {
+                syncState = .failed(error.localizedDescription)
+            }
         }
     }
 
     private func restoreAuthSession() async {
         guard isAuthConfigured else {
-            authErrorMessage = "尚未設定 Supabase iOS 登入參數"
+            authErrorMessage = "尚未完成雲端登入設定"
             isRestoringSession = false
             return
         }
@@ -322,6 +368,7 @@ final class AppSessionStore: ObservableObject {
         do {
             _ = try await validSession(forceRefresh: storedSession.expiresAt <= Date().addingTimeInterval(60))
             await loadPlannerData()
+            await loadLatestScheduleSnapshot(suppressErrors: true)
         } catch {
             clearAuthenticatedState()
             authErrorMessage = "登入已失效，請重新登入"
@@ -335,7 +382,7 @@ final class AppSessionStore: ObservableObject {
             let user = payload.user
         else {
             throw NSError(domain: "CoursePlannerAuth", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Supabase 沒有回傳可用的 session"
+                NSLocalizedDescriptionKey: "雲端登入沒有回傳可用的 session"
             ])
         }
 
@@ -359,7 +406,7 @@ final class AppSessionStore: ObservableObject {
         authSession = storedSession
         currentUserEmail = storedSession.email
         authErrorMessage = nil
-        subtitle = "已登入 Supabase"
+        subtitle = "已登入帳號"
         persistAuthSession(storedSession)
         await loadPlannerData()
     }
@@ -385,16 +432,16 @@ final class AppSessionStore: ObservableObject {
             let records = try decoder.decode([CloudUserDataRecord].self, from: data)
             if let record = records.first {
                 applyPlannerPayload(record.content)
-                authNoticeMessage = "已載入 Supabase 規劃資料"
+                authNoticeMessage = "已載入雲端規劃資料"
             } else {
                 plannerTargets = .default
                 plannerSemesters = Self.blankPlannerSemesters()
-                authNoticeMessage = "已登入 Supabase，可開始建立你的規劃"
+                authNoticeMessage = "已登入帳號，可以開始建立你的規劃"
             }
         } catch {
             plannerTargets = .default
             plannerSemesters = Self.blankPlannerSemesters()
-            authErrorMessage = "讀取 Supabase 資料失敗：\(error.localizedDescription)"
+            authErrorMessage = "讀取雲端資料失敗：\(error.localizedDescription)"
         }
     }
 
@@ -442,9 +489,9 @@ final class AppSessionStore: ObservableObject {
 
             let (data, response) = try await URLSession.shared.data(for: request)
             try validateHTTPResponse(response, data: data)
-            authNoticeMessage = "規劃資料已儲存到 Supabase"
+            authNoticeMessage = "規劃資料已保存到雲端"
         } catch {
-            authErrorMessage = "儲存 Supabase 失敗：\(error.localizedDescription)"
+            authErrorMessage = "保存雲端資料失敗：\(error.localizedDescription)"
         }
     }
 
@@ -543,11 +590,17 @@ final class AppSessionStore: ObservableObject {
                 homeElective: plannerTargets.homeElective,
                 doubleMajor: plannerTargets.doubleMajor,
                 minor: plannerTargets.minor
+            ),
+            settings: CloudUserSettings(
+                schoolAccount: schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                backendBaseURL: backendBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             )
         )
     }
 
     private func applyPlannerPayload(_ payload: CloudAppDataPayload) {
+        applyCloudSettings(payload.settings)
+
         let targets = payload.targets
         plannerTargets = PlannerTarget(
             total: targets?.total ?? PlannerTarget.default.total,
@@ -586,11 +639,27 @@ final class AppSessionStore: ObservableObject {
         plannerSemesters = semesters.isEmpty ? Self.blankPlannerSemesters() : semesters
     }
 
+    private func applyCloudSettings(_ settings: CloudUserSettings?) {
+        guard let settings else {
+            return
+        }
+
+        isRestoringPersistedState = true
+        if let schoolAccount = settings.schoolAccount?.trimmingCharacters(in: .whitespacesAndNewlines), !schoolAccount.isEmpty {
+            self.schoolAccount = schoolAccount
+        }
+        if let backendBaseURL = settings.backendBaseURL?.trimmingCharacters(in: .whitespacesAndNewlines), !backendBaseURL.isEmpty {
+            self.backendBaseURL = backendBaseURL
+        }
+        isRestoringPersistedState = false
+        persistLocalPreferences()
+    }
+
     private func apply(payload: ScheduleSyncResponse) {
         if let payloadStudentName = payload.studentName?.trimmingCharacters(in: .whitespacesAndNewlines), !payloadStudentName.isEmpty {
             studentName = payloadStudentName
         }
-        subtitle = payload.persistedToSupabase ? "已同步並寫入 Supabase" : "已同步但未寫入 Supabase"
+        subtitle = payload.persistedToSupabase ? "已同步並保存到雲端" : "已同步，但尚未保存到雲端"
         lastSyncedAt = payload.syncedAt
         scheduleEntries = payload.scheduleEntries.map { entry in
             ScheduleEntry(
@@ -602,10 +671,11 @@ final class AppSessionStore: ObservableObject {
                 accent: mapAccent(entry.accent)
             )
         }
-        upcomingCourses = buildUpcomingCourses(from: scheduleEntries)
+        upcomingCourses = Self.buildUpcomingCourses(from: scheduleEntries)
+        persistScheduleSnapshot()
     }
 
-    private func buildUpcomingCourses(from entries: [ScheduleEntry]) -> [UpcomingCourse] {
+    private static func buildUpcomingCourses(from entries: [ScheduleEntry]) -> [UpcomingCourse] {
         entries.map { entry in
             UpcomingCourse(
                 title: entry.title,
@@ -673,6 +743,103 @@ final class AppSessionStore: ObservableObject {
         return PlannerGenEdDimension(rawValue: rawValue) ?? .none
     }
 
+    private func restoreLocalPreferences() {
+        isRestoringPersistedState = true
+
+        if
+            let data = UserDefaults.standard.data(forKey: Self.preferencesStorageKey),
+            let preferences = try? JSONDecoder().decode(PersistedAppPreferences.self, from: data)
+        {
+            schoolAccount = preferences.schoolAccount
+            backendBaseURL = preferences.backendBaseURL
+            reminderMinutes = preferences.reminderMinutes
+        } else {
+            schoolAccount = "B11209001"
+            backendBaseURL = "http://127.0.0.1:8000"
+            reminderMinutes = 10
+        }
+
+        schoolPassword = loadSchoolPassword() ?? "courseplanner"
+        isRestoringPersistedState = false
+    }
+
+    private func persistLocalPreferences() {
+        let preferences = PersistedAppPreferences(
+            schoolAccount: schoolAccount,
+            backendBaseURL: backendBaseURL,
+            reminderMinutes: reminderMinutes
+        )
+
+        if let data = try? JSONEncoder().encode(preferences) {
+            UserDefaults.standard.set(data, forKey: Self.preferencesStorageKey)
+        }
+    }
+
+    private func persistScheduleSnapshot() {
+        let snapshot = PersistedScheduleSnapshot(
+            studentName: studentName,
+            subtitle: subtitle,
+            lastSyncedAt: lastSyncedAt,
+            scheduleEntries: scheduleEntries
+        )
+
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: Self.scheduleSnapshotStorageKey)
+        }
+    }
+
+    private static func loadPersistedScheduleSnapshot() -> PersistedScheduleSnapshot? {
+        guard
+            let data = UserDefaults.standard.data(forKey: scheduleSnapshotStorageKey),
+            let snapshot = try? JSONDecoder().decode(PersistedScheduleSnapshot.self, from: data)
+        else {
+            return nil
+        }
+        return snapshot
+    }
+
+    private func persistSchoolPassword() {
+        let trimmedPassword = schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedPassword.isEmpty {
+            deleteSchoolPassword()
+            return
+        }
+
+        guard let passwordData = trimmedPassword.data(using: .utf8) else {
+            return
+        }
+
+        let query = Self.schoolPasswordKeychainQuery()
+        SecItemDelete(query as CFDictionary)
+
+        var attributes = query
+        attributes[kSecValueData as String] = passwordData
+        SecItemAdd(attributes as CFDictionary, nil)
+    }
+
+    private func loadSchoolPassword() -> String? {
+        var query = Self.schoolPasswordKeychainQuery()
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard
+            status == errSecSuccess,
+            let data = result as? Data,
+            let password = String(data: data, encoding: .utf8)
+        else {
+            return nil
+        }
+
+        return password
+    }
+
+    private func deleteSchoolPassword() {
+        let query = Self.schoolPasswordKeychainQuery()
+        SecItemDelete(query as CFDictionary)
+    }
+
     private func persistAuthSession(_ session: SupabaseStoredSession) {
         if let encoded = try? JSONEncoder().encode(session) {
             UserDefaults.standard.set(encoded, forKey: Self.authSessionStorageKey)
@@ -697,7 +864,7 @@ final class AppSessionStore: ObservableObject {
             let url = URL(string: path, relativeTo: supabaseURL)
         else {
             throw NSError(domain: "CoursePlannerAuth", code: 4, userInfo: [
-                NSLocalizedDescriptionKey: "Supabase URL 設定錯誤"
+                NSLocalizedDescriptionKey: "雲端服務網址設定錯誤"
             ])
         }
         return url
@@ -781,6 +948,16 @@ final class AppSessionStore: ObservableObject {
     }
 
     private static let authSessionStorageKey = "courseplanner.supabase.session"
+    private static let preferencesStorageKey = "courseplanner.preferences"
+    private static let scheduleSnapshotStorageKey = "courseplanner.scheduleSnapshot"
+
+    private static func schoolPasswordKeychainQuery() -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.hezhen.courseplanner.school",
+            kSecAttrAccount as String: "schoolPassword"
+        ]
+    }
 
     private static func iso8601String(from date: Date) -> String {
         let formatter = ISO8601DateFormatter()
@@ -907,5 +1084,11 @@ final class AppSessionStore: ObservableObject {
                 PlannerCourse(name: "通識：自然生命", credits: 2, category: .genEd, program: .home, dimension: .F, instructor: "蘇品涵", location: "AU-115", time: "二 6,7")
             ])
         ]
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

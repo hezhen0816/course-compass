@@ -109,7 +109,7 @@ enum Weekday: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum PlannerCourseCategory: String, CaseIterable, Identifiable {
+enum PlannerCourseCategory: String, CaseIterable, Identifiable, Codable {
     case compulsory
     case elective
     case chinese
@@ -275,12 +275,46 @@ struct UpcomingCourse: Identifiable {
     let note: String
 
     var startTime: DateComponents {
+        parsedTime(at: 0, fallbackHour: 9)
+    }
+
+    var endTime: DateComponents {
+        parsedTime(at: 1, fallbackHour: 10)
+    }
+
+    func startDate(on referenceDate: Date, calendar: Calendar = .current) -> Date? {
+        calendar.date(
+            bySettingHour: startTime.hour ?? 9,
+            minute: startTime.minute ?? 0,
+            second: 0,
+            of: referenceDate
+        )
+    }
+
+    func endDate(on referenceDate: Date, calendar: Calendar = .current) -> Date? {
+        calendar.date(
+            bySettingHour: endTime.hour ?? 10,
+            minute: endTime.minute ?? 0,
+            second: 0,
+            of: referenceDate
+        )
+    }
+
+    func hasEnded(on referenceDate: Date, calendar: Calendar = .current) -> Bool {
+        guard let endDate = endDate(on: referenceDate, calendar: calendar) else {
+            return false
+        }
+        return endDate <= referenceDate
+    }
+
+    private func parsedTime(at index: Int, fallbackHour: Int) -> DateComponents {
         let label = timeLabel
             .components(separatedBy: "-")
+            .dropFirst(index)
             .first?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "09:00"
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "\(fallbackHour):00"
         let parts = label.split(separator: ":")
-        let hour = Int(parts.first ?? "9") ?? 9
+        let hour = Int(parts.first ?? Substring("\(fallbackHour)")) ?? fallbackHour
         let minute = Int(parts.dropFirst().first ?? "0") ?? 0
         return DateComponents(hour: hour, minute: minute)
     }
@@ -295,7 +329,7 @@ struct TodoItem: Identifiable {
     let isCompleted: Bool
 }
 
-struct ScheduleEntry: Identifiable {
+struct ScheduleEntry: Identifiable, Codable {
     let id = UUID()
     let weekday: Weekday
     let title: String
@@ -303,6 +337,15 @@ struct ScheduleEntry: Identifiable {
     let room: String
     let instructor: String
     let accent: PlannerCourseCategory
+
+    enum CodingKeys: String, CodingKey {
+        case weekday
+        case title
+        case timeRange
+        case room
+        case instructor
+        case accent
+    }
 }
 
 struct ScheduleSyncRequest: Encodable {
@@ -452,6 +495,7 @@ struct SupabaseAuthErrorResponse: Decodable {
 struct CloudAppDataPayload: Codable {
     let semesters: [CloudSemester]?
     let targets: CloudTargets?
+    let settings: CloudUserSettings?
 }
 
 struct CloudSemester: Codable {
@@ -513,8 +557,31 @@ struct CloudTargets: Codable {
     }
 }
 
+struct CloudUserSettings: Codable {
+    let schoolAccount: String?
+    let backendBaseURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case schoolAccount = "school_account"
+        case backendBaseURL = "backend_base_url"
+    }
+}
+
 struct CloudUserDataRecord: Decodable {
     let content: CloudAppDataPayload
+}
+
+struct PersistedAppPreferences: Codable {
+    let schoolAccount: String
+    let backendBaseURL: String
+    let reminderMinutes: Int
+}
+
+struct PersistedScheduleSnapshot: Codable {
+    let studentName: String
+    let subtitle: String
+    let lastSyncedAt: Date?
+    let scheduleEntries: [ScheduleEntry]
 }
 
 struct PlannerCourse: Identifiable, Equatable {

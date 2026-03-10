@@ -10,17 +10,17 @@ struct PlannerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                pageHeader
                 plannerHeader
                 progressCards
                 semestersSection
             }
             .padding(.horizontal, 20)
-            .padding(.top, 20)
+            .padding(.top, 8)
             .padding(.bottom, 32)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("學分規劃")
-        .navigationBarTitleDisplayMode(.large)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $addSemester) { semester in
             CourseEditorSheet(
                 title: "新增課程",
@@ -57,6 +57,13 @@ struct PlannerView: View {
                 expandedSemesters.insert(firstSemester)
             }
         }
+    }
+
+    private var pageHeader: some View {
+        Text("學分規劃")
+            .font(.system(size: 34, weight: .bold, design: .rounded))
+            .foregroundStyle(.primary)
+            .padding(.top, 4)
     }
 
     private var plannerHeader: some View {
