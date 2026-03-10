@@ -60,18 +60,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
                 {isDemoMode && (
                   <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">
-                    Demo
+                    Visitor
                   </span>
                 )}
                 {syncStatus === 'saving' && <span className="text-xs text-gray-400 hidden sm:inline">同步中...</span>}
                 {syncStatus === 'saved' && <span className="text-xs text-green-500 hidden sm:inline">已同步</span>}
               </div>
               <div className="mt-1 flex items-center gap-2">
-                <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">修課規劃助手</span>
+                <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">修課羅盤 Web</span>
               </div>
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                <span className="text-xs text-slate-500">網頁版專注課程規劃與學分管理</span>
-                <span className="hidden text-[11px] text-slate-400 sm:inline">課表、待辦與提醒保留在 iOS App</span>
+                <span className="text-xs text-slate-500">桌面版專注課程規劃、匯入與學分門檻管理</span>
+                <span className="hidden text-[11px] text-slate-400 sm:inline">課表同步與行動摘要由 iPhone 端處理</span>
               </div>
               <div className="mt-1 flex items-center gap-2 sm:hidden">
                 <span className="text-xs text-slate-500 truncate">{userEmail}</span>
@@ -126,10 +126,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={handleLogout}
                 className="flex items-center justify-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title={isDemoMode ? '離開展示' : '登出'}
+                title={isDemoMode ? '離開訪客模式' : '登出'}
               >
                 <LogOut className="w-4 h-4" />
-                <span className="hidden md:inline">{isDemoMode ? '離開展示' : '登出'}</span>
+                <span className="hidden md:inline">{isDemoMode ? '離開訪客模式' : '登出'}</span>
               </button>
             </div>
           </div>

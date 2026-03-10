@@ -19,6 +19,7 @@ BASE_URL = "https://courseselection.ntust.edu.tw"
 ENTRY_URL = f"{BASE_URL}/"
 VERIFY_URL = f"{BASE_URL}/First/A06/A06"
 COURSE_LIST_URL = f"{BASE_URL}/ChooseList/D01/D01"
+EDU_NEED_URL = "https://stu.ntust.edu.tw/stueduneed/Edu_Need.aspx"
 DEFAULT_TIMEOUT = 30
 DEFAULT_VERIFY_SSL = os.environ.get("NTUST_VERIFY_SSL", "false").lower() in {"true", "1", "yes"}
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -30,6 +31,14 @@ app = FastAPI(title="Course Planner Sync API", version="0.1.0")
 
 
 class SyncRequest(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+    profile_key: str | None = None
+    persist_to_supabase: bool = True
+    verify_ssl: bool = DEFAULT_VERIFY_SSL
+
+
+class HistoryImportRequest(BaseModel):
     username: str = Field(min_length=1)
     password: str = Field(min_length=1)
     profile_key: str | None = None
@@ -84,6 +93,31 @@ class SyncResponse(BaseModel):
     courses: list[CourseRow]
     slots: list[ScheduleSlot]
     schedule_entries: list[ScheduleEntryPayload]
+
+
+class HistoryCourseRecord(BaseModel):
+    category: str
+    course_code: str
+    course_name: str
+    academic_term: str
+    grade: str
+    earned_credits: str
+
+
+class HistoryImportResponse(BaseModel):
+    profile_key: str
+    school_account: str
+    student_name: str | None = None
+    student_no: str | None = None
+    department: str | None = None
+    status: str | None = None
+    source_url: str
+    page_title: str
+    imported_at: datetime
+    record_count: int
+    persisted_to_supabase: bool
+    summary_texts: list[str]
+    records: list[HistoryCourseRecord]
 
 
 def now() -> datetime:
@@ -176,6 +210,74 @@ def submit_hidden_form(
     )
     response.raise_for_status()
     return response
+
+
+def login_to_target(
+    session: requests.Session,
+    username: str,
+    password: str,
+    target_url: str,
+    verify_ssl: bool,
+) -> requests.Response:
+    entry_response = session.get(
+        target_url,
+        timeout=DEFAULT_TIMEOUT,
+        allow_redirects=True,
+        verify=verify_ssl,
+    )
+    entry_response.raise_for_status()
+
+    if "ssoam" not in entry_response.url:
+        return entry_response
+
+    soup = BeautifulSoup(entry_response.text, "html.parser")
+    form = first_form(soup)
+    login_data = parse_hidden_inputs(form)
+    login_data["Username"] = username
+    login_data["Password"] = password
+    login_data.setdefault("captcha", "")
+
+    submit_url = urljoin(entry_response.url, form.get("action", ""))
+    login_response = session.post(
+        submit_url,
+        data=login_data,
+        timeout=DEFAULT_TIMEOUT,
+        allow_redirects=True,
+        verify=verify_ssl,
+    )
+    login_response.raise_for_status()
+
+    if "signin-oidc" in login_response.url:
+        login_response = submit_hidden_form(session, login_response, verify_ssl)
+
+    if "login" in login_response.url.lower() and "ssoam" in login_response.url:
+        error_text = find_error_text(BeautifulSoup(login_response.text, "html.parser"))
+        if error_text:
+            raise RuntimeError(f"SSO 登入失敗：{error_text}")
+        raise RuntimeError(f"SSO 登入失敗，仍停留在登入頁：{login_response.url}")
+
+    page_response = session.get(
+        target_url,
+        timeout=DEFAULT_TIMEOUT,
+        allow_redirects=True,
+        verify=verify_ssl,
+    )
+    page_response.raise_for_status()
+
+    if "signin-oidc" in page_response.url:
+        page_response = submit_hidden_form(session, page_response, verify_ssl)
+        page_response = session.get(
+            target_url,
+            timeout=DEFAULT_TIMEOUT,
+            allow_redirects=True,
+            verify=verify_ssl,
+        )
+        page_response.raise_for_status()
+
+    if "login" in page_response.url.lower() or "ssoam" in page_response.url:
+        raise RuntimeError(f"登入後無法進入目標頁面，目前停在 {page_response.url}")
+
+    return page_response
 
 
 def login(session: requests.Session, username: str, password: str, verify_ssl: bool) -> None:
@@ -472,6 +574,105 @@ def fetch_schedule(username: str, password: str, verify_ssl: bool) -> dict[str, 
     }
 
 
+def extract_history_course_tables(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    for title_cell in soup.select("td.TD_title1_C"):
+        section_title = normalize(title_cell.get_text(" ", strip=True))
+        section_table = title_cell.find_parent("table")
+        if not isinstance(section_table, Tag):
+            continue
+
+        for table in section_table.find_all("table"):
+            tr_rows = table.find_all("tr", recursive=False)
+            if not tr_rows:
+                tr_rows = table.find_all("tr")
+            if not tr_rows:
+                continue
+
+            header_cells = [normalize(cell.get_text(" ", strip=True)) for cell in tr_rows[0].find_all(["td", "th"])]
+            if header_cells[:5] != ["課程代碼", "課程名稱", "學年期", "成績", "實得學分"]:
+                continue
+
+            for tr in tr_rows[1:]:
+                cells = [normalize(cell.get_text(" ", strip=True)) for cell in tr.find_all("td")]
+                if len(cells) < 5 or not cells[0]:
+                    continue
+                rows.append(
+                    {
+                        "category": section_title,
+                        "course_code": cells[0],
+                        "course_name": cells[1],
+                        "academic_term": cells[2],
+                        "grade": cells[3],
+                        "earned_credits": cells[4],
+                    }
+                )
+
+    return rows
+
+
+def extract_history_summary_texts(soup: BeautifulSoup) -> list[str]:
+    summaries: list[str] = []
+    for cell in soup.find_all("td", align="right"):
+        text = normalize(cell.get_text(" ", strip=True))
+        if "學分" in text:
+            summaries.append(text)
+    return summaries
+
+
+def fetch_history_records(username: str, password: str, verify_ssl: bool) -> dict[str, Any]:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+        }
+    )
+
+    page_response = login_to_target(session, username, password, EDU_NEED_URL, verify_ssl)
+    soup = BeautifulSoup(page_response.text, "html.parser")
+
+    student_name = normalize(
+        soup.select_one("#ContentPlaceHolder1_Lal_StudentName").get_text(" ", strip=True)
+        if soup.select_one("#ContentPlaceHolder1_Lal_StudentName")
+        else ""
+    )
+    student_no = normalize(
+        soup.select_one("#ContentPlaceHolder1_Lal_StudentNo").get_text(" ", strip=True)
+        if soup.select_one("#ContentPlaceHolder1_Lal_StudentNo")
+        else ""
+    )
+    department = normalize(
+        soup.select_one("#ContentPlaceHolder1_Lal_Subject").get_text(" ", strip=True)
+        if soup.select_one("#ContentPlaceHolder1_Lal_Subject")
+        else ""
+    )
+    status = normalize(
+        soup.select_one("#ContentPlaceHolder1_Lal_Nowcondition").get_text(" ", strip=True)
+        if soup.select_one("#ContentPlaceHolder1_Lal_Nowcondition")
+        else ""
+    )
+
+    records = extract_history_course_tables(soup)
+    summary_texts = extract_history_summary_texts(soup)
+
+    return {
+        "source_url": page_response.url,
+        "page_title": normalize(soup.title.get_text(" ", strip=True) if soup.title else ""),
+        "student_name": student_name or None,
+        "student_no": student_no or None,
+        "department": department or None,
+        "status": status or None,
+        "summary_texts": summary_texts,
+        "records": records,
+    }
+
+
 def persist_snapshot(profile_key: str, school_account: str, payload: dict[str, Any]) -> bool:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return False
@@ -511,6 +712,51 @@ def load_snapshot(profile_key: str) -> dict[str, Any] | None:
     response = requests.get(endpoint, headers=headers, timeout=DEFAULT_TIMEOUT)
     if response.status_code >= 300:
         raise RuntimeError(f"Supabase 讀取失敗：{response.status_code} {response.text}")
+    rows = response.json()
+    if not rows:
+        return None
+    return rows[0]["payload"]
+
+
+def persist_history_snapshot(profile_key: str, school_account: str, payload: dict[str, Any]) -> bool:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
+
+    endpoint = f"{SUPABASE_URL}/rest/v1/history_import_snapshots"
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
+    }
+    body = {
+        "profile_key": profile_key,
+        "school_account": school_account,
+        "student_name": payload.get("student_name"),
+        "payload": payload,
+        "imported_at": payload["imported_at"],
+    }
+    response = requests.post(endpoint, headers=headers, json=body, timeout=DEFAULT_TIMEOUT)
+    if response.status_code >= 300:
+        raise RuntimeError(f"Supabase 歷史修課寫入失敗：{response.status_code} {response.text}")
+    return True
+
+
+def load_history_snapshot(profile_key: str) -> dict[str, Any] | None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+
+    endpoint = (
+        f"{SUPABASE_URL}/rest/v1/history_import_snapshots"
+        f"?profile_key=eq.{quote(profile_key, safe='')}&select=payload"
+    )
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+    }
+    response = requests.get(endpoint, headers=headers, timeout=DEFAULT_TIMEOUT)
+    if response.status_code >= 300:
+        raise RuntimeError(f"Supabase 歷史修課讀取失敗：{response.status_code} {response.text}")
     rows = response.json()
     if not rows:
         return None
@@ -562,6 +808,44 @@ def get_latest_schedule(profile_key: str) -> SyncResponse:
         if payload is None:
             raise HTTPException(status_code=404, detail="Supabase 找不到此 profile 的課表快照。")
         return SyncResponse.model_validate(payload)
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/history/import", response_model=HistoryImportResponse)
+def import_history(request: HistoryImportRequest) -> HistoryImportResponse:
+    try:
+        payload = fetch_history_records(request.username, request.password, request.verify_ssl)
+        response_payload = {
+            **payload,
+            "profile_key": request.profile_key or request.username,
+            "school_account": request.username,
+            "imported_at": now().isoformat(),
+            "record_count": len(payload["records"]),
+            "persisted_to_supabase": False,
+        }
+        if request.persist_to_supabase:
+            response_payload["persisted_to_supabase"] = persist_history_snapshot(
+                profile_key=response_payload["profile_key"],
+                school_account=request.username,
+                payload=response_payload,
+            )
+        return HistoryImportResponse.model_validate(response_payload)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"歷史修課系統請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/history/{profile_key}", response_model=HistoryImportResponse)
+def get_latest_history(profile_key: str) -> HistoryImportResponse:
+    try:
+        payload = load_history_snapshot(profile_key)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Supabase 找不到此 profile 的歷史修課紀錄。")
+        return HistoryImportResponse.model_validate(payload)
     except HTTPException:
         raise
     except RuntimeError as exc:

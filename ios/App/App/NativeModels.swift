@@ -251,14 +251,14 @@ enum AuthFormMode {
         case .login:
             return "登入"
         case .signup:
-            return "註冊"
+            return "建立帳號"
         }
     }
 
     var toggleTitle: String {
         switch self {
         case .login:
-            return "沒有帳號？點此註冊"
+            return "沒有帳號？點此建立"
         case .signup:
             return "已有帳號？點此登入"
         }
@@ -320,15 +320,6 @@ struct UpcomingCourse: Identifiable {
     }
 }
 
-struct TodoItem: Identifiable {
-    let id = UUID()
-    let title: String
-    let course: String
-    let dueLabel: String
-    let priority: String
-    let isCompleted: Bool
-}
-
 struct ScheduleEntry: Identifiable, Codable {
     let id = UUID()
     let weekday: Weekday
@@ -349,6 +340,22 @@ struct ScheduleEntry: Identifiable, Codable {
 }
 
 struct ScheduleSyncRequest: Encodable {
+    let username: String
+    let password: String
+    let profileKey: String
+    let persistToSupabase: Bool
+    let verifySSL: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case username
+        case password
+        case profileKey = "profile_key"
+        case persistToSupabase = "persist_to_supabase"
+        case verifySSL = "verify_ssl"
+    }
+}
+
+struct HistoryImportRequest: Encodable {
     let username: String
     let password: String
     let profileKey: String
@@ -395,6 +402,56 @@ struct ScheduleSyncResponse: Decodable {
         case persistedToSupabase = "persisted_to_supabase"
         case courses
         case scheduleEntries = "schedule_entries"
+    }
+}
+
+struct HistoryImportResponse: Decodable {
+    let profileKey: String
+    let schoolAccount: String
+    let studentName: String?
+    let studentNo: String?
+    let department: String?
+    let status: String?
+    let sourceURL: String
+    let pageTitle: String
+    let importedAt: Date
+    let recordCount: Int
+    let persistedToSupabase: Bool
+    let summaryTexts: [String]
+    let records: [HistoryCourseRecord]
+
+    enum CodingKeys: String, CodingKey {
+        case profileKey = "profile_key"
+        case schoolAccount = "school_account"
+        case studentName = "student_name"
+        case studentNo = "student_no"
+        case department
+        case status
+        case sourceURL = "source_url"
+        case pageTitle = "page_title"
+        case importedAt = "imported_at"
+        case recordCount = "record_count"
+        case persistedToSupabase = "persisted_to_supabase"
+        case summaryTexts = "summary_texts"
+        case records
+    }
+}
+
+struct HistoryCourseRecord: Decodable {
+    let category: String
+    let courseCode: String
+    let courseName: String
+    let academicTerm: String
+    let grade: String
+    let earnedCredits: String
+
+    enum CodingKeys: String, CodingKey {
+        case category
+        case courseCode = "course_code"
+        case courseName = "course_name"
+        case academicTerm = "academic_term"
+        case grade
+        case earnedCredits = "earned_credits"
     }
 }
 
@@ -559,29 +616,20 @@ struct CloudTargets: Codable {
 
 struct CloudUserSettings: Codable {
     let schoolAccount: String?
+    let schoolPassword: String?
     let backendBaseURL: String?
+    let reminderMinutes: Int?
 
     enum CodingKeys: String, CodingKey {
         case schoolAccount = "school_account"
+        case schoolPassword = "school_password"
         case backendBaseURL = "backend_base_url"
+        case reminderMinutes = "reminder_minutes"
     }
 }
 
 struct CloudUserDataRecord: Decodable {
     let content: CloudAppDataPayload
-}
-
-struct PersistedAppPreferences: Codable {
-    let schoolAccount: String
-    let backendBaseURL: String
-    let reminderMinutes: Int
-}
-
-struct PersistedScheduleSnapshot: Codable {
-    let studentName: String
-    let subtitle: String
-    let lastSyncedAt: Date?
-    let scheduleEntries: [ScheduleEntry]
 }
 
 struct PlannerCourse: Identifiable, Equatable {

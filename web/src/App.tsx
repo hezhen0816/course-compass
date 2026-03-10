@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import type { Course, CourseCategory, GenEdDimension } from './types';
+import { useMemo, useState } from 'react';
+import type { Course, CourseCategory, GenEdDimension, PlannerStats } from './types';
 import { useAuth } from './hooks/useAuth';
 import { useCourseData } from './hooks/useCourseData';
 import { AuthPage } from './components/AuthPage';
@@ -26,15 +26,10 @@ export default function CoursePlannerWebApp() {
 
   const [activeSemesterId, setActiveSemesterId] = useState<string>('1-1');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
-
-  // Check for first visit
-  useEffect(() => {
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
     const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-    if (!hasSeenOnboarding) {
-      setIsOnboardingOpen(true);
-    }
-  }, []);
+    return !hasSeenOnboarding;
+  });
 
   const handleCloseOnboarding = () => {
     setIsOnboardingOpen(false);
@@ -42,8 +37,8 @@ export default function CoursePlannerWebApp() {
   };
 
   // --- Computed Stats ---
-  const stats = useMemo(() => {
-    const current = {
+  const stats = useMemo<PlannerStats>(() => {
+    const current: PlannerStats = {
       total: 0,
       chinese: 0,
       english: 0,
@@ -250,7 +245,7 @@ export default function CoursePlannerWebApp() {
 
         alert(`成功匯入 ${newCourses.length} 門課程！`);
         return;
-      } catch (courselistError) {
+      } catch {
         // 如果選課清單解析失敗，嘗試成績列表格式
         console.log('選課清單解析失敗，嘗試成績列表格式...');
       }
@@ -396,7 +391,7 @@ export default function CoursePlannerWebApp() {
   return (
     <div className="min-h-screen bg-slate-100">
       <Navbar 
-        userEmail={session?.user?.email || "功能演示模式"}
+        userEmail={session?.user?.email || "訪客模式"}
         syncStatus={session ? syncStatus : 'idle'}
         isDemoMode={isDemoMode}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -412,22 +407,22 @@ export default function CoursePlannerWebApp() {
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-sky-200/90">
                 <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1">Web Planner</span>
-                <span className="rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1">與 iOS 並行保留</span>
+                <span className="rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1">桌面規劃</span>
               </div>
 
               <div className="space-y-3">
                 <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  網頁版只保留課程規劃、匯入與學分門檻管理。
+                  在大螢幕上整理學期、課程與畢業門檻。
                 </h1>
                 <p className="max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-                  課表、待辦、首頁摘要與提醒改由原生 iOS App 承接，Web 專注在大螢幕更好操作的規劃流程。
+                  Web 版專注課程規劃、資料匯入與細節編修；課表同步與行動摘要則由 iPhone 端處理。
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-3 text-sm text-slate-200">
                 <span className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2">桌機優先的八學期編排</span>
                 <span className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2">支援 HTML 匯入與雲端同步</span>
-                <span className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2">維持原本學分進度計算</span>
+                <span className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2">課程細節與成績試算</span>
               </div>
             </div>
 
@@ -443,9 +438,9 @@ export default function CoursePlannerWebApp() {
                 <p className="mt-2 text-sm text-slate-300">距離總門檻 {Math.max(data.targets.total - stats.total, 0)} 學分</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-sky-400/18 to-indigo-400/12 p-5 backdrop-blur">
-                <p className="text-xs font-medium uppercase tracking-[0.22em] text-sky-100/70">產品分工</p>
-                <p className="mt-3 text-lg font-semibold text-white">iOS 保留首頁、課表、待辦與提醒</p>
-                <p className="mt-2 text-sm text-slate-200">兩端都沿用同一套課程規劃概念，但 UI 與流程分開維護。</p>
+                <p className="text-xs font-medium uppercase tracking-[0.22em] text-sky-100/70">跨裝置協作</p>
+                <p className="mt-3 text-lg font-semibold text-white">同一份規劃資料，可延續到 iPhone 端</p>
+                <p className="mt-2 text-sm text-slate-200">Web 與 iOS 共用資料，但互動流程各自獨立。</p>
               </div>
             </div>
           </div>
@@ -464,7 +459,7 @@ export default function CoursePlannerWebApp() {
                   學分門檻設定、進度統計，以及臺科大成績 / 選課清單匯入。
                 </div>
                 <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                  {session ? '登入後會繼續透過 Supabase 儲存你的規劃資料。' : '展示模式只保留目前頁面操作，不會寫入任何資料。'}
+                  {session ? '登入後會持續保存你的規劃資料。' : '訪客模式只保留目前頁面操作，不會寫入任何資料。'}
                 </div>
               </div>
             </div>
@@ -484,34 +479,44 @@ export default function CoursePlannerWebApp() {
         </section>
       </main>
 
-      <CourseModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onSave={handleSaveCourse}
-        editingCourse={editingCourse ? editingCourse.course : null}
-      />
+      {isModalOpen && (
+        <CourseModal
+          key={editingCourse?.course.id ?? `new-${activeSemesterId}`}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveCourse}
+          editingCourse={editingCourse ? editingCourse.course : null}
+        />
+      )}
 
-      {detailCourse && (
+      {isDetailOpen && detailCourse && (
         <CourseDetailModal
           isOpen={isDetailOpen}
-          onClose={() => setIsDetailOpen(false)}
+          onClose={() => {
+            setIsDetailOpen(false);
+            setDetailCourse(null);
+          }}
           course={detailCourse.course}
           semesterId={detailCourse.semesterId}
           onSave={handleSaveDetail}
         />
       )}
 
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
-        onSave={handleSaveSettings}
-        initialSettings={data.targets}
-      />
+      {isSettingsOpen && (
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          onSave={handleSaveSettings}
+          initialSettings={data.targets}
+        />
+      )}
 
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={handleCloseOnboarding}
-      />
+      {isOnboardingOpen && (
+        <OnboardingModal
+          isOpen={isOnboardingOpen}
+          onClose={handleCloseOnboarding}
+        />
+      )}
     </div>
   );
 }

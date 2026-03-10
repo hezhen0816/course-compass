@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Upload, Calculator, LayoutDashboard, ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Upload, Calculator, LayoutDashboard, ChevronRight, ChevronLeft, Check, Smartphone } from 'lucide-react';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -8,11 +8,6 @@ interface OnboardingModalProps {
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) => {
   const [currentStep, setCurrentStep] = useState(0);
-
-  // Reset step when opening
-  useEffect(() => {
-    if (isOpen) setCurrentStep(0);
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -38,7 +33,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
     {
       title: "與 iOS 版分工",
       description: "首頁摘要、課表、待辦與提醒將交給原生 iOS App。這樣 Web 與 iOS 可以並行保留，但各自維持清楚的產品定位。",
-      icon: <div className="text-4xl font-bold text-orange-500">133</div>,
+      icon: <Smartphone className="w-16 h-16 text-orange-500" />,
       color: "bg-orange-50"
     }
   ];

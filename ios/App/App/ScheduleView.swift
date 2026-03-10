@@ -13,9 +13,9 @@ struct ScheduleView: View {
             VStack(alignment: .leading, spacing: 20) {
                 pageHeader
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("本週課表")
+                    Text("每週課表")
                         .font(.title3.weight(.bold))
-                    Text(store.lastSyncedAt == nil ? "以單日時間軸呈現，保留 iPhone 直向閱讀節奏。" : "顯示最近一次雲端同步完成後的課表資料。")
+                    Text(store.lastSyncedAt == nil ? "用單日時間軸查看每週課程安排。" : "顯示最近一次更新後的課表內容。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -41,9 +41,9 @@ struct ScheduleView: View {
 
                 if filteredEntries.isEmpty {
                     ContentUnavailableView(
-                        "今天沒有排課",
+                        "\(selectedWeekday.fullTitle)沒有排課",
                         systemImage: "calendar.badge.exclamationmark",
-                        description: Text("可以保留給專題、作業或自修安排。")
+                        description: Text("這段時間可以安排作業、複習或休息。")
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.top, 36)

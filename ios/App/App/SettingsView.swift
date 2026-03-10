@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var infoMessage: InfoMessage?
     @State private var isTargetSheetPresented = false
     @State private var isSyncing = false
+    @State private var isImportingHistory = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +27,7 @@ struct SettingsView: View {
                             .foregroundStyle(.indigo)
                             .frame(width: 34)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("目前登入")
+                            Text("目前使用帳號")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             Text(store.currentUserEmail ?? "未登入")
@@ -41,23 +42,23 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("學校帳密設定") {
+                Section("校務系統") {
                     TextField("學號 / 校務帳號", text: $store.schoolAccount)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                     SecureField("密碼", text: $store.schoolPassword)
 
-                    TextField("Python 後端網址", text: $store.backendBaseURL)
+                    TextField("同步服務網址", text: $store.backendBaseURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                         .keyboardType(.URL)
 
-                    Text("同步課表會把帳密送到你自己的 Python 後端，由後端登入校務系統、寫入資料庫，再同步回 iOS。")
+                    Text("更新課表或修課紀錄時，會透過你的同步服務登入校務系統，再把資料整理回這個 App。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
-                Section("同步") {
+                Section("資料同步") {
                     Button {
                         isSyncing = true
                         Task {
@@ -67,25 +68,27 @@ struct SettingsView: View {
                     } label: {
                         settingsRow(
                             title: isSyncing ? "同步中..." : "同步課表",
-                            subtitle: "將學校課表同步到資料庫，再更新 iOS 課表",
+                            subtitle: "更新雲端課表，並同步到這支 iPhone",
                             symbol: "arrow.triangle.2.circlepath"
                         )
                     }
                     .disabled(isSyncing)
 
                     Button {
-                        infoMessage = InfoMessage(
-                            title: "匯入歷史修課紀錄",
-                            message: "這個入口之後會把歷史修課紀錄匯入學分規劃系統，目前先保留 UI，暫不實作。"
-                        )
+                        isImportingHistory = true
+                        Task {
+                            await store.importAcademicHistory()
+                            isImportingHistory = false
+                        }
                     } label: {
                         settingsRow(
-                            title: "匯入歷史修課紀錄",
-                            subtitle: "將歷史修課紀錄匯入學分規劃系統（尚未實作）",
+                            title: isImportingHistory ? "匯入中..." : "匯入歷史修課紀錄",
+                            subtitle: "整理歷年修課資料，並更新到學分規劃",
                             symbol: "square.and.arrow.down.on.square"
                         )
                     }
                     .buttonStyle(.plain)
+                    .disabled(isImportingHistory)
 
                     if case .failed(let message) = store.syncState {
                         Text(message)
@@ -93,6 +96,16 @@ struct SettingsView: View {
                             .foregroundStyle(.red)
                     } else {
                         Text(syncStatusDescription)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let historyImportErrorMessage = store.historyImportErrorMessage {
+                        Text(historyImportErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    } else if let historyImportNoticeMessage = store.historyImportNoticeMessage {
+                        Text(historyImportNoticeMessage)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -105,7 +118,7 @@ struct SettingsView: View {
                         }
                     }
 
-                    Text("提醒設定只保存於本次 App 執行期間，不建立本地通知。")
+                    Text("提醒時間會保留在這台裝置上，目前不會建立系統通知。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -114,7 +127,7 @@ struct SettingsView: View {
                     Button {
                         isTargetSheetPresented = true
                     } label: {
-                        settingsRow(title: "設定畢業門檻", subtitle: "可編輯本地 session 狀態", symbol: "slider.horizontal.3")
+                        settingsRow(title: "設定畢業門檻", subtitle: "調整你的學分目標與畢業條件", symbol: "slider.horizontal.3")
                     }
 
                     let progress = store.plannerProgress
@@ -128,11 +141,11 @@ struct SettingsView: View {
                     .padding(.vertical, 6)
                 }
 
-                Section("功能導覽") {
+                Section("關於 App") {
                     Button {
-                        infoMessage = InfoMessage(title: "功能導覽", message: "目前已接入 Python 後端課表同步；學分規劃與待辦仍是本地資料。")
+                        infoMessage = InfoMessage(title: "修課羅盤", message: "修課羅盤整合課表、歷史修課紀錄與學分規劃，讓你能在同一個 App 追蹤自己的修課進度。")
                     } label: {
-                        settingsRow(title: "查看功能導覽", subtitle: "說明哪些資料已接真實同步", symbol: "book.closed")
+                        settingsRow(title: "查看 App 介紹", subtitle: "了解這個 App 的主要功能與定位", symbol: "book.closed")
                     }
                 }
 

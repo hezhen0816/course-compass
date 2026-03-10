@@ -63,3 +63,17 @@ export interface AppData {
   semesters: Semester[];
   targets: AppTargets;
 }
+
+export interface PlannerStats {
+  total: number;
+  chinese: number;
+  english: number;
+  gen_ed: number;
+  pe_semesters: number;
+  social: number;
+  homeCompulsory: number;
+  homeElective: number;
+  doubleMajor: number;
+  minor: number;
+  genEdDimensions: Set<string>;
+}

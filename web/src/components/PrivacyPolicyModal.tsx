@@ -44,7 +44,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
               資料儲存與隔離
             </h4>
             <p className="text-sm leading-relaxed">
-              本系統使用 <strong>Supabase</strong> 雲端資料庫服務。
+              本系統使用雲端資料庫與帳號隔離機制。
               我們採用列級安全性（Row Level Security, RLS）技術，
               確保只有您登入後才能存取屬於您的修課規劃資料，其他使用者無法窺探。
             </p>

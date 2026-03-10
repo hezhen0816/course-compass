@@ -1,11 +1,11 @@
 import React from 'react';
 import { Activity, BookOpen } from 'lucide-react';
 import { ProgressBar } from './ProgressBar';
-import type { AppData } from '../types';
+import type { AppData, PlannerStats } from '../types';
 
 interface SidebarProps {
   data: AppData;
-  stats: any; // Define stats type properly if possible
+  stats: PlannerStats;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ data, stats }) => {

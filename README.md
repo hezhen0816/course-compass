@@ -1,62 +1,84 @@
-# 修課規劃助手
+# 修課羅盤 Workspace
 
-同一個 repo 內同時保留兩條產品線：
+這個 repo 明確分成兩條產品線與三個共享支援區：
 
-- `Web`：專注課程規劃、課程匯入、學分門檻管理與詳細資訊編修。
-- `iOS`：原生 SwiftUI App，承接首頁摘要、課表、待辦、提醒與手機版學分規劃。
+- `web/`：React + Vite 的課程與學分規劃 Web 版
+- `ios/`：SwiftUI 原生 iPhone App
+- `backend/`：Python 同步服務
+- `supabase/`：migration 與資料庫結構
+- `test_artifacts/`：測試素材與校務頁面樣本
 
-這樣的分工可以避免 Web 與 iOS 互相拖累，同時保留最適合各自裝置的操作模式。
+`backend/`、`supabase/`、`test_artifacts/` 都維持在根目錄，方便兩端共用。
 
-## 產品邊界
+## 目錄角色
 
-### Web 版
+### Web
 
-- React + Vite 單頁應用。
-- 保留 Supabase 登入與同步。
-- 保留 HTML 匯入、八學期編排、學分統計、課程詳細資訊與成績試算。
-- 不再承接首頁摘要、待辦、提醒或手機導向課表。
+- 專注在大螢幕操作最有價值的流程
+- 提供課程規劃、HTML 匯入、學分門檻設定、課程細節與成績試算
+- 使用雲端帳號保存 `public.user_data`
 
-### iOS 版
+詳細說明在 [web/README.md](/Users/hezhen/Project/course_planner/web/README.md)。
 
-- `iOS 17+` 原生 SwiftUI。
-- 課表同步改由 Python 後端登入校務系統，並可寫入 Supabase。
-- 以 `TabView` 提供首頁、課表、學分規劃、設定四個原生分頁。
+### iOS
 
-### Python 後端
+- 原生 SwiftUI App
+- 提供首頁摘要、每週課表、手機版學分規劃與設定
+- 額外串接同步服務，從校務系統抓課表與歷史修課紀錄
 
-- `FastAPI` 提供課表同步 API。
-- 可用校務帳密登入 `https://courseselection.ntust.edu.tw/` 抓取課表。
-- 可將同步結果 upsert 到 Supabase `schedule_sync_snapshots`。
+詳細說明在 [ios/README.md](/Users/hezhen/Project/course_planner/ios/README.md)。
+
+### Backend
+
+- `FastAPI` 提供課表同步與歷史修課匯入 API
+- 以校務帳密登入校務系統抓資料
+- 將同步結果寫入 `schedule_sync_snapshots` 與 `history_import_snapshots`
+
+### Supabase
+
+- Web 與 iOS 共用同一個 Supabase 專案
+- 學分規劃存於 `public.user_data`
+- iOS 額外的同步快照由後端寫入
+- `user_data.content.settings` 目前使用的欄位鍵：
+  - `school_account`
+  - `school_password`
+  - `backend_base_url`
+  - `reminder_minutes`
+
+### Test Artifacts
+
+- `test_artifacts/course_selection/`：課表與選課頁樣本
+- `test_artifacts/edu_need_history/`：歷史修課紀錄頁樣本
 
 ## 開發指令
 
-### Web
+### 根目錄總控
 
 ```bash
 npm run web:dev
 npm run web:build
-```
-
-`dev` / `build` 目前仍等同於 Web 版指令。
-
-### iOS
-
-```bash
+npm run web:lint
 npm run ios:open
 npm run ios:build
+npm run backend:dev
 ```
 
-- `ios:open`：直接開啟 `ios/App/App.xcodeproj`
-- `ios:build`：用 `xcodebuild` 驗證原生 iOS target 可編譯
+### Web 安裝
 
-### Backend
+```bash
+cd /Users/hezhen/Project/course_planner/web
+npm install
+```
+
+Web 會從 repo 根目錄讀取 `.env`，不需要另外複製一份到 `web/`。
+
+### Backend 安裝
 
 ```bash
 cd /Users/hezhen/Project/course_planner
 python3 -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt
 cp .env.example .env
-npm run backend:dev
 ```
 
 需要的環境變數：
@@ -72,22 +94,19 @@ NTUST_VERIFY_SSL=false
 說明：
 
 - `VITE_SUPABASE_*` 給 Web 前端使用
-- `SUPABASE_SERVICE_ROLE_KEY` 只給 Python 後端使用，不要放進前端或 iOS
-- Web 與 iOS 可共用同一個 Supabase 專案，目前學分規劃資料共用 `public.user_data`
+- `SUPABASE_SERVICE_ROLE_KEY` 只給 Python 後端使用
+- iOS 不應直接持有 `service_role`
 
-Supabase table schema 在 [backend/supabase_schema.sql](/Users/hezhen/Project/course_planner/backend/supabase_schema.sql)。
+資料表與快照 schema 在 [backend/supabase_schema.sql](/Users/hezhen/Project/course_planner/backend/supabase_schema.sql)，migration 在 [supabase/migrations](/Users/hezhen/Project/course_planner/supabase/migrations)。
 
-API：
+## API
 
-- `POST /api/schedule/sync`：登入校務、抓課表、可選擇寫入 Supabase
-- `GET /api/schedule/{profile_key}`：從 Supabase 讀取最新課表快照
+- `POST /api/schedule/sync`：同步校務課表並保存快照
+- `GET /api/schedule/{profile_key}`：讀取最新課表快照
+- `POST /api/history/import`：匯入歷史修課紀錄並保存快照
 
-## 建議維護方式
+## 維護原則
 
-1. Web 與 iOS 分開定義產品責任，不共用畫面層。
-2. 若未來要串接真資料，優先抽出共用的資料規則與 mapping，不共用 UI 狀態。
-3. Web 端只處理大螢幕最有價值的規劃流程；行動版需求直接落在原生 iOS。
-
----
-
-Developed by Hezhen
+1. Web 與 iOS 不共用畫面與互動流程，只共用資料規則。
+2. `backend/`、`supabase/`、`test_artifacts/` 維持根目錄，作為共享基礎設施。
+3. 新功能優先先判斷屬於 Web 還是 iOS，再決定落點。

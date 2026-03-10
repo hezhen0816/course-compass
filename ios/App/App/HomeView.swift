@@ -153,35 +153,18 @@ struct HomeView: View {
 
     private var todoSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "待辦作業", subtitle: "目前仍為本地資料，不隨課表同步更新")
+            sectionHeader(title: "待辦作業", subtitle: "先保留首頁版位，之後再接上作業整理功能")
 
-            ForEach(store.todoItems) { item in
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
-                        .foregroundStyle(item.isCompleted ? Color.green : Color.orange)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(item.title)
-                            .font(.headline)
-                            .foregroundStyle(item.isCompleted ? .secondary : .primary)
-                            .strikethrough(item.isCompleted, color: .secondary)
-                        Text(item.course)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: 10) {
-                            Label(item.dueLabel, systemImage: "calendar.badge.clock")
-                            Label("\(item.priority)優先", systemImage: "flag.fill")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-                }
-                .padding(18)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            VStack(alignment: .leading, spacing: 10) {
+                Label("待辦功能即將開放", systemImage: "checklist")
+                    .font(.headline)
+                Text("目前這個區塊只保留介面，不會保存或同步任何待辦資料。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
     }
 
@@ -190,7 +173,7 @@ struct HomeView: View {
         let targets = store.plannerTargets
 
         return VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "學分摘要", subtitle: "學分規劃的重點進度整理")
+            sectionHeader(title: "學分摘要", subtitle: "快速查看目前進度與剩餘目標")
 
             VStack(alignment: .leading, spacing: 14) {
                 summaryRow(title: "總學分", current: progress.total, target: targets.total, tint: .blue)

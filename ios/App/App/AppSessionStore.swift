@@ -1,4 +1,3 @@
-import Security
 import SwiftUI
 
 private struct UserDataUpsertRequest: Encodable {
@@ -19,27 +18,25 @@ final class AppSessionStore: ObservableObject {
     @Published var schoolAccount: String = "" {
         didSet {
             guard !isRestoringPersistedState else { return }
-            persistLocalPreferences()
             queuePlannerSave()
         }
     }
     @Published var schoolPassword: String = "" {
         didSet {
             guard !isRestoringPersistedState else { return }
-            persistSchoolPassword()
+            queuePlannerSave()
         }
     }
     @Published var backendBaseURL: String = "http://127.0.0.1:8000" {
         didSet {
             guard !isRestoringPersistedState else { return }
-            persistLocalPreferences()
             queuePlannerSave()
         }
     }
     @Published var reminderMinutes: Int = 10 {
         didSet {
             guard !isRestoringPersistedState else { return }
-            persistLocalPreferences()
+            queuePlannerSave()
         }
     }
     @Published var syncState: ScheduleSyncState = .idle
@@ -47,35 +44,34 @@ final class AppSessionStore: ObservableObject {
     @Published var plannerTargets: PlannerTarget = .default
     @Published var plannerSemesters: [PlannerSemester] = []
     @Published var studentName: String = ""
-    @Published var subtitle: String = "資料展示模式"
+    @Published var subtitle: String = "尚未同步課表"
     @Published var upcomingCourses: [UpcomingCourse]
-    @Published var todoItems: [TodoItem]
     @Published var scheduleEntries: [ScheduleEntry]
     @Published var currentUserEmail: String?
-    @Published var isRestoringSession = true
     @Published var isAuthenticating = false
     @Published var authErrorMessage: String?
     @Published var authNoticeMessage: String?
+    @Published var historyImportErrorMessage: String?
+    @Published var historyImportNoticeMessage: String?
 
     private var authSession: SupabaseStoredSession?
     private var plannerSaveTask: Task<Void, Never>?
     private var isRestoringPersistedState = false
 
     init() {
-        let persistedScheduleSnapshot = Self.loadPersistedScheduleSnapshot()
-        self.upcomingCourses = persistedScheduleSnapshot.map {
-            Self.buildUpcomingCourses(from: $0.scheduleEntries)
-        } ?? Self.demoUpcomingCourses()
-        self.todoItems = Self.demoTodoItems()
-        self.scheduleEntries = persistedScheduleSnapshot?.scheduleEntries ?? Self.demoScheduleEntries()
-        self.plannerSemesters = Self.demoPlannerSemesters()
-        self.studentName = persistedScheduleSnapshot?.studentName ?? ""
-        self.subtitle = persistedScheduleSnapshot?.subtitle ?? "資料展示模式"
-        self.lastSyncedAt = persistedScheduleSnapshot?.lastSyncedAt
-        restoreLocalPreferences()
+        self.upcomingCourses = []
+        self.scheduleEntries = []
+        self.plannerSemesters = Self.blankPlannerSemesters()
+        self.studentName = ""
+        self.subtitle = "尚未同步課表"
+        self.lastSyncedAt = nil
+        restoreCachedAuthSession()
 
-        Task {
-            await restoreAuthSession()
+        if !isAuthConfigured, authSession != nil {
+            clearAuthenticatedState()
+            authErrorMessage = "尚未完成雲端登入設定"
+        } else if let storedSession = authSession {
+            bootstrapAuthenticatedData(forceRefresh: storedSession.expiresAt <= Date().addingTimeInterval(60))
         }
     }
 
@@ -311,6 +307,7 @@ final class AppSessionStore: ObservableObject {
         let baseURL = normalizedBackendBaseURL
 
         guard !profileKey.isEmpty else {
+            clearScheduleState()
             if !suppressErrors {
                 syncState = .failed("缺少學號，無法更新課表")
             }
@@ -338,23 +335,76 @@ final class AppSessionStore: ObservableObject {
             apply(payload: payload)
             syncState = .synced
         } catch {
+            if let nsError = error as NSError?, nsError.code == 404 {
+                clearScheduleState()
+            }
             if !suppressErrors {
                 syncState = .failed(error.localizedDescription)
             }
         }
     }
 
-    private func restoreAuthSession() async {
-        guard isAuthConfigured else {
-            authErrorMessage = "尚未完成雲端登入設定"
-            isRestoringSession = false
+    func importAcademicHistory() async {
+        let username = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+        let password = schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseURL = normalizedBackendBaseURL
+
+        historyImportErrorMessage = nil
+        historyImportNoticeMessage = nil
+
+        guard !username.isEmpty, !password.isEmpty else {
+            historyImportErrorMessage = "請先輸入學校帳號與密碼"
             return
         }
 
-        defer {
-            isRestoringSession = false
+        guard let endpoint = URL(string: "\(baseURL)/api/history/import") else {
+            historyImportErrorMessage = "後端網址格式錯誤"
+            return
         }
 
+        do {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(
+                HistoryImportRequest(
+                    username: username,
+                    password: password,
+                    profileKey: username,
+                    persistToSupabase: true,
+                    verifySSL: false
+                )
+            )
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try validateHTTPResponse(response, data: data)
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let payload = try decoder.decode(HistoryImportResponse.self, from: data)
+
+            if let payloadStudentName = payload.studentName?.trimmingCharacters(in: .whitespacesAndNewlines), !payloadStudentName.isEmpty {
+                studentName = payloadStudentName.replacingOccurrences(of: "姓名：", with: "")
+            }
+
+            let summary = mergeImportedHistory(
+                payload.records,
+                studentNumber: payload.studentNo ?? username
+            )
+            try await persistPlannerData()
+
+            historyImportNoticeMessage = [
+                "已匯入 \(payload.recordCount) 筆歷史修課紀錄",
+                "新增 \(summary.inserted) 筆",
+                "更新 \(summary.updated) 筆",
+                "略過 \(summary.skipped) 筆",
+            ].joined(separator: "・")
+        } catch {
+            historyImportErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreCachedAuthSession() {
         guard
             let sessionData = UserDefaults.standard.data(forKey: Self.authSessionStorageKey),
             let storedSession = try? JSONDecoder().decode(SupabaseStoredSession.self, from: sessionData)
@@ -364,15 +414,6 @@ final class AppSessionStore: ObservableObject {
 
         authSession = storedSession
         currentUserEmail = storedSession.email
-
-        do {
-            _ = try await validSession(forceRefresh: storedSession.expiresAt <= Date().addingTimeInterval(60))
-            await loadPlannerData()
-            await loadLatestScheduleSnapshot(suppressErrors: true)
-        } catch {
-            clearAuthenticatedState()
-            authErrorMessage = "登入已失效，請重新登入"
-        }
     }
 
     private func establishAuthenticatedSession(from payload: SupabaseAuthSessionResponse, fallbackEmail: String) async throws {
@@ -406,9 +447,22 @@ final class AppSessionStore: ObservableObject {
         authSession = storedSession
         currentUserEmail = storedSession.email
         authErrorMessage = nil
-        subtitle = "已登入帳號"
+        subtitle = "尚未同步課表"
         persistAuthSession(storedSession)
-        await loadPlannerData()
+        bootstrapAuthenticatedData(forceRefresh: false)
+    }
+
+    private func bootstrapAuthenticatedData(forceRefresh: Bool) {
+        Task { @MainActor in
+            do {
+                _ = try await validSession(forceRefresh: forceRefresh)
+                await loadPlannerData()
+                await loadLatestScheduleSnapshot(suppressErrors: true)
+            } catch {
+                clearAuthenticatedState()
+                authErrorMessage = "登入已失效，請重新登入"
+            }
+        }
     }
 
     private func loadPlannerData() async {
@@ -432,15 +486,13 @@ final class AppSessionStore: ObservableObject {
             let records = try decoder.decode([CloudUserDataRecord].self, from: data)
             if let record = records.first {
                 applyPlannerPayload(record.content)
-                authNoticeMessage = "已載入雲端規劃資料"
+                authNoticeMessage = "已載入你的規劃資料"
             } else {
-                plannerTargets = .default
-                plannerSemesters = Self.blankPlannerSemesters()
-                authNoticeMessage = "已登入帳號，可以開始建立你的規劃"
+                resetCloudBackedState()
+                authNoticeMessage = "已登入，可以開始建立你的規劃"
             }
         } catch {
-            plannerTargets = .default
-            plannerSemesters = Self.blankPlannerSemesters()
+            resetCloudBackedState()
             authErrorMessage = "讀取雲端資料失敗：\(error.localizedDescription)"
         }
     }
@@ -466,33 +518,37 @@ final class AppSessionStore: ObservableObject {
         }
 
         do {
-            let session = try await validSession()
-            let endpoint = try makeURL(path: "/rest/v1/user_data?on_conflict=user_id")
-            var request = URLRequest(url: endpoint)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("resolution=merge-duplicates,return=minimal", forHTTPHeaderField: "Prefer")
-            applyAPIHeaders(to: &request)
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-            let payload = cloudAppDataPayload()
-            let body = [
-                UserDataUpsertRequest(
-                    userID: session.userID,
-                    content: payload,
-                    updatedAt: Self.iso8601String(from: Date())
-                )
-            ]
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.withoutEscapingSlashes]
-            request.httpBody = try encoder.encode(body)
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            try validateHTTPResponse(response, data: data)
+            try await persistPlannerData()
             authNoticeMessage = "規劃資料已保存到雲端"
         } catch {
             authErrorMessage = "保存雲端資料失敗：\(error.localizedDescription)"
         }
+    }
+
+    private func persistPlannerData() async throws {
+        let session = try await validSession()
+        let endpoint = try makeURL(path: "/rest/v1/user_data?on_conflict=user_id")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("resolution=merge-duplicates,return=minimal", forHTTPHeaderField: "Prefer")
+        applyAPIHeaders(to: &request)
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+        let payload = cloudAppDataPayload()
+        let body = [
+            UserDataUpsertRequest(
+                userID: session.userID,
+                content: payload,
+                updatedAt: Self.iso8601String(from: Date())
+            )
+        ]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        request.httpBody = try encoder.encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateHTTPResponse(response, data: data)
     }
 
     private func validSession(forceRefresh: Bool = false) async throws -> SupabaseStoredSession {
@@ -593,7 +649,9 @@ final class AppSessionStore: ObservableObject {
             ),
             settings: CloudUserSettings(
                 schoolAccount: schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                backendBaseURL: backendBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                schoolPassword: schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                backendBaseURL: backendBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                reminderMinutes: reminderMinutes
             )
         )
     }
@@ -620,7 +678,8 @@ final class AppSessionStore: ObservableObject {
                 id: UUID(uuidString: semester.id) ?? UUID(),
                 name: semester.name,
                 courses: semester.courses.map { course in
-                    PlannerCourse(
+                    normalizedImportedHistoryCourse(
+                        PlannerCourse(
                         id: UUID(uuidString: course.id) ?? UUID(),
                         name: course.name,
                         credits: course.credits,
@@ -632,6 +691,7 @@ final class AppSessionStore: ObservableObject {
                         time: course.details?.time ?? "",
                         notes: course.details?.notes ?? ""
                     )
+                    )
                 }
             )
         }
@@ -639,27 +699,266 @@ final class AppSessionStore: ObservableObject {
         plannerSemesters = semesters.isEmpty ? Self.blankPlannerSemesters() : semesters
     }
 
-    private func applyCloudSettings(_ settings: CloudUserSettings?) {
-        guard let settings else {
-            return
+    private func mergeImportedHistory(_ records: [HistoryCourseRecord], studentNumber: String?) -> HistoryImportSummary {
+        var summary = HistoryImportSummary()
+
+        for record in records.sorted(by: historyRecordSort) {
+            let targetIndex = ensureSemesterIndex(for: record.academicTerm, studentNumber: studentNumber)
+            let importedCourse = plannerCourse(from: record)
+            let importedName = importedCourse.name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let existingIndex = plannerSemesters[targetIndex].courses.firstIndex(where: {
+                historyImportedCourseCode(from: $0.notes) == record.courseCode
+            }) {
+                plannerSemesters[targetIndex].courses[existingIndex] = importedCourse
+                summary.updated += 1
+                continue
+            }
+
+            if plannerSemesters[targetIndex].courses.contains(where: {
+                $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == importedName
+            }) {
+                summary.skipped += 1
+                continue
+            }
+
+            plannerSemesters[targetIndex].courses.append(importedCourse)
+            summary.inserted += 1
         }
 
+        return summary
+    }
+
+    private func ensureSemesterIndex(for academicTerm: String, studentNumber: String?) -> Int {
+        if let computedIndex = plannerSemesterIndex(for: academicTerm, studentNumber: studentNumber) {
+            while plannerSemesters.count <= computedIndex {
+                let nextIndex = plannerSemesters.count
+                plannerSemesters.append(
+                    PlannerSemester(
+                        name: semesterName(forSequentialIndex: nextIndex),
+                        courses: []
+                    )
+                )
+            }
+            return computedIndex
+        }
+
+        let fallbackName = fallbackSemesterName(for: academicTerm)
+        if let existingIndex = plannerSemesters.firstIndex(where: { $0.name == fallbackName }) {
+            return existingIndex
+        }
+
+        plannerSemesters.append(PlannerSemester(name: fallbackName, courses: []))
+        return plannerSemesters.count - 1
+    }
+
+    private func plannerSemesterIndex(for academicTerm: String, studentNumber: String?) -> Int? {
+        guard academicTerm.count >= 4 else {
+            return nil
+        }
+
+        let termYearText = String(academicTerm.prefix(3))
+        let termSemesterText = String(academicTerm.suffix(1))
+        guard
+            let termYear = Int(termYearText),
+            let termSemester = Int(termSemesterText),
+            (1 ... 2).contains(termSemester),
+            let admissionYear = admissionYear(from: studentNumber ?? schoolAccount)
+        else {
+            return nil
+        }
+
+        let yearOffset = termYear - admissionYear
+        guard yearOffset >= 0 else {
+            return nil
+        }
+
+        return yearOffset * 2 + (termSemester - 1)
+    }
+
+    private func admissionYear(from studentNumber: String) -> Int? {
+        let trimmed = studentNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let match = trimmed.range(of: #"\d{3}"#, options: .regularExpression)
+        guard let match else {
+            return nil
+        }
+        return Int(trimmed[match])
+    }
+
+    private func semesterName(forSequentialIndex index: Int) -> String {
+        let academicYear = index / 2
+        let semesterLabel = index.isMultiple(of: 2) ? "上" : "下"
+        let yearLabel: String
+
+        switch academicYear {
+        case 0:
+            yearLabel = "大一"
+        case 1:
+            yearLabel = "大二"
+        case 2:
+            yearLabel = "大三"
+        case 3:
+            yearLabel = "大四"
+        default:
+            yearLabel = "第\(academicYear + 1)學年"
+        }
+
+        return "\(yearLabel)\(semesterLabel)"
+    }
+
+    private func fallbackSemesterName(for academicTerm: String) -> String {
+        guard academicTerm.count >= 4 else {
+            return academicTerm
+        }
+
+        let year = String(academicTerm.prefix(3))
+        let semester = academicTerm.hasSuffix("1") ? "上" : "下"
+        return "\(year)學年\(semester)"
+    }
+
+    private func plannerCourse(from record: HistoryCourseRecord) -> PlannerCourse {
+        let cleanedName = sanitizedHistoryCourseName(record.courseName)
+        let category = plannerCategory(
+            forHistoryCourseName: cleanedName,
+            courseCode: record.courseCode,
+            sourceCategory: record.category
+        )
+
+        return PlannerCourse(
+            name: cleanedName,
+            credits: parsedCredits(record.earnedCredits),
+            category: category,
+            program: .home,
+            notes: historyNotes(for: record)
+        )
+    }
+
+    private func sanitizedHistoryCourseName(_ rawName: String) -> String {
+        rawName
+            .replacingOccurrences(of: "★", with: "")
+            .replacingOccurrences(of: "◆", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func parsedCredits(_ rawValue: String) -> Double {
+        Double(rawValue.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+    }
+
+    private func plannerCategory(forHistoryCourseName name: String, courseCode: String, sourceCategory: String) -> PlannerCourseCategory {
+        let categoryText = sourceCategory
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = courseCode.uppercased()
+
+        if normalizedName.contains("體育") || code.hasPrefix("PE") {
+            return .pe
+        }
+        if
+            normalizedName.contains("國文")
+            || normalizedName.contains("中文")
+            || normalizedName.contains("文學")
+            || normalizedName.contains("表達")
+        {
+            return .chinese
+        }
+        if normalizedName.contains("英文") || normalizedName.contains("英語") || code.hasPrefix("CC101") || code.hasPrefix("CC105") {
+            return .english
+        }
+        if normalizedName.contains("通識") || code.hasPrefix("GE") || categoryText.contains("通識") {
+            return .genEd
+        }
+        if categoryText.contains("社會") {
+            return .social
+        }
+        if categoryText.contains("必修") {
+            return .compulsory
+        }
+        if categoryText.contains("選修") {
+            return .elective
+        }
+        return .other
+    }
+
+    private func normalizedImportedHistoryCourse(_ course: PlannerCourse) -> PlannerCourse {
+        guard course.notes.contains("歷史修課匯入") else {
+            return course
+        }
+
+        let sourceCategory = historySourceCategory(from: course.notes) ?? ""
+        let courseCode = historyImportedCourseCode(from: course.notes) ?? ""
+        let normalizedCategory = plannerCategory(
+            forHistoryCourseName: course.name,
+            courseCode: courseCode,
+            sourceCategory: sourceCategory
+        )
+
+        if normalizedCategory == course.category {
+            return course
+        }
+
+        var updatedCourse = course
+        updatedCourse.category = normalizedCategory
+        return updatedCourse
+    }
+
+    private func historyNotes(for record: HistoryCourseRecord) -> String {
+        [
+            "歷史修課匯入",
+            "課碼: \(record.courseCode)",
+            "學年期: \(record.academicTerm)",
+            "成績: \(record.grade)",
+            "來源分類: \(record.category)"
+        ].joined(separator: "\n")
+    }
+
+    private func historyImportedCourseCode(from notes: String) -> String? {
+        let lines = notes.split(separator: "\n")
+        for line in lines {
+            if line.hasPrefix("課碼: ") {
+                return line.replacingOccurrences(of: "課碼: ", with: "")
+            }
+        }
+        return nil
+    }
+
+    private func historySourceCategory(from notes: String) -> String? {
+        let lines = notes.split(separator: "\n")
+        for line in lines {
+            if line.hasPrefix("來源分類: ") {
+                return line.replacingOccurrences(of: "來源分類: ", with: "")
+            }
+        }
+        return nil
+    }
+
+    private func historyRecordSort(lhs: HistoryCourseRecord, rhs: HistoryCourseRecord) -> Bool {
+        if lhs.academicTerm == rhs.academicTerm {
+            return lhs.courseCode < rhs.courseCode
+        }
+        return lhs.academicTerm < rhs.academicTerm
+    }
+
+    private func applyCloudSettings(_ settings: CloudUserSettings?) {
         isRestoringPersistedState = true
-        if let schoolAccount = settings.schoolAccount?.trimmingCharacters(in: .whitespacesAndNewlines), !schoolAccount.isEmpty {
-            self.schoolAccount = schoolAccount
-        }
-        if let backendBaseURL = settings.backendBaseURL?.trimmingCharacters(in: .whitespacesAndNewlines), !backendBaseURL.isEmpty {
-            self.backendBaseURL = backendBaseURL
-        }
+        self.schoolAccount = settings?.schoolAccount?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.schoolPassword = settings?.schoolPassword?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.backendBaseURL = settings?.backendBaseURL?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? Self.defaultBackendBaseURL
+        self.reminderMinutes = settings?.reminderMinutes ?? 10
         isRestoringPersistedState = false
-        persistLocalPreferences()
+    }
+
+    private func clearScheduleState() {
+        studentName = ""
+        subtitle = "尚未同步課表"
+        lastSyncedAt = nil
+        scheduleEntries = []
+        upcomingCourses = []
     }
 
     private func apply(payload: ScheduleSyncResponse) {
         if let payloadStudentName = payload.studentName?.trimmingCharacters(in: .whitespacesAndNewlines), !payloadStudentName.isEmpty {
             studentName = payloadStudentName
         }
-        subtitle = payload.persistedToSupabase ? "已同步並保存到雲端" : "已同步，但尚未保存到雲端"
+        subtitle = payload.persistedToSupabase ? "課表已更新" : "課表已更新，等待雲端保存"
         lastSyncedAt = payload.syncedAt
         scheduleEntries = payload.scheduleEntries.map { entry in
             ScheduleEntry(
@@ -672,18 +971,17 @@ final class AppSessionStore: ObservableObject {
             )
         }
         upcomingCourses = Self.buildUpcomingCourses(from: scheduleEntries)
-        persistScheduleSnapshot()
     }
 
     private static func buildUpcomingCourses(from entries: [ScheduleEntry]) -> [UpcomingCourse] {
         entries.map { entry in
             UpcomingCourse(
                 title: entry.title,
-                subtitle: entry.instructor.isEmpty ? "已同步課表" : entry.instructor,
+                subtitle: entry.instructor.isEmpty ? "課表已更新" : entry.instructor,
                 timeLabel: entry.timeRange,
                 room: entry.room.isEmpty ? "未提供地點" : entry.room,
                 weekday: entry.weekday,
-                note: entry.room.isEmpty ? "此課程未提供教室資訊" : "同步自校務課表"
+                note: entry.room.isEmpty ? "此課程未提供教室資訊" : "課表資料已更新"
             )
         }
     }
@@ -743,103 +1041,6 @@ final class AppSessionStore: ObservableObject {
         return PlannerGenEdDimension(rawValue: rawValue) ?? .none
     }
 
-    private func restoreLocalPreferences() {
-        isRestoringPersistedState = true
-
-        if
-            let data = UserDefaults.standard.data(forKey: Self.preferencesStorageKey),
-            let preferences = try? JSONDecoder().decode(PersistedAppPreferences.self, from: data)
-        {
-            schoolAccount = preferences.schoolAccount
-            backendBaseURL = preferences.backendBaseURL
-            reminderMinutes = preferences.reminderMinutes
-        } else {
-            schoolAccount = "B11209001"
-            backendBaseURL = "http://127.0.0.1:8000"
-            reminderMinutes = 10
-        }
-
-        schoolPassword = loadSchoolPassword() ?? "courseplanner"
-        isRestoringPersistedState = false
-    }
-
-    private func persistLocalPreferences() {
-        let preferences = PersistedAppPreferences(
-            schoolAccount: schoolAccount,
-            backendBaseURL: backendBaseURL,
-            reminderMinutes: reminderMinutes
-        )
-
-        if let data = try? JSONEncoder().encode(preferences) {
-            UserDefaults.standard.set(data, forKey: Self.preferencesStorageKey)
-        }
-    }
-
-    private func persistScheduleSnapshot() {
-        let snapshot = PersistedScheduleSnapshot(
-            studentName: studentName,
-            subtitle: subtitle,
-            lastSyncedAt: lastSyncedAt,
-            scheduleEntries: scheduleEntries
-        )
-
-        if let data = try? JSONEncoder().encode(snapshot) {
-            UserDefaults.standard.set(data, forKey: Self.scheduleSnapshotStorageKey)
-        }
-    }
-
-    private static func loadPersistedScheduleSnapshot() -> PersistedScheduleSnapshot? {
-        guard
-            let data = UserDefaults.standard.data(forKey: scheduleSnapshotStorageKey),
-            let snapshot = try? JSONDecoder().decode(PersistedScheduleSnapshot.self, from: data)
-        else {
-            return nil
-        }
-        return snapshot
-    }
-
-    private func persistSchoolPassword() {
-        let trimmedPassword = schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedPassword.isEmpty {
-            deleteSchoolPassword()
-            return
-        }
-
-        guard let passwordData = trimmedPassword.data(using: .utf8) else {
-            return
-        }
-
-        let query = Self.schoolPasswordKeychainQuery()
-        SecItemDelete(query as CFDictionary)
-
-        var attributes = query
-        attributes[kSecValueData as String] = passwordData
-        SecItemAdd(attributes as CFDictionary, nil)
-    }
-
-    private func loadSchoolPassword() -> String? {
-        var query = Self.schoolPasswordKeychainQuery()
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard
-            status == errSecSuccess,
-            let data = result as? Data,
-            let password = String(data: data, encoding: .utf8)
-        else {
-            return nil
-        }
-
-        return password
-    }
-
-    private func deleteSchoolPassword() {
-        let query = Self.schoolPasswordKeychainQuery()
-        SecItemDelete(query as CFDictionary)
-    }
-
     private func persistAuthSession(_ session: SupabaseStoredSession) {
         if let encoded = try? JSONEncoder().encode(session) {
             UserDefaults.standard.set(encoded, forKey: Self.authSessionStorageKey)
@@ -847,15 +1048,30 @@ final class AppSessionStore: ObservableObject {
     }
 
     private func clearAuthenticatedState() {
+        plannerSaveTask?.cancel()
+        plannerSaveTask = nil
         authSession = nil
         currentUserEmail = nil
-        studentName = ""
         authErrorMessage = nil
         authNoticeMessage = nil
-        subtitle = "資料展示模式"
+        historyImportErrorMessage = nil
+        historyImportNoticeMessage = nil
+        resetCloudBackedState()
+        selectedTab = .home
+        UserDefaults.standard.removeObject(forKey: Self.authSessionStorageKey)
+    }
+
+    private func resetCloudBackedState() {
+        isRestoringPersistedState = true
+        schoolAccount = ""
+        schoolPassword = ""
+        backendBaseURL = Self.defaultBackendBaseURL
+        reminderMinutes = 10
         plannerTargets = .default
         plannerSemesters = Self.blankPlannerSemesters()
-        UserDefaults.standard.removeObject(forKey: Self.authSessionStorageKey)
+        syncState = .idle
+        clearScheduleState()
+        isRestoringPersistedState = false
     }
 
     private func makeURL(path: String) throws -> URL {
@@ -948,16 +1164,7 @@ final class AppSessionStore: ObservableObject {
     }
 
     private static let authSessionStorageKey = "courseplanner.supabase.session"
-    private static let preferencesStorageKey = "courseplanner.preferences"
-    private static let scheduleSnapshotStorageKey = "courseplanner.scheduleSnapshot"
-
-    private static func schoolPasswordKeychainQuery() -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "com.hezhen.courseplanner.school",
-            kSecAttrAccount as String: "schoolPassword"
-        ]
-    }
+    private static let defaultBackendBaseURL = "http://127.0.0.1:8000"
 
     private static func iso8601String(from date: Date) -> String {
         let formatter = ISO8601DateFormatter()
@@ -978,113 +1185,12 @@ final class AppSessionStore: ObservableObject {
         ]
     }
 
-    private static func demoUpcomingCourses() -> [UpcomingCourse] {
-        [
-            UpcomingCourse(
-                title: "人機互動設計",
-                subtitle: "今日第一堂課",
-                timeLabel: "09:10 - 12:00",
-                room: "TR-512",
-                weekday: .monday,
-                note: "課前帶上分組 wireframe 草稿"
-            ),
-            UpcomingCourse(
-                title: "資料庫系統",
-                subtitle: "期中專案進度確認",
-                timeLabel: "13:20 - 16:10",
-                room: "RB-105",
-                weekday: .tuesday,
-                note: "準備 schema 關聯圖與 SQL demo"
-            ),
-            UpcomingCourse(
-                title: "數位產品企劃",
-                subtitle: "提案彩排",
-                timeLabel: "10:20 - 12:10",
-                room: "IB-302",
-                weekday: .thursday,
-                note: "10 分鐘內完成 pitch"
-            )
-        ]
+    private struct HistoryImportSummary {
+        var inserted = 0
+        var updated = 0
+        var skipped = 0
     }
 
-    private static func demoTodoItems() -> [TodoItem] {
-        [
-            TodoItem(
-                title: "完成期中簡報首頁與資訊架構圖",
-                course: "數位產品企劃",
-                dueLabel: "今天 18:00 前",
-                priority: "高",
-                isCompleted: false
-            ),
-            TodoItem(
-                title: "上傳 Lab 2 程式與測試截圖",
-                course: "資料庫系統",
-                dueLabel: "明天 23:59 前",
-                priority: "中",
-                isCompleted: false
-            ),
-            TodoItem(
-                title: "閱讀 HCI 第 6 章並整理筆記",
-                course: "人機互動設計",
-                dueLabel: "本週五前",
-                priority: "低",
-                isCompleted: true
-            )
-        ]
-    }
-
-    private static func demoScheduleEntries() -> [ScheduleEntry] {
-        [
-            ScheduleEntry(weekday: .monday, title: "人機互動設計", timeRange: "09:10 - 12:00", room: "TR-512", instructor: "王怡文", accent: .compulsory),
-            ScheduleEntry(weekday: .monday, title: "通識：科技與社會", timeRange: "13:20 - 15:10", room: "AU-101", instructor: "陳明志", accent: .genEd),
-            ScheduleEntry(weekday: .tuesday, title: "資料庫系統", timeRange: "13:20 - 16:10", room: "RB-105", instructor: "林大鈞", accent: .compulsory),
-            ScheduleEntry(weekday: .wednesday, title: "英文簡報與溝通", timeRange: "10:20 - 12:10", room: "IB-201", instructor: "Jessica Wu", accent: .english),
-            ScheduleEntry(weekday: .thursday, title: "數位產品企劃", timeRange: "10:20 - 12:10", room: "IB-302", instructor: "黃詠真", accent: .elective),
-            ScheduleEntry(weekday: .friday, title: "體育：羽球", timeRange: "15:30 - 17:20", room: "體育館 B1", instructor: "張嘉宏", accent: .pe)
-        ]
-    }
-
-    private static func demoPlannerSemesters() -> [PlannerSemester] {
-        [
-            PlannerSemester(name: "大一上", courses: [
-                PlannerCourse(name: "微積分(一)", credits: 3, category: .compulsory, program: .home, instructor: "黃建豪", location: "MA-201", time: "一 1,2,3"),
-                PlannerCourse(name: "程式設計", credits: 3, category: .compulsory, program: .home, instructor: "李宜庭", location: "IB-105", time: "二 2,3,4"),
-                PlannerCourse(name: "大學國文", credits: 2, category: .chinese, program: .home, instructor: "林佳穎", location: "TR-301", time: "三 6,7")
-            ]),
-            PlannerSemester(name: "大一下", courses: [
-                PlannerCourse(name: "微積分(二)", credits: 3, category: .compulsory, program: .home, instructor: "黃建豪", location: "MA-201", time: "一 1,2,3"),
-                PlannerCourse(name: "資料結構", credits: 3, category: .compulsory, program: .home, instructor: "陳奕安", location: "IB-210", time: "四 2,3,4"),
-                PlannerCourse(name: "英文聽講", credits: 2, category: .english, program: .home, instructor: "Amy Chen", location: "IB-406", time: "五 3,4")
-            ]),
-            PlannerSemester(name: "大二上", courses: [
-                PlannerCourse(name: "機率", credits: 3, category: .compulsory, program: .home, instructor: "楊文祥", location: "MA-105", time: "二 1,2,3"),
-                PlannerCourse(name: "資料庫系統", credits: 3, category: .compulsory, program: .home, instructor: "林大鈞", location: "RB-105", time: "二 6,7,8"),
-                PlannerCourse(name: "通識：當代文明", credits: 2, category: .genEd, program: .home, dimension: .B, instructor: "王瑞華", location: "AU-205", time: "三 3,4")
-            ]),
-            PlannerSemester(name: "大二下", courses: [
-                PlannerCourse(name: "作業系統", credits: 3, category: .compulsory, program: .home, instructor: "陳柏凱", location: "RB-202", time: "一 6,7,8"),
-                PlannerCourse(name: "英文簡報與溝通", credits: 2, category: .english, program: .home, instructor: "Jessica Wu", location: "IB-201", time: "三 2,3"),
-                PlannerCourse(name: "體育：游泳", credits: 0, category: .pe, program: .home, instructor: "張嘉宏", location: "游泳館", time: "五 7,8")
-            ]),
-            PlannerSemester(name: "大三上", courses: [
-                PlannerCourse(name: "人機互動設計", credits: 3, category: .elective, program: .home, instructor: "王怡文", location: "TR-512", time: "一 2,3,4"),
-                PlannerCourse(name: "通識：美感與人生", credits: 2, category: .genEd, program: .home, dimension: .C, instructor: "張若琳", location: "AU-110", time: "二 8,9"),
-                PlannerCourse(name: "社會實踐", credits: 0, category: .social, program: .home, instructor: "服務學習中心", location: "校外服務", time: "彈性安排")
-            ]),
-            PlannerSemester(name: "大三下", courses: [
-                PlannerCourse(name: "數位產品企劃", credits: 3, category: .elective, program: .home, instructor: "黃詠真", location: "IB-302", time: "四 3,4,5"),
-                PlannerCourse(name: "通識：群己制度", credits: 2, category: .genEd, program: .home, dimension: .E, instructor: "宋哲民", location: "AU-220", time: "四 8,9")
-            ]),
-            PlannerSemester(name: "大四上", courses: [
-                PlannerCourse(name: "畢業專題(一)", credits: 3, category: .compulsory, program: .home, instructor: "專題指導老師", location: "研究室", time: "另行約定"),
-                PlannerCourse(name: "行動應用設計", credits: 3, category: .elective, program: .home, instructor: "邱正杰", location: "IB-506", time: "三 6,7,8")
-            ]),
-            PlannerSemester(name: "大四下", courses: [
-                PlannerCourse(name: "畢業專題(二)", credits: 3, category: .compulsory, program: .home, instructor: "專題指導老師", location: "研究室", time: "另行約定"),
-                PlannerCourse(name: "通識：自然生命", credits: 2, category: .genEd, program: .home, dimension: .F, instructor: "蘇品涵", location: "AU-115", time: "二 6,7")
-            ])
-        ]
-    }
 }
 
 private extension String {

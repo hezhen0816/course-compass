@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   X, User, Calculator, Award, Trash2, Plus, FileText, Save, 
   Mail, MapPin, Clock, Link as LinkIcon, Copy, ChevronUp, ChevronDown, MoreHorizontal
@@ -16,17 +16,16 @@ interface CourseDetailModalProps {
 export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ 
   isOpen, onClose, course, semesterId, onSave 
 }) => {
-  const [detailData, setDetailData] = useState<CourseDetails>({ gradingPolicy: [] });
+  const [detailData, setDetailData] = useState<CourseDetails>(() => course.details || {
+    professor: '',
+    email: '',
+    location: '',
+    time: '',
+    link: '',
+    notes: '',
+    gradingPolicy: [],
+  });
   const [openGradingMenuId, setOpenGradingMenuId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isOpen && course) {
-      setDetailData(course.details || { 
-        professor: '', email: '', location: '', time: '', link: '', notes: '', gradingPolicy: [] 
-      });
-      setOpenGradingMenuId(null);
-    }
-  }, [isOpen, course]);
 
   if (!isOpen) return null;
 

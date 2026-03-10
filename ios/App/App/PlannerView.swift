@@ -68,9 +68,9 @@ struct PlannerView: View {
 
     private var plannerHeader: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("保留原本學分規劃核心功能")
+            Text("把修課進度整理成清楚的畢業路線")
                 .font(.title3.weight(.bold))
-            Text("以單欄手機版重新組織進度、八學期與課程細節。")
+            Text("用八學期視角整理課程、門檻與修課重點，隨時調整你的規劃。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Info } from 'lucide-react';
 import type { Course, CourseCategory, GenEdDimension, CourseProgram } from '../types';
 import { CATEGORY_LABELS, GEN_ED_LABELS, PROGRAM_LABELS } from '../constants';
@@ -11,30 +11,13 @@ interface CourseModalProps {
 }
 
 export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose, onSave, editingCourse }) => {
-  const [formName, setFormName] = useState('');
-  const [formCredits, setFormCredits] = useState(3);
-  const [formCategory, setFormCategory] = useState<CourseCategory>('compulsory');
-  const [formProgram, setFormProgram] = useState<CourseProgram>('home');
-  const [formDimension, setFormDimension] = useState<GenEdDimension>('None');
-
   const supportsProgram = (category: CourseCategory) =>
     category === 'compulsory' || category === 'elective' || category === 'other' || category === 'unclassified';
-
-  useEffect(() => {
-    if (editingCourse) {
-      setFormName(editingCourse.name);
-      setFormCredits(editingCourse.credits);
-      setFormCategory(editingCourse.category);
-      setFormProgram(editingCourse.program || 'home');
-      setFormDimension(editingCourse.dimension || 'None');
-    } else {
-      setFormName('');
-      setFormCredits(3);
-      setFormCategory('compulsory');
-      setFormProgram('home');
-      setFormDimension('None');
-    }
-  }, [editingCourse, isOpen]);
+  const [formName, setFormName] = useState(editingCourse?.name ?? '');
+  const [formCredits, setFormCredits] = useState(editingCourse?.credits ?? 3);
+  const [formCategory, setFormCategory] = useState<CourseCategory>(editingCourse?.category ?? 'compulsory');
+  const [formProgram, setFormProgram] = useState<CourseProgram>(editingCourse?.program ?? 'home');
+  const [formDimension, setFormDimension] = useState<GenEdDimension>(editingCourse?.dimension ?? 'None');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { AppData } from '../types';
 
 interface SettingsModalProps {
@@ -10,10 +10,6 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onSave, initialSettings }) => {
   const [settingsForm, setSettingsForm] = useState(initialSettings);
-
-  useEffect(() => {
-    setSettingsForm(initialSettings);
-  }, [initialSettings, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
