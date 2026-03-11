@@ -15,6 +15,13 @@ private struct UserDataUpsertRequest: Encodable {
 
 @MainActor
 final class AppSessionStore: ObservableObject {
+    private struct CachedScheduleSnapshot: Codable {
+        let studentName: String
+        let subtitle: String
+        let lastSyncedAt: Date?
+        let scheduleEntries: [ScheduleEntry]
+    }
+
     @Published var selectedTab: AppTab = .home
     @Published var schoolAccount: String = "" {
         didSet {
@@ -258,6 +265,24 @@ final class AppSessionStore: ObservableObject {
         clearAuthenticatedState()
     }
 
+    func refreshAppContent(suppressErrors: Bool = true) async {
+        guard isAuthenticated else {
+            return
+        }
+
+        do {
+            _ = try await validSession(forceRefresh: false)
+            await loadPlannerData(preserveExistingStateOnFailure: true)
+
+            if !schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                await loadLatestScheduleSnapshot(suppressErrors: suppressErrors)
+            }
+        } catch {
+            clearAuthenticatedState()
+            authErrorMessage = "登入已失效，請重新登入"
+        }
+    }
+
     func syncSchedule() async {
         let username = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
         let password = schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -300,7 +325,6 @@ final class AppSessionStore: ObservableObject {
     func loadLatestScheduleSnapshot(suppressErrors: Bool = false) async {
         let profileKey = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !profileKey.isEmpty else {
-            clearScheduleState()
             if !suppressErrors {
                 syncState = .failed("缺少學號，無法更新課表")
             }
@@ -397,6 +421,7 @@ final class AppSessionStore: ObservableObject {
 
         authSession = storedSession
         currentUserEmail = storedSession.email
+        restoreCachedScheduleSnapshot(for: storedSession)
     }
 
     private func establishAuthenticatedSession(from payload: SupabaseAuthSessionResponse, fallbackEmail: String) async throws {
@@ -432,6 +457,7 @@ final class AppSessionStore: ObservableObject {
         authErrorMessage = nil
         subtitle = "尚未同步課表"
         persistAuthSession(storedSession)
+        restoreCachedScheduleSnapshot(for: storedSession)
         bootstrapAuthenticatedData(forceRefresh: false)
     }
 
@@ -439,8 +465,10 @@ final class AppSessionStore: ObservableObject {
         Task { @MainActor in
             do {
                 _ = try await validSession(forceRefresh: forceRefresh)
-                await loadPlannerData()
-                await loadLatestScheduleSnapshot(suppressErrors: true)
+                await loadPlannerData(preserveExistingStateOnFailure: true)
+                if !schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    await loadLatestScheduleSnapshot(suppressErrors: true)
+                }
             } catch {
                 clearAuthenticatedState()
                 authErrorMessage = "登入已失效，請重新登入"
@@ -448,7 +476,7 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
-    private func loadPlannerData() async {
+    private func loadPlannerData(preserveExistingStateOnFailure: Bool = true) async {
         guard isAuthenticated else {
             return
         }
@@ -475,7 +503,9 @@ final class AppSessionStore: ObservableObject {
                 authNoticeMessage = "已登入，可以開始建立你的規劃"
             }
         } catch {
-            resetCloudBackedState()
+            if !preserveExistingStateOnFailure {
+                resetCloudBackedState()
+            }
             authErrorMessage = "讀取雲端資料失敗：\(error.localizedDescription)"
         }
     }
@@ -952,6 +982,7 @@ final class AppSessionStore: ObservableObject {
             )
         }
         upcomingCourses = Self.buildUpcomingCourses(from: scheduleEntries)
+        persistCachedScheduleSnapshot()
         Task {
             await refreshClassReminders()
         }
@@ -1060,6 +1091,38 @@ final class AppSessionStore: ObservableObject {
         syncState = .idle
         clearScheduleState()
         isRestoringPersistedState = false
+    }
+
+    private func persistCachedScheduleSnapshot() {
+        guard let session = authSession else {
+            return
+        }
+
+        let snapshot = CachedScheduleSnapshot(
+            studentName: studentName,
+            subtitle: subtitle,
+            lastSyncedAt: lastSyncedAt,
+            scheduleEntries: scheduleEntries
+        )
+
+        if let encoded = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(encoded, forKey: Self.scheduleSnapshotStorageKeyPrefix + session.userID)
+        }
+    }
+
+    private func restoreCachedScheduleSnapshot(for session: SupabaseStoredSession) {
+        guard
+            let data = UserDefaults.standard.data(forKey: Self.scheduleSnapshotStorageKeyPrefix + session.userID),
+            let snapshot = try? JSONDecoder().decode(CachedScheduleSnapshot.self, from: data)
+        else {
+            return
+        }
+
+        studentName = snapshot.studentName
+        subtitle = snapshot.subtitle
+        lastSyncedAt = snapshot.lastSyncedAt
+        scheduleEntries = snapshot.scheduleEntries
+        upcomingCourses = Self.buildUpcomingCourses(from: snapshot.scheduleEntries)
     }
 
     private func refreshClassReminders() async {
@@ -1332,6 +1395,7 @@ final class AppSessionStore: ObservableObject {
     }
 
     private static let authSessionStorageKey = "courseplanner.supabase.session"
+    private static let scheduleSnapshotStorageKeyPrefix = "courseplanner.scheduleSnapshot."
     private static let backendServiceBaseURL = "https://course-planner-backend-production.up.railway.app"
 
     private static func iso8601String(from date: Date) -> String {

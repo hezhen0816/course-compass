@@ -2,26 +2,31 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var store: AppSessionStore
-
-    private var formattedDate: String {
+    
+    private func formattedDate(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_Hant_TW")
         formatter.dateFormat = "M 月 d 日 EEEE"
-        return formatter.string(from: Date())
+        return formatter.string(from: date)
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                pageHeader
-                headerCard
-                upcomingSection
-                todoSection
-                progressSnapshot
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    pageHeader
+                    headerCard(now: context.date)
+                    upcomingSection(now: context.date)
+                    todoSection
+                    progressSnapshot
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+            .refreshable {
+                await store.refreshAppContent(suppressErrors: false)
+            }
         }
         .background(Color(.systemGroupedBackground))
         .toolbar(.hidden, for: .navigationBar)
@@ -34,11 +39,11 @@ struct HomeView: View {
             .padding(.top, 4)
     }
 
-    private var headerCard: some View {
+    private func headerCard(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             if let nextCourse = store.nextUpcomingCourse {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(formattedDate)
+                    Text(formattedDate(for: now))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.9))
 
@@ -56,7 +61,7 @@ struct HomeView: View {
                         heroMetaPill(systemImage: "mappin.and.ellipse", text: nextCourse.room)
                     }
 
-                    if let countdownText = countdownText(for: nextCourse) {
+                    if let countdownText = countdownText(for: nextCourse, now: now) {
                         Text(countdownText)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.92))
@@ -64,7 +69,7 @@ struct HomeView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(formattedDate)
+                    Text(formattedDate(for: now))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.9))
                     Text("今天沒有剩餘課程，可以保留時間安排複習或作業。")
@@ -85,7 +90,7 @@ struct HomeView: View {
         )
     }
 
-    private var upcomingSection: some View {
+    private func upcomingSection(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader(title: "今日課程", subtitle: "只顯示今天尚未結束的課程與提醒")
 
@@ -122,7 +127,7 @@ struct HomeView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer()
                                 Circle()
-                                    .fill(courseAccentColor(for: course))
+                                    .fill(courseAccentColor(for: course, now: now))
                                     .frame(width: 10, height: 10)
                                     .padding(.top, 6)
                             }
@@ -131,10 +136,10 @@ struct HomeView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 
-                            if let countdownText = countdownText(for: course) {
+                            if let countdownText = countdownText(for: course, now: now) {
                                 Text(countdownText)
                                     .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(courseAccentColor(for: course))
+                                    .foregroundStyle(courseAccentColor(for: course, now: now))
                             }
 
                             HStack(spacing: 14) {
@@ -226,8 +231,8 @@ struct HomeView: View {
             .lineLimit(1)
     }
 
-    private func courseAccentColor(for course: UpcomingCourse) -> Color {
-        let currentMinutes = Calendar.current.component(.hour, from: Date()) * 60 + Calendar.current.component(.minute, from: Date())
+    private func courseAccentColor(for course: UpcomingCourse, now: Date) -> Color {
+        let currentMinutes = Calendar.current.component(.hour, from: now) * 60 + Calendar.current.component(.minute, from: now)
         let startMinutes = minutes(from: timeComponent(for: course, at: 0, fallbackHour: 9))
         let endMinutes = minutes(from: timeComponent(for: course, at: 1, fallbackHour: 10))
 

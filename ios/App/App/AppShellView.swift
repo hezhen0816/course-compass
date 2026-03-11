@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppShellView: View {
     @StateObject private var store = AppSessionStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -12,6 +13,15 @@ struct AppShellView: View {
             }
         }
         .environmentObject(store)
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active, store.isAuthenticated else {
+                return
+            }
+
+            Task {
+                await store.refreshAppContent(suppressErrors: true)
+            }
+        }
     }
 
     private var authBackground: some View {

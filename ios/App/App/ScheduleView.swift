@@ -87,8 +87,14 @@ struct ScheduleView: View {
             .padding(.top, 8)
             .padding(.bottom, 32)
         }
+        .refreshable {
+            await store.refreshAppContent(suppressErrors: false)
+        }
         .background(Color(.systemGroupedBackground))
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            selectedWeekday = Weekday.currentWeekday()
+        }
     }
 
     private var pageHeader: some View {
