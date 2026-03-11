@@ -483,6 +483,8 @@ final class AppSessionStore: ObservableObject {
         } catch {
             if let nsError = error as NSError?, nsError.code == 404 {
                 clearMoodleAssignmentsState()
+                moodleAssignmentsErrorMessage = nil
+                return
             }
             if !suppressErrors {
                 moodleAssignmentsErrorMessage = error.localizedDescription
@@ -772,8 +774,7 @@ final class AppSessionStore: ObservableObject {
                 id: UUID(uuidString: semester.id) ?? UUID(),
                 name: semester.name,
                 courses: semester.courses.map { course in
-                    normalizedImportedHistoryCourse(
-                        PlannerCourse(
+                    PlannerCourse(
                         id: UUID(uuidString: course.id) ?? UUID(),
                         name: course.name,
                         credits: course.credits,
@@ -784,7 +785,6 @@ final class AppSessionStore: ObservableObject {
                         location: course.details?.location ?? "",
                         time: course.details?.time ?? "",
                         notes: course.details?.notes ?? ""
-                    )
                     )
                 }
             )
@@ -804,7 +804,11 @@ final class AppSessionStore: ObservableObject {
             if let existingIndex = plannerSemesters[targetIndex].courses.firstIndex(where: {
                 historyImportedCourseCode(from: $0.notes) == record.courseCode
             }) {
-                plannerSemesters[targetIndex].courses[existingIndex] = importedCourse
+                let existingCourse = plannerSemesters[targetIndex].courses[existingIndex]
+                plannerSemesters[targetIndex].courses[existingIndex] = mergedImportedHistoryCourse(
+                    existing: existingCourse,
+                    imported: importedCourse
+                )
                 summary.updated += 1
                 continue
             }
@@ -821,6 +825,14 @@ final class AppSessionStore: ObservableObject {
         }
 
         return summary
+    }
+
+    private func mergedImportedHistoryCourse(existing: PlannerCourse, imported: PlannerCourse) -> PlannerCourse {
+        var merged = existing
+        merged.name = imported.name
+        merged.credits = imported.credits
+        merged.notes = mergedHistoryNotes(existingNotes: existing.notes, importedNotes: imported.notes)
+        return merged
     }
 
     private func ensureSemesterIndex(for academicTerm: String, studentNumber: String?) -> Int {
@@ -972,28 +984,6 @@ final class AppSessionStore: ObservableObject {
         return .other
     }
 
-    private func normalizedImportedHistoryCourse(_ course: PlannerCourse) -> PlannerCourse {
-        guard course.notes.contains("歷史修課匯入") else {
-            return course
-        }
-
-        let sourceCategory = historySourceCategory(from: course.notes) ?? ""
-        let courseCode = historyImportedCourseCode(from: course.notes) ?? ""
-        let normalizedCategory = plannerCategory(
-            forHistoryCourseName: course.name,
-            courseCode: courseCode,
-            sourceCategory: sourceCategory
-        )
-
-        if normalizedCategory == course.category {
-            return course
-        }
-
-        var updatedCourse = course
-        updatedCourse.category = normalizedCategory
-        return updatedCourse
-    }
-
     private func historyNotes(for record: HistoryCourseRecord) -> String {
         [
             "歷史修課匯入",
@@ -1002,6 +992,36 @@ final class AppSessionStore: ObservableObject {
             "成績: \(record.grade)",
             "來源分類: \(record.category)"
         ].joined(separator: "\n")
+    }
+
+    private func mergedHistoryNotes(existingNotes: String, importedNotes: String) -> String {
+        let preservedNotes = strippedHistoryMetadata(from: existingNotes)
+        guard !preservedNotes.isEmpty else {
+            return importedNotes
+        }
+        return importedNotes + "\n\n" + preservedNotes
+    }
+
+    private func strippedHistoryMetadata(from notes: String) -> String {
+        let metadataPrefixes = [
+            "歷史修課匯入",
+            "課碼: ",
+            "學年期: ",
+            "成績: ",
+            "來源分類: "
+        ]
+
+        let filteredLines = notes
+            .components(separatedBy: .newlines)
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    return false
+                }
+                return !metadataPrefixes.contains(where: { trimmed.hasPrefix($0) })
+            }
+
+        return filteredLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func historyImportedCourseCode(from notes: String) -> String? {
