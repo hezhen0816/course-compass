@@ -158,19 +158,77 @@ struct HomeView: View {
 
     private var todoSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "待辦作業", subtitle: "先保留首頁版位，之後再接上作業整理功能")
+            sectionHeader(title: "待繳事項", subtitle: todoSubtitle)
 
-            VStack(alignment: .leading, spacing: 10) {
-                Label("待辦功能即將開放", systemImage: "checklist")
-                    .font(.headline)
-                Text("目前這個區塊只保留介面，不會保存或同步任何待辦資料。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            if store.moodleAssignments.isEmpty {
+                ContentUnavailableView(
+                    "目前沒有待繳事項",
+                    systemImage: "checkmark.seal",
+                    description: Text("同步 Moodle 後，這裡會顯示近期需要繳交的作業。")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.top, 12)
+            } else {
+                ForEach(store.moodleAssignments.prefix(4)) { item in
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(todoDateText(for: item.dueAt))
+                                    .font(.headline.weight(.bold))
+                                    .monospacedDigit()
+                                Text(todoWeekdayText(for: item.dueAt))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(width: 78, alignment: .leading)
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.title)
+                                        .font(.headline)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer()
+                                    Text(item.overdue ? "已逾期" : nonEmptyText(item.actionLabel) ?? "待處理")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(item.overdue ? .red : .indigo)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            (item.overdue ? Color.red : Color.indigo).opacity(0.1),
+                                            in: Capsule()
+                                        )
+                                }
+
+                                Text(item.courseName)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                if !item.summary.isEmpty {
+                                    Text(item.summary)
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
+    }
+
+    private var todoSubtitle: String {
+        if let syncedAt = store.moodleAssignmentsSyncedAt {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_Hant_TW")
+            formatter.dateFormat = "M/d HH:mm"
+            let filterLabel = nonEmptyText(store.moodleAssignmentsFilterLabel) ?? "近期"
+            return "\(filterLabel)・上次更新 \(formatter.string(from: syncedAt))"
+        }
+        return "同步 Moodle 後，會顯示近期需要繳交的作業"
     }
 
     private var progressSnapshot: some View {
@@ -302,6 +360,25 @@ struct HomeView: View {
             ProgressView(value: min(current, target), total: max(target, 1))
                 .tint(tint)
         }
+    }
+
+    private func todoDateText(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_Hant_TW")
+        formatter.dateFormat = "M/d HH:mm"
+        return formatter.string(from: date)
+    }
+
+    private func todoWeekdayText(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_Hant_TW")
+        formatter.dateFormat = "EEEE"
+        return formatter.string(from: date)
+    }
+
+    private func nonEmptyText(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func dimensionColor(for dimension: PlannerGenEdDimension) -> Color {

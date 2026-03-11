@@ -1,6 +1,6 @@
 -- Shared planner data lives in public.user_data.
 -- iOS currently writes these keys into user_data.content.settings:
--- school_account, school_password, backend_base_url, reminder_minutes
+-- school_account, school_password, reminder_minutes
 
 create table if not exists public.schedule_sync_snapshots (
   profile_key text primary key,
@@ -56,6 +56,32 @@ alter table public.history_import_snapshots enable row level security;
 drop policy if exists "service role only" on public.history_import_snapshots;
 create policy "service role only"
 on public.history_import_snapshots
+for all
+using ((select auth.role()) = 'service_role')
+with check ((select auth.role()) = 'service_role');
+
+create table if not exists public.moodle_assignment_snapshots (
+  profile_key text primary key,
+  school_account text not null,
+  payload jsonb not null,
+  synced_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists moodle_assignment_snapshots_synced_at_idx
+  on public.moodle_assignment_snapshots (synced_at desc);
+
+drop trigger if exists trg_moodle_assignment_snapshots_updated_at on public.moodle_assignment_snapshots;
+create trigger trg_moodle_assignment_snapshots_updated_at
+before update on public.moodle_assignment_snapshots
+for each row
+execute function public.set_updated_at();
+
+alter table public.moodle_assignment_snapshots enable row level security;
+
+drop policy if exists "service role only" on public.moodle_assignment_snapshots;
+create policy "service role only"
+on public.moodle_assignment_snapshots
 for all
 using ((select auth.role()) = 'service_role')
 with check ((select auth.role()) = 'service_role');

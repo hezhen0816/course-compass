@@ -371,6 +371,22 @@ struct HistoryImportRequest: Encodable {
     }
 }
 
+struct MoodleAssignmentsRequest: Encodable {
+    let username: String
+    let password: String
+    let profileKey: String
+    let persistToSupabase: Bool
+    let verifySSL: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case username
+        case password
+        case profileKey = "profile_key"
+        case persistToSupabase = "persist_to_supabase"
+        case verifySSL = "verify_ssl"
+    }
+}
+
 struct ScheduleSyncResponse: Decodable {
     let profileKey: String
     let schoolAccount: String
@@ -437,6 +453,30 @@ struct HistoryImportResponse: Decodable {
     }
 }
 
+struct MoodleAssignmentsResponse: Decodable {
+    let profileKey: String
+    let schoolAccount: String
+    let sourceURL: String
+    let pageTitle: String
+    let timelineFilter: String
+    let syncedAt: Date
+    let itemCount: Int
+    let persistedToSupabase: Bool
+    let items: [MoodleAssignmentItem]
+
+    enum CodingKeys: String, CodingKey {
+        case profileKey = "profile_key"
+        case schoolAccount = "school_account"
+        case sourceURL = "source_url"
+        case pageTitle = "page_title"
+        case timelineFilter = "timeline_filter"
+        case syncedAt = "synced_at"
+        case itemCount = "item_count"
+        case persistedToSupabase = "persisted_to_supabase"
+        case items
+    }
+}
+
 struct HistoryCourseRecord: Decodable {
     let category: String
     let courseCode: String
@@ -452,6 +492,32 @@ struct HistoryCourseRecord: Decodable {
         case academicTerm = "academic_term"
         case grade
         case earnedCredits = "earned_credits"
+    }
+}
+
+struct MoodleAssignmentItem: Identifiable, Codable {
+    let dueAt: Date
+    let title: String
+    let summary: String
+    let courseName: String
+    let actionLabel: String
+    let actionURL: String
+    let eventURL: String
+    let overdue: Bool
+
+    var id: String {
+        "\(courseName)|\(title)|\(dueAt.timeIntervalSince1970)"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case dueAt = "due_at"
+        case title
+        case summary
+        case courseName = "course_name"
+        case actionLabel = "action_label"
+        case actionURL = "action_url"
+        case eventURL = "event_url"
+        case overdue
     }
 }
 

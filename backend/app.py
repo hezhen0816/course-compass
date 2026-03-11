@@ -20,6 +20,7 @@ ENTRY_URL = f"{BASE_URL}/"
 VERIFY_URL = f"{BASE_URL}/First/A06/A06"
 COURSE_LIST_URL = f"{BASE_URL}/ChooseList/D01/D01"
 EDU_NEED_URL = "https://stu.ntust.edu.tw/stueduneed/Edu_Need.aspx"
+MOODLE_DASHBOARD_URL = "https://moodle2.ntust.edu.tw/my/"
 DEFAULT_TIMEOUT = 30
 DEFAULT_VERIFY_SSL = os.environ.get("NTUST_VERIFY_SSL", "false").lower() in {"true", "1", "yes"}
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -39,6 +40,14 @@ class SyncRequest(BaseModel):
 
 
 class HistoryImportRequest(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+    profile_key: str | None = None
+    persist_to_supabase: bool = True
+    verify_ssl: bool = DEFAULT_VERIFY_SSL
+
+
+class MoodleAssignmentsRequest(BaseModel):
     username: str = Field(min_length=1)
     password: str = Field(min_length=1)
     profile_key: str | None = None
@@ -118,6 +127,29 @@ class HistoryImportResponse(BaseModel):
     persisted_to_supabase: bool
     summary_texts: list[str]
     records: list[HistoryCourseRecord]
+
+
+class MoodleAssignmentItem(BaseModel):
+    due_at: datetime
+    title: str
+    summary: str
+    course_name: str
+    action_label: str
+    action_url: str
+    event_url: str
+    overdue: bool
+
+
+class MoodleAssignmentsResponse(BaseModel):
+    profile_key: str
+    school_account: str
+    source_url: str
+    page_title: str
+    timeline_filter: str
+    synced_at: datetime
+    item_count: int
+    persisted_to_supabase: bool
+    items: list[MoodleAssignmentItem]
 
 
 def now() -> datetime:
@@ -673,6 +705,129 @@ def fetch_history_records(username: str, password: str, verify_ssl: bool) -> dic
     }
 
 
+def extract_moodle_timeline_config(soup: BeautifulSoup) -> dict[str, int | str]:
+    timeline = soup.select_one('[data-region="timeline"]')
+    if not isinstance(timeline, Tag):
+        raise RuntimeError("找不到 Moodle 時間軸區塊。")
+
+    filter_label = normalize(
+        timeline.select_one("#timeline-day-filter-current-selection").get_text(" ", strip=True)
+        if timeline.select_one("#timeline-day-filter-current-selection")
+        else ""
+    )
+
+    event_container = timeline.select_one('[data-region="event-list-container"]')
+    view_dates = timeline.select_one('[data-region="view-dates"]')
+    if not isinstance(event_container, Tag) or not isinstance(view_dates, Tag):
+        raise RuntimeError("找不到 Moodle 時間軸 API 設定。")
+
+    return {
+        "filter_label": filter_label,
+        "midnight": int(event_container.get("data-midnight", "0")),
+        "days_limit": int(event_container.get("data-days-limit", "7")),
+        "limit_num": int(view_dates.get("data-limit", "5")) + 1,
+    }
+
+
+def fetch_moodle_timeline_items(
+    session: requests.Session,
+    html: str,
+    timeline_config: dict[str, int | str],
+    verify_ssl: bool,
+) -> list[dict[str, Any]]:
+    sesskey_match = re.search(r'"sesskey":"([^"]+)"', html)
+    if not sesskey_match:
+        raise RuntimeError("找不到 Moodle sesskey。")
+
+    payload = [
+        {
+            "index": 0,
+            "methodname": "core_calendar_get_action_events_by_timesort",
+            "args": {
+                "limitnum": int(timeline_config["limit_num"]),
+                "timesortfrom": int(timeline_config["midnight"]),
+                "timesortto": int(timeline_config["midnight"]) + int(timeline_config["days_limit"]) * 86400,
+                "limittononsuspendedevents": True,
+            },
+        }
+    ]
+
+    response = session.post(
+        (
+            "https://moodle2.ntust.edu.tw/lib/ajax/service.php"
+            f"?sesskey={sesskey_match.group(1)}&info=core_calendar_get_action_events_by_timesort"
+        ),
+        json=payload,
+        timeout=DEFAULT_TIMEOUT,
+        allow_redirects=True,
+        verify=verify_ssl,
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    if not data or data[0].get("error"):
+        raise RuntimeError(f"Moodle 時間軸 API 回傳錯誤：{data}")
+
+    items: list[dict[str, Any]] = []
+    for event in data[0]["data"]["events"]:
+        action = event.get("action") or {}
+        course = event.get("course") or {}
+        items.append(
+            {
+                "due_at": datetime.fromtimestamp(event["timesort"], TAIPEI).isoformat(),
+                "title": normalize(str(event.get("activityname") or event.get("name") or "")),
+                "summary": normalize(str(event.get("activitystr") or "")),
+                "event_url": normalize(str(event.get("viewurl") or "")),
+                "action_label": normalize(str(action.get("name") or "")),
+                "action_url": normalize(str(action.get("url") or "")),
+                "course_name": normalize(str(course.get("fullnamedisplay") or course.get("fullname") or "")),
+                "module_name": normalize(str(event.get("modulename") or "")),
+                "event_type": normalize(str(event.get("eventtype") or "")),
+                "timesort": event.get("timesort"),
+                "overdue": bool(event.get("overdue", False)),
+            }
+        )
+
+    return items
+
+
+def filter_moodle_assignment_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    assignments = [
+        item
+        for item in items
+        if item["action_label"] == "繳交作業" or "/mod/assign/" in str(item["event_url"])
+    ]
+    assignments.sort(key=lambda item: (item["due_at"], item["course_name"], item["title"]))
+    return assignments
+
+
+def fetch_moodle_assignments(username: str, password: str, verify_ssl: bool) -> dict[str, Any]:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+        }
+    )
+
+    page_response = login_to_target(session, username, password, MOODLE_DASHBOARD_URL, verify_ssl)
+    soup = BeautifulSoup(page_response.text, "html.parser")
+    timeline_config = extract_moodle_timeline_config(soup)
+    timeline_items = fetch_moodle_timeline_items(session, page_response.text, timeline_config, verify_ssl)
+    assignments = filter_moodle_assignment_items(timeline_items)
+
+    return {
+        "source_url": page_response.url,
+        "page_title": normalize(soup.title.get_text(" ", strip=True) if soup.title else ""),
+        "timeline_filter": str(timeline_config["filter_label"]),
+        "items": assignments,
+    }
+
+
 def persist_snapshot(profile_key: str, school_account: str, payload: dict[str, Any]) -> bool:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return False
@@ -763,6 +918,50 @@ def load_history_snapshot(profile_key: str) -> dict[str, Any] | None:
     return rows[0]["payload"]
 
 
+def persist_moodle_assignments_snapshot(profile_key: str, school_account: str, payload: dict[str, Any]) -> bool:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
+
+    endpoint = f"{SUPABASE_URL}/rest/v1/moodle_assignment_snapshots"
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
+    }
+    body = {
+        "profile_key": profile_key,
+        "school_account": school_account,
+        "payload": payload,
+        "synced_at": payload["synced_at"],
+    }
+    response = requests.post(endpoint, headers=headers, json=body, timeout=DEFAULT_TIMEOUT)
+    if response.status_code >= 300:
+        raise RuntimeError(f"Supabase 待繳事項寫入失敗：{response.status_code} {response.text}")
+    return True
+
+
+def load_moodle_assignments_snapshot(profile_key: str) -> dict[str, Any] | None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+
+    endpoint = (
+        f"{SUPABASE_URL}/rest/v1/moodle_assignment_snapshots"
+        f"?profile_key=eq.{quote(profile_key, safe='')}&select=payload"
+    )
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+    }
+    response = requests.get(endpoint, headers=headers, timeout=DEFAULT_TIMEOUT)
+    if response.status_code >= 300:
+        raise RuntimeError(f"Supabase 待繳事項讀取失敗：{response.status_code} {response.text}")
+    rows = response.json()
+    if not rows:
+        return None
+    return rows[0]["payload"]
+
+
 @app.get("/health")
 def healthcheck() -> dict[str, Any]:
     return {
@@ -846,6 +1045,44 @@ def get_latest_history(profile_key: str) -> HistoryImportResponse:
         if payload is None:
             raise HTTPException(status_code=404, detail="Supabase 找不到此 profile 的歷史修課紀錄。")
         return HistoryImportResponse.model_validate(payload)
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/moodle/assignments/sync", response_model=MoodleAssignmentsResponse)
+def sync_moodle_assignments(request: MoodleAssignmentsRequest) -> MoodleAssignmentsResponse:
+    try:
+        payload = fetch_moodle_assignments(request.username, request.password, request.verify_ssl)
+        response_payload = {
+            **payload,
+            "profile_key": request.profile_key or request.username,
+            "school_account": request.username,
+            "synced_at": now().isoformat(),
+            "item_count": len(payload["items"]),
+            "persisted_to_supabase": False,
+        }
+        if request.persist_to_supabase:
+            response_payload["persisted_to_supabase"] = persist_moodle_assignments_snapshot(
+                profile_key=response_payload["profile_key"],
+                school_account=request.username,
+                payload=response_payload,
+            )
+        return MoodleAssignmentsResponse.model_validate(response_payload)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Moodle 待繳事項請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/moodle/assignments/{profile_key}", response_model=MoodleAssignmentsResponse)
+def get_latest_moodle_assignments(profile_key: str) -> MoodleAssignmentsResponse:
+    try:
+        payload = load_moodle_assignments_snapshot(profile_key)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Supabase 找不到此 profile 的待繳事項快照。")
+        return MoodleAssignmentsResponse.model_validate(payload)
     except HTTPException:
         raise
     except RuntimeError as exc:

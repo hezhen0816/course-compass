@@ -22,6 +22,12 @@ final class AppSessionStore: ObservableObject {
         let scheduleEntries: [ScheduleEntry]
     }
 
+    private struct CachedMoodleAssignmentsSnapshot: Codable {
+        let syncedAt: Date?
+        let filterLabel: String
+        let items: [MoodleAssignmentItem]
+    }
+
     @Published var selectedTab: AppTab = .home
     @Published var schoolAccount: String = "" {
         didSet {
@@ -52,6 +58,9 @@ final class AppSessionStore: ObservableObject {
     @Published var subtitle: String = "尚未同步課表"
     @Published var upcomingCourses: [UpcomingCourse]
     @Published var scheduleEntries: [ScheduleEntry]
+    @Published var moodleAssignments: [MoodleAssignmentItem]
+    @Published var moodleAssignmentsSyncedAt: Date?
+    @Published var moodleAssignmentsFilterLabel: String = ""
     @Published var currentUserEmail: String?
     @Published var isAuthenticating = false
     @Published var authErrorMessage: String?
@@ -60,6 +69,8 @@ final class AppSessionStore: ObservableObject {
     @Published var historyImportNoticeMessage: String?
     @Published var reminderErrorMessage: String?
     @Published var reminderNoticeMessage: String?
+    @Published var moodleAssignmentsErrorMessage: String?
+    @Published var moodleAssignmentsNoticeMessage: String?
 
     private var authSession: SupabaseStoredSession?
     private var plannerSaveTask: Task<Void, Never>?
@@ -68,6 +79,8 @@ final class AppSessionStore: ObservableObject {
     init() {
         self.upcomingCourses = []
         self.scheduleEntries = []
+        self.moodleAssignments = []
+        self.moodleAssignmentsSyncedAt = nil
         self.plannerSemesters = Self.blankPlannerSemesters()
         self.studentName = ""
         self.subtitle = "尚未同步課表"
@@ -276,6 +289,7 @@ final class AppSessionStore: ObservableObject {
 
             if !schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 await loadLatestScheduleSnapshot(suppressErrors: suppressErrors)
+                await loadLatestMoodleAssignments(suppressErrors: suppressErrors)
             }
         } catch {
             clearAuthenticatedState()
@@ -411,6 +425,71 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
+    func syncMoodleAssignments() async {
+        let username = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+        let password = schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        moodleAssignmentsErrorMessage = nil
+        moodleAssignmentsNoticeMessage = nil
+
+        guard !username.isEmpty, !password.isEmpty else {
+            moodleAssignmentsErrorMessage = "請先輸入學校帳號與密碼"
+            return
+        }
+
+        let endpoint = URL(string: "\(Self.backendServiceBaseURL)/api/moodle/assignments/sync")!
+
+        do {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(
+                MoodleAssignmentsRequest(
+                    username: username,
+                    password: password,
+                    profileKey: username,
+                    persistToSupabase: true,
+                    verifySSL: false
+                )
+            )
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try validateHTTPResponse(response, data: data)
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let payload = try decoder.decode(MoodleAssignmentsResponse.self, from: data)
+            apply(payload: payload)
+        } catch {
+            moodleAssignmentsErrorMessage = error.localizedDescription
+        }
+    }
+
+    func loadLatestMoodleAssignments(suppressErrors: Bool = false) async {
+        let profileKey = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !profileKey.isEmpty else {
+            return
+        }
+
+        let endpoint = URL(string: "\(Self.backendServiceBaseURL)/api/moodle/assignments/\(profileKey.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? profileKey)")!
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: endpoint)
+            try validateHTTPResponse(response, data: data)
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let payload = try decoder.decode(MoodleAssignmentsResponse.self, from: data)
+            apply(payload: payload)
+        } catch {
+            if let nsError = error as NSError?, nsError.code == 404 {
+                clearMoodleAssignmentsState()
+            }
+            if !suppressErrors {
+                moodleAssignmentsErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func restoreCachedAuthSession() {
         guard
             let sessionData = UserDefaults.standard.data(forKey: Self.authSessionStorageKey),
@@ -422,6 +501,7 @@ final class AppSessionStore: ObservableObject {
         authSession = storedSession
         currentUserEmail = storedSession.email
         restoreCachedScheduleSnapshot(for: storedSession)
+        restoreCachedMoodleAssignmentsSnapshot(for: storedSession)
     }
 
     private func establishAuthenticatedSession(from payload: SupabaseAuthSessionResponse, fallbackEmail: String) async throws {
@@ -458,6 +538,7 @@ final class AppSessionStore: ObservableObject {
         subtitle = "尚未同步課表"
         persistAuthSession(storedSession)
         restoreCachedScheduleSnapshot(for: storedSession)
+        restoreCachedMoodleAssignmentsSnapshot(for: storedSession)
         bootstrapAuthenticatedData(forceRefresh: false)
     }
 
@@ -468,6 +549,7 @@ final class AppSessionStore: ObservableObject {
                 await loadPlannerData(preserveExistingStateOnFailure: true)
                 if !schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     await loadLatestScheduleSnapshot(suppressErrors: true)
+                    await loadLatestMoodleAssignments(suppressErrors: true)
                 }
             } catch {
                 clearAuthenticatedState()
@@ -965,6 +1047,12 @@ final class AppSessionStore: ObservableObject {
         upcomingCourses = []
     }
 
+    private func clearMoodleAssignmentsState() {
+        moodleAssignments = []
+        moodleAssignmentsSyncedAt = nil
+        moodleAssignmentsFilterLabel = ""
+    }
+
     private func apply(payload: ScheduleSyncResponse) {
         if let payloadStudentName = payload.studentName?.trimmingCharacters(in: .whitespacesAndNewlines), !payloadStudentName.isEmpty {
             studentName = payloadStudentName
@@ -986,6 +1074,17 @@ final class AppSessionStore: ObservableObject {
         Task {
             await refreshClassReminders()
         }
+    }
+
+    private func apply(payload: MoodleAssignmentsResponse) {
+        moodleAssignments = payload.items.sorted { $0.dueAt < $1.dueAt }
+        moodleAssignmentsSyncedAt = payload.syncedAt
+        moodleAssignmentsFilterLabel = payload.timelineFilter
+        moodleAssignmentsErrorMessage = nil
+        moodleAssignmentsNoticeMessage = payload.itemCount > 0
+            ? "已更新 \(payload.itemCount) 筆待繳事項"
+            : "目前沒有待繳事項"
+        persistCachedMoodleAssignmentsSnapshot()
     }
 
     private static func buildUpcomingCourses(from entries: [ScheduleEntry]) -> [UpcomingCourse] {
@@ -1073,6 +1172,8 @@ final class AppSessionStore: ObservableObject {
         historyImportNoticeMessage = nil
         reminderErrorMessage = nil
         reminderNoticeMessage = nil
+        moodleAssignmentsErrorMessage = nil
+        moodleAssignmentsNoticeMessage = nil
         Task {
             await removeAllScheduledClassReminders()
         }
@@ -1090,6 +1191,7 @@ final class AppSessionStore: ObservableObject {
         plannerSemesters = Self.blankPlannerSemesters()
         syncState = .idle
         clearScheduleState()
+        clearMoodleAssignmentsState()
         isRestoringPersistedState = false
     }
 
@@ -1123,6 +1225,35 @@ final class AppSessionStore: ObservableObject {
         lastSyncedAt = snapshot.lastSyncedAt
         scheduleEntries = snapshot.scheduleEntries
         upcomingCourses = Self.buildUpcomingCourses(from: snapshot.scheduleEntries)
+    }
+
+    private func persistCachedMoodleAssignmentsSnapshot() {
+        guard let session = authSession else {
+            return
+        }
+
+        let snapshot = CachedMoodleAssignmentsSnapshot(
+            syncedAt: moodleAssignmentsSyncedAt,
+            filterLabel: moodleAssignmentsFilterLabel,
+            items: moodleAssignments
+        )
+
+        if let encoded = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(encoded, forKey: Self.moodleAssignmentsStorageKeyPrefix + session.userID)
+        }
+    }
+
+    private func restoreCachedMoodleAssignmentsSnapshot(for session: SupabaseStoredSession) {
+        guard
+            let data = UserDefaults.standard.data(forKey: Self.moodleAssignmentsStorageKeyPrefix + session.userID),
+            let snapshot = try? JSONDecoder().decode(CachedMoodleAssignmentsSnapshot.self, from: data)
+        else {
+            return
+        }
+
+        moodleAssignments = snapshot.items.sorted { $0.dueAt < $1.dueAt }
+        moodleAssignmentsSyncedAt = snapshot.syncedAt
+        moodleAssignmentsFilterLabel = snapshot.filterLabel
     }
 
     private func refreshClassReminders() async {
@@ -1396,6 +1527,7 @@ final class AppSessionStore: ObservableObject {
 
     private static let authSessionStorageKey = "courseplanner.supabase.session"
     private static let scheduleSnapshotStorageKeyPrefix = "courseplanner.scheduleSnapshot."
+    private static let moodleAssignmentsStorageKeyPrefix = "courseplanner.moodleAssignments."
     private static let backendServiceBaseURL = "https://course-planner-backend-production.up.railway.app"
 
     private static func iso8601String(from date: Date) -> String {

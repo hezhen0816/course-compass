@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var isTargetSheetPresented = false
     @State private var isSyncing = false
     @State private var isImportingHistory = false
+    @State private var isSyncingMoodleAssignments = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,6 +71,22 @@ struct SettingsView: View {
                     .disabled(isSyncing)
 
                     Button {
+                        isSyncingMoodleAssignments = true
+                        Task {
+                            await store.syncMoodleAssignments()
+                            isSyncingMoodleAssignments = false
+                        }
+                    } label: {
+                        settingsRow(
+                            title: isSyncingMoodleAssignments ? "同步中..." : "同步待繳事項",
+                            subtitle: "更新 Moodle 待繳作業，並同步到這支 iPhone",
+                            symbol: "checklist.checked"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSyncingMoodleAssignments)
+
+                    Button {
                         isImportingHistory = true
                         Task {
                             await store.importAcademicHistory()
@@ -101,6 +118,16 @@ struct SettingsView: View {
                             .foregroundStyle(.red)
                     } else if let historyImportNoticeMessage = store.historyImportNoticeMessage {
                         Text(historyImportNoticeMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let moodleAssignmentsErrorMessage = store.moodleAssignmentsErrorMessage {
+                        Text(moodleAssignmentsErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    } else if let moodleAssignmentsNoticeMessage = store.moodleAssignmentsNoticeMessage {
+                        Text(moodleAssignmentsNoticeMessage)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
