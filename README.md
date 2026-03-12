@@ -1,4 +1,4 @@
-# 修課羅盤 Workspace
+# Course Compass 修課羅盤 Workspace
 
 這個 repo 明確分成兩條產品線與三個共享支援區：
 

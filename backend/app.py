@@ -28,7 +28,7 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-app = FastAPI(title="Course Planner Sync API", version="0.1.0")
+app = FastAPI(title="Course Compass Sync API", version="0.1.0")
 
 
 class SyncRequest(BaseModel):

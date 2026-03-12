@@ -13,7 +13,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
 
   const steps = [
     {
-      title: "歡迎使用修課規劃助手",
+      title: "歡迎使用修課羅盤",
       description: "這是一個幫助你規劃大學修課路徑的工具。透過視覺化介面，你可以輕鬆管理未來的課程安排。",
       icon: <LayoutDashboard className="w-16 h-16 text-blue-500" />,
       color: "bg-blue-50"

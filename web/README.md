@@ -1,4 +1,4 @@
-# 修課羅盤 Web
+# Course Compass 修課羅盤 Web
 
 `web/` 是桌面優先的課程規劃產品，負責：
 

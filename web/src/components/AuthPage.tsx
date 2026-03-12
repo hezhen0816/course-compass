@@ -37,9 +37,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onDemoLogin }) => {
       >
         <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
           <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">尚未設定 Supabase</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">尚未完成雲端設定</h1>
           <p className="text-gray-600 mb-4 leading-7">
-            若要使用 Web 版登入與同步，請確認專案根目錄的 <code>.env</code> 已設定 Supabase URL 與前端 Anon Key。
+            若要使用 Web 版登入與同步，請確認專案根目錄的 <code>.env</code> 已設定雲端服務網址與前端登入金鑰。
           </p>
           <button
             onClick={onDemoLogin}
@@ -61,7 +61,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onDemoLogin }) => {
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
           <GraduationCap className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">修課規劃助手</h1>
+          <h1 className="text-2xl font-bold text-gray-900">修課羅盤</h1>
           <p className="text-gray-600 mt-2">請先登入以儲存資料，或使用功能演示快速體驗</p>
         </div>
         

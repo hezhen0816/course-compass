@@ -1,5 +1,5 @@
 {
-  "name": "course-planner-workspace",
+  "name": "course-compass-workspace",
   "private": true,
   "scripts": {
     "web:dev": "npm --prefix web run dev",

@@ -1,4 +1,4 @@
-# 修課羅盤 iOS
+# Course Compass 修課羅盤 iOS
 
 `ios/` 是原生 SwiftUI App，負責：
 
