@@ -370,7 +370,26 @@ struct UpcomingCourse: Identifiable {
     }
 
     private func parsedTimeRange(_ label: String, fallbackStartHour: Int, fallbackEndHour: Int) -> (start: DateComponents, end: DateComponents) {
-        let pieces = label.components(separatedBy: "-")
+        let matches = label.matches(of: /(\d{1,2}):(\d{2})/)
+        if matches.count >= 2 {
+            let start = matches[0]
+            let end = matches[1]
+            return (
+                DateComponents(
+                    hour: Int(start.output.1) ?? fallbackStartHour,
+                    minute: Int(start.output.2) ?? 0
+                ),
+                DateComponents(
+                    hour: Int(end.output.1) ?? fallbackEndHour,
+                    minute: Int(end.output.2) ?? 0
+                )
+            )
+        }
+
+        let pieces = label
+            .replacingOccurrences(of: "～", with: "-")
+            .replacingOccurrences(of: "~", with: "-")
+            .components(separatedBy: "-")
         let startLabel = pieces.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "\(fallbackStartHour):00"
         let endLabel = pieces.dropFirst().first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "\(fallbackEndHour):00"
         return (
@@ -380,6 +399,13 @@ struct UpcomingCourse: Identifiable {
     }
 
     private func parseSingleTime(_ label: String, fallbackHour: Int) -> DateComponents {
+        if let match = label.firstMatch(of: /(\d{1,2}):(\d{2})/) {
+            return DateComponents(
+                hour: Int(match.output.1) ?? fallbackHour,
+                minute: Int(match.output.2) ?? 0
+            )
+        }
+
         let parts = label.split(separator: ":")
         let hour = Int(parts.first ?? Substring("\(fallbackHour)")) ?? fallbackHour
         let minute = Int(parts.dropFirst().first ?? "0") ?? 0
