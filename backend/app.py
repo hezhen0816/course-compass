@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Any
 from urllib.parse import quote, urljoin
 from zoneinfo import ZoneInfo
@@ -203,6 +203,7 @@ class TRRoomMeeting(BaseModel):
 class TRRoomStatusResponse(BaseModel):
     semester: str
     queried_at: datetime
+    target: str
     node: str | None
     node_label: str
     is_class_time: bool
@@ -1039,6 +1040,26 @@ def node_from_datetime(moment: datetime) -> str | None:
     return None
 
 
+def next_node_from_datetime(moment: datetime) -> str:
+    local_moment = moment.astimezone(TAIPEI)
+    day_code = DAY_CODES[local_moment.weekday()]
+    local_time = local_moment.time()
+
+    for index, (period, start, end) in enumerate(CLASS_PERIODS):
+        if local_time < start:
+            return f"{day_code}{period}"
+        if start <= local_time <= end:
+            if index + 1 < len(CLASS_PERIODS):
+                next_period = CLASS_PERIODS[index + 1][0]
+                return f"{day_code}{next_period}"
+            break
+
+    next_day = local_moment + timedelta(days=1)
+    next_day_code = DAY_CODES[next_day.weekday()]
+    first_period = CLASS_PERIODS[0][0]
+    return f"{next_day_code}{first_period}"
+
+
 def label_for_node(node: str | None, moment: datetime) -> str:
     if node is None:
         return "目前不是正式節次"
@@ -1226,6 +1247,7 @@ def get_tr_room_status(
     room: str | None = None,
     semester: str | None = None,
     node: str | None = None,
+    target: str = "current",
     refresh: bool = False,
     verify_ssl: bool = DEFAULT_VERIFY_SSL,
 ) -> TRRoomStatusResponse:
@@ -1234,7 +1256,12 @@ def get_tr_room_status(
         selected_semester = semester or fetch_current_query_semester(verify_ssl=verify_ssl)
         courses = fetch_query_courses(selected_semester, refresh=refresh, verify_ssl=verify_ssl)
         meetings = build_tr_meetings(courses)
-        selected_node = node.upper() if node else node_from_datetime(query_time)
+        normalized_target = target.lower()
+        if normalized_target not in {"current", "next"}:
+            raise RuntimeError("target 只能是 current 或 next。")
+        selected_node = node.upper() if node else (
+            next_node_from_datetime(query_time) if normalized_target == "next" else node_from_datetime(query_time)
+        )
         occupied = occupied_meetings(meetings, selected_node)
         rooms = sorted({meeting.room for meeting in meetings}, key=room_sort_key)
         busy_rooms = [room_code for room_code in rooms if room_code in occupied]
@@ -1245,6 +1272,7 @@ def get_tr_room_status(
         return TRRoomStatusResponse(
             semester=selected_semester,
             queried_at=query_time,
+            target=normalized_target,
             node=selected_node,
             node_label=label_for_node(selected_node, query_time),
             is_class_time=selected_node is not None,

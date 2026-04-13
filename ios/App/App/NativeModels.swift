@@ -635,6 +635,7 @@ struct TRRoomMeeting: Identifiable, Decodable {
 struct TRRoomStatusResponse: Decodable {
     let semester: String
     let queriedAt: Date
+    let target: String
     let node: String?
     let nodeLabel: String
     let isClassTime: Bool
@@ -649,6 +650,7 @@ struct TRRoomStatusResponse: Decodable {
     enum CodingKeys: String, CodingKey {
         case semester
         case queriedAt = "queried_at"
+        case target
         case node
         case nodeLabel = "node_label"
         case isClassTime = "is_class_time"

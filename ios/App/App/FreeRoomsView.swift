@@ -2,7 +2,8 @@ import SwiftUI
 
 struct FreeRoomsView: View {
     @EnvironmentObject private var store: AppSessionStore
-    @State private var status: TRRoomStatusResponse?
+    @State private var currentStatus: TRRoomStatusResponse?
+    @State private var nextStatus: TRRoomStatusResponse?
     @State private var roomQuery = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -11,9 +12,10 @@ struct FreeRoomsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 pageHeader
-                statusPanel
+                nextStatusPanel
                 roomLookup
-                freeRoomsSection
+                nextRoomsSection
+                currentRoomsSection
                 busyRoomsSection
             }
             .padding(.horizontal, 20)
@@ -26,7 +28,7 @@ struct FreeRoomsView: View {
         .background(Color(.systemGroupedBackground))
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            guard status == nil else {
+            guard currentStatus == nil, nextStatus == nil else {
                 return
             }
             await loadStatus(refresh: false)
@@ -40,19 +42,20 @@ struct FreeRoomsView: View {
             .padding(.top, 4)
     }
 
-    private var statusPanel: some View {
+    private var nextStatusPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "door.left.hand.open")
+                Image(systemName: "figure.walk.motion")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(Color.indigo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(status?.nodeLabel ?? "正在讀取節次")
+                    Text(nextStatus.map { "下一節：\($0.nodeLabel)" } ?? "正在讀取下一節")
                         .font(.title3.weight(.bold))
-                    Text(statusSubtitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(statusSubtitle(for: nextStatus))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -71,14 +74,18 @@ struct FreeRoomsView: View {
                     .foregroundStyle(.red)
             }
 
-            if let status {
+            if let nextStatus {
                 HStack(spacing: 10) {
-                    metricPill(title: "空堂", value: "\(status.freeRooms.count)")
-                    metricPill(title: "有課", value: "\(status.busyRooms.count)")
-                    metricPill(title: "TR 教室", value: "\(status.totalRooms)")
+                    metricPill(title: "下一節空堂", value: "\(nextStatus.freeRooms.count)")
+                    metricPill(title: "下一節有課", value: "\(nextStatus.busyRooms.count)")
+                    metricPill(title: "TR 教室", value: "\(nextStatus.totalRooms)")
                 }
 
-                Text(status.note)
+                if let currentStatus {
+                    currentSummary(status: currentStatus)
+                }
+
+                Text(nextStatus.note)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -90,7 +97,7 @@ struct FreeRoomsView: View {
 
     private var roomLookup: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "查單一教室", subtitle: "輸入 TR-613 這類教室代碼")
+            sectionHeader(title: "查單一教室", subtitle: "同時確認目前和下一節能不能去")
 
             HStack(spacing: 10) {
                 TextField("TR-613", text: $roomQuery)
@@ -120,45 +127,28 @@ struct FreeRoomsView: View {
                 .disabled(isLoading)
             }
 
-            if let status, let room = status.room, let isFree = status.roomIsFree {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text(room)
-                            .font(.title3.weight(.bold))
-                        Spacer()
-                        Text(isFree ? "空堂" : "有課")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(isFree ? Color.green : Color.orange)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background((isFree ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+            if hasRoomResult {
+                VStack(spacing: 12) {
+                    if let currentStatus, currentStatus.room != nil {
+                        roomAvailabilityCard(title: "目前", status: currentStatus)
                     }
-
-                    if status.roomMeetings.isEmpty {
-                        Text("這個節次沒有正式課表資料。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(status.roomMeetings) { meeting in
-                            meetingRow(meeting)
-                        }
+                    if let nextStatus, nextStatus.room != nil {
+                        roomAvailabilityCard(title: "下一節", status: nextStatus)
                     }
                 }
-                .padding(16)
-                .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
     }
 
-    private var freeRoomsSection: some View {
+    private var nextRoomsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "目前空堂", subtitle: "依本學期正式課表推定")
+            sectionHeader(title: "下一節空堂", subtitle: "可以直接考慮去這些 TR 教室")
 
-            if let rooms = status?.freeRooms, !rooms.isEmpty {
+            if let rooms = nextStatus?.freeRooms, !rooms.isEmpty {
                 roomGrid(rooms, tint: .green)
             } else {
                 ContentUnavailableView(
-                    "沒有可顯示的空堂教室",
+                    "沒有可顯示的下一節空教室",
                     systemImage: "door.left.hand.closed",
                     description: Text("下拉重新整理，或稍後再試。")
                 )
@@ -168,26 +158,49 @@ struct FreeRoomsView: View {
         }
     }
 
-    private var busyRoomsSection: some View {
+    private var currentRoomsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             DisclosureGroup {
-                if let rooms = status?.busyRooms, !rooms.isEmpty {
-                    roomGrid(rooms, tint: .orange)
+                if let currentStatus, currentStatus.isClassTime, !currentStatus.freeRooms.isEmpty {
+                    roomGrid(currentStatus.freeRooms, tint: .teal)
                         .padding(.top, 10)
                 } else {
-                    Text("目前沒有有課教室。")
+                    Text("目前不是正式節次，先看下一節比較準。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .padding(.top, 8)
                 }
             } label: {
-                sectionHeader(title: "有課教室", subtitle: "展開查看此節次被佔用的 TR 教室")
+                sectionHeader(title: "目前空堂", subtitle: currentStatus?.nodeLabel ?? "正在讀取目前節次")
             }
             .tint(.indigo)
         }
     }
 
-    private var statusSubtitle: String {
+    private var busyRoomsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            DisclosureGroup {
+                if let rooms = nextStatus?.busyRooms, !rooms.isEmpty {
+                    roomGrid(rooms, tint: .orange)
+                        .padding(.top, 10)
+                } else {
+                    Text("下一節沒有有課教室。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                }
+            } label: {
+                sectionHeader(title: "下一節有課教室", subtitle: "展開查看下一節被佔用的 TR 教室")
+            }
+            .tint(.indigo)
+        }
+    }
+
+    private var hasRoomResult: Bool {
+        currentStatus?.room != nil || nextStatus?.room != nil
+    }
+
+    private func statusSubtitle(for status: TRRoomStatusResponse?) -> String {
         guard let status else {
             return "正在讀取台科大課程查詢系統"
         }
@@ -196,6 +209,26 @@ struct FreeRoomsView: View {
         formatter.locale = Locale(identifier: "zh_Hant_TW")
         formatter.dateFormat = "M/d HH:mm"
         return "學期 \(status.semester)・更新 \(formatter.string(from: status.queriedAt))"
+    }
+
+    private func currentSummary(status: TRRoomStatusResponse) -> some View {
+        HStack(spacing: 8) {
+            Label("目前：\(status.nodeLabel)", systemImage: "clock")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if status.isClassTime {
+                Text("\(status.freeRooms.count) 間空堂")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.teal)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.teal.opacity(0.12), in: Capsule())
+            }
+        }
+        .padding(12)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func sectionHeader(title: String, subtitle: String) -> some View {
@@ -235,6 +268,48 @@ struct FreeRoomsView: View {
         }
     }
 
+    @ViewBuilder
+    private func roomAvailabilityCard(title: String, status: TRRoomStatusResponse) -> some View {
+        if let room = status.room, let isFree = status.roomIsFree {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(room)
+                            .font(.title3.weight(.bold))
+                    }
+                    Spacer()
+                    Text(isFree ? "空堂" : "有課")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isFree ? Color.green : Color.orange)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background((isFree ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+                }
+
+                Text(status.nodeLabel)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                if status.roomMeetings.isEmpty {
+                    Text("\(title)沒有正式課表資料。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(status.roomMeetings) { meeting in
+                        meetingRow(meeting)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            EmptyView()
+        }
+    }
+
     private func meetingRow(_ meeting: TRRoomMeeting) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(meeting.courseName)
@@ -258,7 +333,10 @@ struct FreeRoomsView: View {
         isLoading = true
         errorMessage = nil
         do {
-            status = try await store.loadTRRoomStatus(room: roomQuery, refresh: refresh)
+            let nextResponse = try await store.loadTRRoomStatus(room: roomQuery, target: "next", refresh: refresh)
+            let currentResponse = try await store.loadTRRoomStatus(room: roomQuery, target: "current", refresh: false)
+            nextStatus = nextResponse
+            currentStatus = currentResponse
         } catch {
             errorMessage = error.localizedDescription
         }

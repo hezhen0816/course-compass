@@ -508,12 +508,14 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
-    func loadTRRoomStatus(room: String? = nil, refresh: Bool = false) async throws -> TRRoomStatusResponse {
+    func loadTRRoomStatus(room: String? = nil, target: String = "current", refresh: Bool = false) async throws -> TRRoomStatusResponse {
         guard var components = URLComponents(string: "\(Self.backendServiceBaseURL)/api/tr-rooms/status") else {
             throw URLError(.badURL)
         }
 
-        var queryItems: [URLQueryItem] = []
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "target", value: target)
+        ]
         if let room = room?.trimmingCharacters(in: .whitespacesAndNewlines), !room.isEmpty {
             queryItems.append(URLQueryItem(name: "room", value: room))
         }
