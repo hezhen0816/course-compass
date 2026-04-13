@@ -55,6 +55,14 @@ struct AppShellView: View {
             .tag(AppTab.schedule)
 
             NavigationStack {
+                FreeRoomsView()
+            }
+            .tabItem {
+                Label(AppTab.rooms.title, systemImage: AppTab.rooms.systemImage)
+            }
+            .tag(AppTab.rooms)
+
+            NavigationStack {
                 PlannerView()
             }
             .tabItem {

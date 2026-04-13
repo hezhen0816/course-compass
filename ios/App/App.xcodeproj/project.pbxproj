@@ -17,6 +17,7 @@
 		70A2D1162FC1000100ABC001 /* ScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A2D1062FC1000100ABC001 /* ScheduleView.swift */; };
 		70A2D1172FC1000100ABC001 /* PlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A2D1072FC1000100ABC001 /* PlannerView.swift */; };
 		70A2D1182FC1000100ABC001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A2D1082FC1000100ABC001 /* SettingsView.swift */; };
+		70A2D11A2FC1000100ABC001 /* FreeRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A2D1192FC1000100ABC001 /* FreeRoomsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 		70A2D1062FC1000100ABC001 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
 		70A2D1072FC1000100ABC001 /* PlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannerView.swift; sourceTree = "<group>"; };
 		70A2D1082FC1000100ABC001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		70A2D1192FC1000100ABC001 /* FreeRoomsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreeRoomsView.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -72,6 +74,7 @@
 				70A2D1042FC1000100ABC001 /* AppSessionStore.swift */,
 				70A2D1052FC1000100ABC001 /* HomeView.swift */,
 				70A2D1062FC1000100ABC001 /* ScheduleView.swift */,
+				70A2D1192FC1000100ABC001 /* FreeRoomsView.swift */,
 				70A2D1072FC1000100ABC001 /* PlannerView.swift */,
 				70A2D1082FC1000100ABC001 /* SettingsView.swift */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -160,6 +163,7 @@
 				70A2D1182FC1000100ABC001 /* SettingsView.swift in Sources */,
 				70A2D1162FC1000100ABC001 /* ScheduleView.swift in Sources */,
 				70A2D1122FC1000100ABC001 /* AppShellView.swift in Sources */,
+				70A2D11A2FC1000100ABC001 /* FreeRoomsView.swift in Sources */,
 				70A2D1172FC1000100ABC001 /* PlannerView.swift in Sources */,
 				70A2D1152FC1000100ABC001 /* HomeView.swift in Sources */,
 			);

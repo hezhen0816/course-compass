@@ -3,6 +3,7 @@ import SwiftUI
 enum AppTab: String, CaseIterable, Hashable {
     case home
     case schedule
+    case rooms
     case planner
     case settings
 
@@ -12,6 +13,8 @@ enum AppTab: String, CaseIterable, Hashable {
             return "首頁"
         case .schedule:
             return "課表"
+        case .rooms:
+            return "空教室"
         case .planner:
             return "學分規劃"
         case .settings:
@@ -25,6 +28,8 @@ enum AppTab: String, CaseIterable, Hashable {
             return "house.fill"
         case .schedule:
             return "calendar"
+        case .rooms:
+            return "door.left.hand.open"
         case .planner:
             return "chart.bar.doc.horizontal"
         case .settings:
@@ -604,6 +609,56 @@ struct MoodleAssignmentsResponse: Decodable {
         case itemCount = "item_count"
         case persistedToSupabase = "persisted_to_supabase"
         case items
+    }
+}
+
+struct TRRoomMeeting: Identifiable, Decodable {
+    let room: String
+    let node: String
+    let courseNo: String
+    let courseName: String
+    let teacher: String
+
+    var id: String {
+        "\(room)|\(node)|\(courseNo)|\(courseName)"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case room
+        case node
+        case courseNo = "course_no"
+        case courseName = "course_name"
+        case teacher
+    }
+}
+
+struct TRRoomStatusResponse: Decodable {
+    let semester: String
+    let queriedAt: Date
+    let node: String?
+    let nodeLabel: String
+    let isClassTime: Bool
+    let room: String?
+    let roomIsFree: Bool?
+    let roomMeetings: [TRRoomMeeting]
+    let freeRooms: [String]
+    let busyRooms: [String]
+    let totalRooms: Int
+    let note: String
+
+    enum CodingKeys: String, CodingKey {
+        case semester
+        case queriedAt = "queried_at"
+        case node
+        case nodeLabel = "node_label"
+        case isClassTime = "is_class_time"
+        case room
+        case roomIsFree = "room_is_free"
+        case roomMeetings = "room_meetings"
+        case freeRooms = "free_rooms"
+        case busyRooms = "busy_rooms"
+        case totalRooms = "total_rooms"
+        case note
     }
 }
 

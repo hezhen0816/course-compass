@@ -508,6 +508,32 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
+    func loadTRRoomStatus(room: String? = nil, refresh: Bool = false) async throws -> TRRoomStatusResponse {
+        guard var components = URLComponents(string: "\(Self.backendServiceBaseURL)/api/tr-rooms/status") else {
+            throw URLError(.badURL)
+        }
+
+        var queryItems: [URLQueryItem] = []
+        if let room = room?.trimmingCharacters(in: .whitespacesAndNewlines), !room.isEmpty {
+            queryItems.append(URLQueryItem(name: "room", value: room))
+        }
+        if refresh {
+            queryItems.append(URLQueryItem(name: "refresh", value: "true"))
+        }
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+
+        guard let endpoint = components.url else {
+            throw URLError(.badURL)
+        }
+
+        let (data, response) = try await URLSession.shared.data(from: endpoint)
+        try validateHTTPResponse(response, data: data)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(TRRoomStatusResponse.self, from: data)
+    }
+
     private func restoreCachedAuthSession() {
         guard
             let sessionData = UserDefaults.standard.data(forKey: Self.authSessionStorageKey),

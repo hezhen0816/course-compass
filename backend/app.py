@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 from urllib.parse import quote, urljoin
 from zoneinfo import ZoneInfo
@@ -21,6 +21,8 @@ VERIFY_URL = f"{BASE_URL}/First/A06/A06"
 COURSE_LIST_URL = f"{BASE_URL}/ChooseList/D01/D01"
 EDU_NEED_URL = "https://stu.ntust.edu.tw/stueduneed/Edu_Need.aspx"
 MOODLE_DASHBOARD_URL = "https://moodle2.ntust.edu.tw/my/"
+QUERY_COURSE_API_URL = "https://querycourse.ntust.edu.tw/QueryCourse/api/courses"
+SEMESTERS_INFO_URL = "https://querycourse.ntust.edu.tw/QueryCourse/api/semestersinfo"
 DEFAULT_TIMEOUT = 30
 DEFAULT_VERIFY_SSL = os.environ.get("NTUST_VERIFY_SSL", "false").lower() in {"true", "1", "yes"}
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -29,6 +31,43 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = FastAPI(title="Course Compass Sync API", version="0.1.0")
+
+ROOM_RE = re.compile(r"\bTR-\d+(?:-\d+)?\b", re.IGNORECASE)
+DAY_CODES = {
+    0: "M",
+    1: "T",
+    2: "W",
+    3: "R",
+    4: "F",
+    5: "S",
+    6: "U",
+}
+DAY_NAMES = {
+    "M": "星期一",
+    "T": "星期二",
+    "W": "星期三",
+    "R": "星期四",
+    "F": "星期五",
+    "S": "星期六",
+    "U": "星期日",
+}
+CLASS_PERIODS = [
+    ("1", time(8, 10), time(9, 0)),
+    ("2", time(9, 10), time(10, 0)),
+    ("3", time(10, 20), time(11, 10)),
+    ("4", time(11, 20), time(12, 10)),
+    ("5", time(12, 20), time(13, 10)),
+    ("6", time(13, 20), time(14, 10)),
+    ("7", time(14, 20), time(15, 10)),
+    ("8", time(15, 30), time(16, 20)),
+    ("9", time(16, 30), time(17, 20)),
+    ("10", time(17, 30), time(18, 20)),
+    ("A", time(18, 25), time(19, 15)),
+    ("B", time(19, 20), time(20, 10)),
+    ("C", time(20, 15), time(21, 5)),
+    ("D", time(21, 10), time(22, 0)),
+]
+_tr_course_cache: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 
 
 class SyncRequest(BaseModel):
@@ -151,6 +190,29 @@ class MoodleAssignmentsResponse(BaseModel):
     item_count: int
     persisted_to_supabase: bool
     items: list[MoodleAssignmentItem]
+
+
+class TRRoomMeeting(BaseModel):
+    room: str
+    node: str
+    course_no: str
+    course_name: str
+    teacher: str
+
+
+class TRRoomStatusResponse(BaseModel):
+    semester: str
+    queried_at: datetime
+    node: str | None
+    node_label: str
+    is_class_time: bool
+    room: str | None = None
+    room_is_free: bool | None = None
+    room_meetings: list[TRRoomMeeting] = Field(default_factory=list)
+    free_rooms: list[str]
+    busy_rooms: list[str]
+    total_rooms: int
+    note: str
 
 
 def now() -> datetime:
@@ -852,6 +914,149 @@ def fetch_moodle_assignments(username: str, password: str, verify_ssl: bool) -> 
     }
 
 
+def query_course_payload(semester: str) -> dict[str, Any]:
+    return {
+        "Semester": semester,
+        "CourseNo": "",
+        "CourseName": "",
+        "CourseTeacher": "",
+        "Dimension": "",
+        "CourseNotes": "",
+        "CampusNotes": "Main_Campus",
+        "ForeignLanguage": 0,
+        "OnlyIntensive": 0,
+        "OnlyGeneral": 0,
+        "OnleyNTUST": 1,
+        "OnlyMaster": 0,
+        "OnlyUnderGraduate": 0,
+        "OnlyNode": 0,
+        "Language": "zh",
+    }
+
+
+def fetch_current_query_semester(verify_ssl: bool) -> str:
+    response = requests.get(
+        SEMESTERS_INFO_URL,
+        headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"},
+        timeout=DEFAULT_TIMEOUT,
+        verify=verify_ssl,
+    )
+    response.raise_for_status()
+    semesters = response.json()
+    for item in semesters:
+        if item.get("CurrentSemester") and item.get("Static") is False:
+            return str(item["Semester"])
+    if semesters:
+        return str(semesters[0]["Semester"])
+    raise RuntimeError("課程查詢系統沒有回傳可用學期。")
+
+
+def fetch_query_courses(semester: str, refresh: bool, verify_ssl: bool) -> list[dict[str, Any]]:
+    cached = _tr_course_cache.get(semester)
+    if cached and not refresh:
+        cached_at, courses = cached
+        if (now() - cached_at).total_seconds() < 1800:
+            return courses
+
+    response = requests.post(
+        QUERY_COURSE_API_URL,
+        json=query_course_payload(semester),
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
+            "Origin": "https://querycourse.ntust.edu.tw",
+            "Referer": "https://querycourse.ntust.edu.tw/querycourse/",
+            "User-Agent": "Mozilla/5.0",
+        },
+        timeout=DEFAULT_TIMEOUT,
+        verify=verify_ssl,
+    )
+    response.raise_for_status()
+    courses = response.json()
+    if not isinstance(courses, list):
+        raise RuntimeError("課程查詢系統回傳格式不是課程清單。")
+
+    _tr_course_cache[semester] = (now(), courses)
+    return courses
+
+
+def normalize_room_code(room: str | None) -> str | None:
+    normalized = normalize(room).upper()
+    return normalized or None
+
+
+def split_tr_rooms(classroom_text: str | None) -> list[str]:
+    if not classroom_text:
+        return []
+    return [match.group(0).upper() for match in ROOM_RE.finditer(classroom_text)]
+
+
+def split_course_nodes(node_text: str | None) -> list[str]:
+    if not node_text:
+        return []
+    return [part.strip().upper() for part in re.split(r"[,、\s]+", node_text) if part.strip()]
+
+
+def build_tr_meetings(courses: list[dict[str, Any]]) -> list[TRRoomMeeting]:
+    meetings: list[TRRoomMeeting] = []
+    for course in courses:
+        rooms = split_tr_rooms(str(course.get("ClassRoomNo") or ""))
+        nodes = split_course_nodes(str(course.get("Node") or ""))
+        if not rooms or not nodes:
+            continue
+
+        if len(rooms) == len(nodes):
+            pairs = zip(rooms, nodes, strict=False)
+        else:
+            pairs = ((room, node) for room in sorted(set(rooms), key=room_sort_key) for node in nodes)
+
+        for room, node in pairs:
+            meetings.append(
+                TRRoomMeeting(
+                    room=room,
+                    node=node,
+                    course_no=str(course.get("CourseNo") or ""),
+                    course_name=str(course.get("CourseName") or ""),
+                    teacher=str(course.get("CourseTeacher") or ""),
+                )
+            )
+    return meetings
+
+
+def room_sort_key(room: str) -> tuple[int, str]:
+    numbers = re.findall(r"\d+", room)
+    first = int(numbers[0]) if numbers else 0
+    return first, room
+
+
+def node_from_datetime(moment: datetime) -> str | None:
+    local_moment = moment.astimezone(TAIPEI)
+    day_code = DAY_CODES[local_moment.weekday()]
+    local_time = local_moment.time()
+    for period, start, end in CLASS_PERIODS:
+        if start <= local_time <= end:
+            return f"{day_code}{period}"
+    return None
+
+
+def label_for_node(node: str | None, moment: datetime) -> str:
+    if node is None:
+        return "目前不是正式節次"
+    day_name = DAY_NAMES.get(node[0], "未知星期")
+    return f"{day_name} 第 {node[1:]} 節（{node}）"
+
+
+def occupied_meetings(meetings: list[TRRoomMeeting], node: str | None) -> dict[str, list[TRRoomMeeting]]:
+    if node is None:
+        return {}
+
+    occupied: dict[str, list[TRRoomMeeting]] = {}
+    for meeting in meetings:
+        if meeting.node == node:
+            occupied.setdefault(meeting.room, []).append(meeting)
+    return occupied
+
+
 def persist_snapshot(profile_key: str, school_account: str, payload: dict[str, Any]) -> bool:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return False
@@ -1014,6 +1219,47 @@ def healthcheck() -> dict[str, Any]:
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
         "timestamp": now().isoformat(),
     }
+
+
+@app.get("/api/tr-rooms/status", response_model=TRRoomStatusResponse)
+def get_tr_room_status(
+    room: str | None = None,
+    semester: str | None = None,
+    node: str | None = None,
+    refresh: bool = False,
+    verify_ssl: bool = DEFAULT_VERIFY_SSL,
+) -> TRRoomStatusResponse:
+    try:
+        query_time = now().replace(microsecond=0)
+        selected_semester = semester or fetch_current_query_semester(verify_ssl=verify_ssl)
+        courses = fetch_query_courses(selected_semester, refresh=refresh, verify_ssl=verify_ssl)
+        meetings = build_tr_meetings(courses)
+        selected_node = node.upper() if node else node_from_datetime(query_time)
+        occupied = occupied_meetings(meetings, selected_node)
+        rooms = sorted({meeting.room for meeting in meetings}, key=room_sort_key)
+        busy_rooms = [room_code for room_code in rooms if room_code in occupied]
+        free_rooms = [room_code for room_code in rooms if room_code not in occupied]
+
+        requested_room = normalize_room_code(room)
+        room_meetings = occupied.get(requested_room, []) if requested_room else []
+        return TRRoomStatusResponse(
+            semester=selected_semester,
+            queried_at=query_time,
+            node=selected_node,
+            node_label=label_for_node(selected_node, query_time),
+            is_class_time=selected_node is not None,
+            room=requested_room,
+            room_is_free=None if requested_room is None else not room_meetings,
+            room_meetings=room_meetings,
+            free_rooms=free_rooms,
+            busy_rooms=busy_rooms,
+            total_rooms=len(rooms),
+            note="結果只代表正式課表，不包含臨時借用、活動或現場使用狀態。",
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"課程查詢系統請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/schedule/sync", response_model=SyncResponse)
