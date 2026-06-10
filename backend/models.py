@@ -91,6 +91,7 @@ class HistoryCourseRecord(BaseModel):
     academic_term: str
     grade: str
     earned_credits: str
+    ge_dimension: str = ""
 
 
 class HistoryImportResponse(BaseModel):

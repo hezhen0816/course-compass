@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  BookOpen,
   CheckCircle2,
   Clock,
   FileText,
@@ -68,6 +67,12 @@ type RequirementStatus = {
   earnedCredits: number;
   targetCredits: number;
   scheduledCount: number;
+};
+
+type HistoricalScheduleLookup = {
+  status: 'matched' | 'ambiguous' | 'missing' | 'skipped';
+  candidateCount: number;
+  offering?: CourseSearchResult;
 };
 
 function parseNodeSlots(node: string): string[] {
@@ -244,13 +249,17 @@ function isFailedHistoryRecord(record: HistoryCourseRecord): boolean {
 }
 
 function historyStatus(record: HistoryCourseRecord): AcademicHistoryRecord['status'] {
-  if (record.grade.trim() === '修習中') return 'in_progress';
+  if (['修習中', '成績未到'].includes(record.grade.trim())) return 'in_progress';
   if (isFailedHistoryRecord(record)) return 'failed';
   return 'passed';
 }
 
 function historyRecordKey(record: Pick<AcademicHistoryRecord, 'courseCode' | 'courseName'>): string {
   return record.courseCode.trim().toUpperCase() || normalizeName(record.courseName);
+}
+
+function historicalLookupKey(record: AcademicHistoryRecord): string {
+  return `${record.academicTerm}-${historyRecordKey(record)}`;
 }
 
 function inferAdmissionYearFromStudentNo(studentNo: string): number | null {
@@ -296,7 +305,16 @@ function historyRecordsFromImport(payload: HistoryImportResponse): AcademicHisto
     grade: record.grade,
     credits: Number(record.earned_credits) || 0,
     status: historyStatus(record),
+    dimension: normalizeGenEdDimension(record.ge_dimension),
   }));
+}
+
+function normalizeGenEdDimension(value: string | undefined): AcademicHistoryRecord['dimension'] {
+  const normalized = value?.trim().toUpperCase();
+  if (normalized && ['A', 'B', 'C', 'D', 'E', 'F'].includes(normalized)) {
+    return normalized as AcademicHistoryRecord['dimension'];
+  }
+  return undefined;
 }
 
 function categoryFromHistoryRecord(record: AcademicHistoryRecord): CourseCategory {
@@ -333,27 +351,41 @@ function isFailedImportedHistoryCourse(course: Course): boolean {
   return isHistoryImportedCourse(course) && Boolean(course.details?.notes?.includes('狀態: 不及格'));
 }
 
-function courseFromHistoryRecord(record: AcademicHistoryRecord): Course {
+function historicalLookupNote(lookup?: HistoricalScheduleLookup): string {
+  if (!lookup) return '';
+  if (lookup.status === 'matched') return '歷史節次: 已由課程查詢補查';
+  if (lookup.status === 'ambiguous') return `歷史節次: 找到 ${lookup.candidateCount} 個候選班別，未自動排入`;
+  if (lookup.status === 'missing') return '歷史節次: 查無開課資料';
+  return '歷史節次: 課碼或學年期不足，未補查';
+}
+
+function courseFromHistoryRecord(record: AcademicHistoryRecord, lookup?: HistoricalScheduleLookup): Course {
   const key = historyRecordKey(record).replace(/[^A-Z0-9_-]/gi, '-');
+  const offering = lookup?.status === 'matched' ? lookup.offering : undefined;
+  const scheduledOffering = offering ? toScheduledOffering(offering) : undefined;
   const notes = [
     HISTORY_IMPORT_NOTE_MARKER,
     record.courseCode ? `課碼: ${record.courseCode}` : '',
     record.academicTerm ? `學年期: ${record.academicTerm}` : '',
     record.grade ? `成績: ${record.grade}` : '',
     `狀態: ${historyStatusLabel(record.status)}`,
+    historicalLookupNote(lookup),
+    offering?.contents || '',
   ].filter(Boolean).join('\n');
 
   return {
-    id: `history-${key}-${record.academicTerm || nextPlannerId()}`,
-    name: record.courseName,
-    credits: Number.isFinite(record.credits) ? record.credits : 0,
+    id: `history-${offering?.course_no || key}-${record.academicTerm || nextPlannerId()}`,
+    name: offering?.course_name || record.courseName,
+    credits: offering?.credits ?? (Number.isFinite(record.credits) ? record.credits : 0),
     category: categoryFromHistoryRecord(record),
     program: 'home',
+    dimension: record.dimension,
     grade: record.grade || historyStatusLabel(record.status),
+    scheduledOffering,
     details: {
-      professor: '',
-      location: '',
-      time: '',
+      professor: offering?.teacher || '',
+      location: offering?.classroom || '',
+      time: scheduledOffering ? displaySlots(scheduledOffering.slots) : '',
       gradingPolicy: [],
       notes,
     },
@@ -363,12 +395,19 @@ function courseFromHistoryRecord(record: AcademicHistoryRecord): Course {
 function mergeHistoryRecordsIntoSemesters(
   semesters: AppData['semesters'],
   records: AcademicHistoryRecord[],
-  studentNo: string
-): { semesters: AppData['semesters']; firstSemesterId: string | null; importedCourseCount: number } {
+  studentNo: string,
+  lookups: Map<string, HistoricalScheduleLookup> = new Map()
+): {
+  semesters: AppData['semesters'];
+  firstSemesterId: string | null;
+  importedCourseCount: number;
+  scheduledHistoryCourseCount: number;
+} {
   const admissionYear = inferAdmissionYearFromStudentNo(studentNo) ?? fallbackAdmissionYear(records);
   const semesterIds = new Set(semesters.map((semester) => semester.id));
   let firstSemesterId: string | null = null;
   let importedCourseCount = 0;
+  let scheduledHistoryCourseCount = 0;
   const seenHistoryKeys = new Set<string>();
 
   const nextSemesters = semesters.map((semester) => ({
@@ -387,12 +426,14 @@ function mergeHistoryRecordsIntoSemesters(
     seenHistoryKeys.add(historyKey);
 
     if (targetSemester.courses.some((course) => courseMatchesHistoryRecord(course, record))) return;
-    targetSemester.courses = [...targetSemester.courses, courseFromHistoryRecord(record)];
+    const course = courseFromHistoryRecord(record, lookups.get(historicalLookupKey(record)));
+    targetSemester.courses = [...targetSemester.courses, course];
     importedCourseCount += 1;
+    if (course.scheduledOffering?.slots.length) scheduledHistoryCourseCount += 1;
     if (!firstSemesterId) firstSemesterId = semesterId;
   });
 
-  return { semesters: nextSemesters, firstSemesterId, importedCourseCount };
+  return { semesters: nextSemesters, firstSemesterId, importedCourseCount, scheduledHistoryCourseCount };
 }
 
 function retakeRequirementsFromHistory(records: AcademicHistoryRecord[]): PendingRequirement[] {
@@ -411,6 +452,43 @@ function retakeRequirementsFromHistory(records: AcademicHistoryRecord[]): Pendin
       note: `不及格待重修・${record.academicTerm}・${record.grade}`,
       courseCodePrefix: record.courseCode || null,
     }));
+}
+
+function selectHistoricalOffering(record: AcademicHistoryRecord, results: CourseSearchResult[]): HistoricalScheduleLookup {
+  const recordCode = record.courseCode.trim().toUpperCase();
+  const normalizedCourseName = normalizeName(record.courseName);
+  const codeMatched = results.filter((result) => {
+    const courseNo = result.course_no.trim().toUpperCase();
+    return Boolean(recordCode && (courseNo === recordCode || courseNo.startsWith(recordCode)));
+  });
+  const candidates = codeMatched.length > 0 ? codeMatched : results;
+  const nameMatched = candidates.filter((result) => normalizeName(result.course_name) === normalizedCourseName);
+  const plausible = nameMatched.length > 0 ? nameMatched : candidates;
+  const withSlots = plausible.filter((result) => parseNodeSlots(result.node).length > 0);
+
+  if (withSlots.length === 1) {
+    return { status: 'matched', candidateCount: plausible.length, offering: withSlots[0] };
+  }
+  if (plausible.length === 0) {
+    return { status: 'missing', candidateCount: 0 };
+  }
+  return { status: 'ambiguous', candidateCount: plausible.length };
+}
+
+async function lookupHistoricalSchedules(records: AcademicHistoryRecord[]): Promise<Map<string, HistoricalScheduleLookup>> {
+  const lookupEntries = await Promise.all(records.map(async (record): Promise<[string, HistoricalScheduleLookup]> => {
+    const key = historicalLookupKey(record);
+    if (!record.courseCode.trim() || !record.academicTerm.trim()) {
+      return [key, { status: 'skipped', candidateCount: 0 }];
+    }
+    try {
+      const results = await searchCourses(record.academicTerm, record.courseCode, 'code');
+      return [key, selectHistoricalOffering(record, results)];
+    } catch {
+      return [key, { status: 'missing', candidateCount: 0 }];
+    }
+  }));
+  return new Map(lookupEntries);
 }
 
 function normalizeName(value: string): string {
@@ -582,16 +660,10 @@ export default function CoursePlannerWebApp() {
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [importError, setImportError] = useState('');
   const [isSchoolSyncOpen, setIsSchoolSyncOpen] = useState(false);
-  const [schoolSyncTargetSemesterId, setSchoolSyncTargetSemesterId] = useState('2-1');
   const [schoolUsername, setSchoolUsername] = useState('');
   const [schoolPassword, setSchoolPassword] = useState('');
   const [schoolSyncStatus, setSchoolSyncStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
   const [schoolSyncMessage, setSchoolSyncMessage] = useState('');
-  const [isHistoryImportOpen, setIsHistoryImportOpen] = useState(false);
-  const [historyUsername, setHistoryUsername] = useState('');
-  const [historyPassword, setHistoryPassword] = useState('');
-  const [historyImportStatus, setHistoryImportStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
-  const [historyImportMessage, setHistoryImportMessage] = useState('');
   const [hasMigratedHistoryCourses, setHasMigratedHistoryCourses] = useState(false);
 
   useEffect(() => {
@@ -617,16 +689,16 @@ export default function CoursePlannerWebApp() {
       setHasMigratedHistoryCourses(true);
       return;
     }
-    const merged = mergeHistoryRecordsIntoSemesters(data.semesters, data.historyRecords, historyUsername || schoolUsername);
+    const merged = mergeHistoryRecordsIntoSemesters(data.semesters, data.historyRecords, schoolUsername);
     if (merged.importedCourseCount === 0) return;
     setData((prev) => {
       if (prev.semesters.some((semester) => semester.courses.some(isHistoryImportedCourse))) return prev;
-      const next = mergeHistoryRecordsIntoSemesters(prev.semesters, prev.historyRecords, historyUsername || schoolUsername);
+      const next = mergeHistoryRecordsIntoSemesters(prev.semesters, prev.historyRecords, schoolUsername);
       return next.importedCourseCount > 0 ? { ...prev, semesters: next.semesters } : prev;
     });
     if (merged.firstSemesterId) setActiveSemesterId(merged.firstSemesterId);
     setHasMigratedHistoryCourses(true);
-  }, [data.historyRecords, data.semesters, hasMigratedHistoryCourses, historyUsername, schoolUsername, setData]);
+  }, [data.historyRecords, data.semesters, hasMigratedHistoryCourses, schoolUsername, setData]);
 
   const stats = useMemo<PlannerStats>(() => {
     const current: PlannerStats = {
@@ -660,7 +732,10 @@ export default function CoursePlannerWebApp() {
       current.total += credits;
       if (category === 'chinese') current.chinese += credits;
       if (category === 'english') current.english += credits;
-      if (category === 'gen_ed') current.gen_ed += credits;
+      if (category === 'gen_ed') {
+        current.gen_ed += credits;
+        if (record.dimension && record.dimension !== 'None') current.genEdDimensions.add(record.dimension);
+      }
       if (category === 'compulsory') current.homeCompulsory += credits;
       if (category === 'elective') current.homeElective += credits;
     });
@@ -824,13 +899,12 @@ export default function CoursePlannerWebApp() {
     setSchoolUsername(username);
     const inferredSemesterId = semesterIdForStudentTerm(querySemester, username);
     if (inferredSemesterId && data.semesters.some((semester) => semester.id === inferredSemesterId)) {
-      setSchoolSyncTargetSemesterId(inferredSemesterId);
-      setSchoolSyncMessage(`已依學號與查詢學期 ${querySemester} 推算匯入到「${data.semesters.find((semester) => semester.id === inferredSemesterId)?.name}」。`);
+      setSchoolSyncMessage(`已依學號與查詢學期 ${querySemester} 推算最新課表會匯入「${data.semesters.find((semester) => semester.id === inferredSemesterId)?.name}」。`);
       setSchoolSyncStatus('idle');
     }
   };
 
-  const importSchoolSchedule = async () => {
+  const syncSchoolData = async () => {
     const username = schoolUsername.trim();
     const password = schoolPassword.trim();
     if (!username || !password) {
@@ -840,9 +914,12 @@ export default function CoursePlannerWebApp() {
     }
 
     const inferredSemesterId = semesterIdForStudentTerm(querySemester, username);
-    const importSemesterId = inferredSemesterId && data.semesters.some((semester) => semester.id === inferredSemesterId)
-      ? inferredSemesterId
-      : schoolSyncTargetSemesterId;
+    const importSemesterId = inferredSemesterId && data.semesters.some((semester) => semester.id === inferredSemesterId) ? inferredSemesterId : null;
+    if (!importSemesterId) {
+      setSchoolSyncStatus('error');
+      setSchoolSyncMessage(`無法依帳號與查詢學期 ${querySemester} 推算匯入學期，請確認校務帳號是學號格式。`);
+      return;
+    }
     const targetSemester = data.semesters.find((semester) => semester.id === importSemesterId);
     if (!targetSemester) {
       setSchoolSyncStatus('error');
@@ -857,48 +934,14 @@ export default function CoursePlannerWebApp() {
     setSchoolSyncStatus('loading');
     setSchoolSyncMessage('');
     try {
-      const payload = await syncSchoolSchedule(username, password);
-      const courses = coursesFromScheduleSync(payload);
-      setData((prev) => ({
-        ...prev,
-        semesters: prev.semesters.map((semester) => (
-          semester.id === importSemesterId
-            ? { ...semester, courses }
-            : semester
-        )),
-      }));
-      setActiveSemesterId(importSemesterId);
-      setSchoolSyncTargetSemesterId(importSemesterId);
-      setSchoolPassword('');
-      setSchoolSyncStatus('success');
-      setSchoolSyncMessage(`已匯入 ${courses.length} 門課到「${targetSemester.name}」。`);
-    } catch (error) {
-      setSchoolSyncStatus('error');
-      setSchoolSyncMessage(error instanceof Error ? error.message : '校務課表同步失敗。');
-    }
-  };
+      setSchoolSyncMessage('正在同步最新選課清單...');
+      const schedulePayload = await syncSchoolSchedule(username, password);
+      const courses = coursesFromScheduleSync(schedulePayload);
 
-  const closeHistoryImportModal = () => {
-    setIsHistoryImportOpen(false);
-    setHistoryPassword('');
-    setHistoryImportStatus('idle');
-    setHistoryImportMessage('');
-  };
-
-  const syncAcademicHistory = async () => {
-    const username = historyUsername.trim();
-    const password = historyPassword.trim();
-    if (!username || !password) {
-      setHistoryImportStatus('error');
-      setHistoryImportMessage('請輸入校務系統帳號與密碼。');
-      return;
-    }
-
-    setHistoryImportStatus('loading');
-    setHistoryImportMessage('');
-    try {
-      const payload = await importAcademicHistory(username, password);
-      const historyRecords = historyRecordsFromImport(payload);
+      setSchoolSyncMessage('已取得最新課表，正在同步歷年成績與補查歷史節次...');
+      const historyPayload = await importAcademicHistory(username, password);
+      const historyRecords = historyRecordsFromImport(historyPayload);
+      const historicalLookups = await lookupHistoricalSchedules(historyRecords);
       const retakeRequirements = retakeRequirementsFromHistory(historyRecords);
       const retakeSet: RequirementSet = {
         id: RETAKE_SET_ID,
@@ -907,29 +950,36 @@ export default function CoursePlannerWebApp() {
         notes: ['由已修紀錄自動產生'],
       };
       let importedCourseCount = 0;
-      let firstSemesterId: string | null = null;
-      setData((prev) => {
-        const otherSets = prev.requirementSets.filter((set) => set.id !== RETAKE_SET_ID);
-        const otherRequirements = prev.pendingRequirements.filter((requirement) => requirement.setId !== RETAKE_SET_ID);
-        const merged = mergeHistoryRecordsIntoSemesters(prev.semesters, historyRecords, payload.student_no || username);
-        importedCourseCount = merged.importedCourseCount;
-        firstSemesterId = merged.firstSemesterId;
-        return {
-          ...prev,
-          semesters: merged.semesters,
-          historyRecords,
-          requirementSets: retakeRequirements.length > 0 ? [...otherSets, retakeSet] : otherSets,
-          pendingRequirements: [...otherRequirements, ...retakeRequirements],
-        };
-      });
-      if (firstSemesterId) setActiveSemesterId(firstSemesterId);
+      let scheduledHistoryCourseCount = 0;
+      setData((prev) => ({
+        ...prev,
+        ...(() => {
+          const semestersWithSchedule = prev.semesters.map((semester) => (
+            semester.id === importSemesterId
+              ? { ...semester, courses }
+              : semester
+          ));
+          const merged = mergeHistoryRecordsIntoSemesters(semestersWithSchedule, historyRecords, historyPayload.student_no || username, historicalLookups);
+          importedCourseCount = merged.importedCourseCount;
+          scheduledHistoryCourseCount = merged.scheduledHistoryCourseCount;
+          const otherSets = prev.requirementSets.filter((set) => set.id !== RETAKE_SET_ID);
+          const otherRequirements = prev.pendingRequirements.filter((requirement) => requirement.setId !== RETAKE_SET_ID);
+          return {
+            semesters: merged.semesters,
+            historyRecords,
+            requirementSets: retakeRequirements.length > 0 ? [...otherSets, retakeSet] : otherSets,
+            pendingRequirements: [...otherRequirements, ...retakeRequirements],
+          };
+        })(),
+      }));
+      setActiveSemesterId(importSemesterId);
       setHasMigratedHistoryCourses(true);
-      setHistoryPassword('');
-      setHistoryImportStatus('success');
-      setHistoryImportMessage(`已匯入 ${historyRecords.length} 筆紀錄，${importedCourseCount} 門寫入學期課表，${retakeRequirements.length} 門列為待重修。`);
+      setSchoolPassword('');
+      setSchoolSyncStatus('success');
+      setSchoolSyncMessage(`已同步完成：最新課表 ${courses.length} 門匯入「${targetSemester.name}」，歷年紀錄 ${historyRecords.length} 筆，${scheduledHistoryCourseCount} 門補到歷史節次，${importedCourseCount} 門寫入學期，${retakeRequirements.length} 門列為待重修。`);
     } catch (error) {
-      setHistoryImportStatus('error');
-      setHistoryImportMessage(error instanceof Error ? error.message : '已修紀錄匯入失敗。');
+      setSchoolSyncStatus('error');
+      setSchoolSyncMessage(error instanceof Error ? error.message : '校務資料同步失敗。');
     }
   };
 
@@ -984,14 +1034,7 @@ export default function CoursePlannerWebApp() {
               className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
               <RefreshCw className="h-4 w-4" />
-              同步校務課表
-            </button>
-            <button
-              onClick={() => setIsHistoryImportOpen(true)}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <BookOpen className="h-4 w-4" />
-              同步已修紀錄
+              同步校務資料
             </button>
             <label className="text-sm font-medium text-slate-600">查詢學期</label>
             <select
@@ -1182,30 +1225,14 @@ export default function CoursePlannerWebApp() {
 
       {isSchoolSyncOpen && (
         <SchoolScheduleSyncModal
-          semesters={data.semesters}
-          targetSemesterId={schoolSyncTargetSemesterId}
           username={schoolUsername}
           password={schoolPassword}
           status={schoolSyncStatus}
           message={schoolSyncMessage}
-          onTargetSemesterChange={setSchoolSyncTargetSemesterId}
           onUsernameChange={handleSchoolUsernameChange}
           onPasswordChange={setSchoolPassword}
           onClose={closeSchoolSyncModal}
-          onImport={() => void importSchoolSchedule()}
-        />
-      )}
-
-      {isHistoryImportOpen && (
-        <HistoryImportModal
-          username={historyUsername}
-          password={historyPassword}
-          status={historyImportStatus}
-          message={historyImportMessage}
-          onUsernameChange={setHistoryUsername}
-          onPasswordChange={setHistoryPassword}
-          onClose={closeHistoryImportModal}
-          onImport={() => void syncAcademicHistory()}
+          onImport={() => void syncSchoolData()}
         />
       )}
 
@@ -1335,7 +1362,8 @@ function WeeklySchedule({
   semester: AppData['semesters'][number];
   onDeleteCourse: (courseId: string) => void;
 }) {
-  const unscheduled = semester.courses.filter((course) => !course.scheduledOffering?.slots.length);
+  const unscheduledPlanned = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && !isHistoryImportedCourse(course));
+  const historyRecords = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && isHistoryImportedCourse(course));
   return (
     <div className="p-4">
       <div className="overflow-x-auto">
@@ -1354,11 +1382,22 @@ function WeeklySchedule({
         </div>
       </div>
 
-      {unscheduled.length > 0 && (
+      {unscheduledPlanned.length > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">未提供節次</h3>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">未排入時間的規劃課程</h3>
           <div className="flex flex-wrap gap-2">
-            {unscheduled.map((course) => (
+            {unscheduledPlanned.map((course) => (
+              <CoursePill key={course.id} course={course} onDelete={() => onDeleteCourse(course.id)} compact />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {historyRecords.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">修課紀錄（未補到節次）</h3>
+          <div className="flex flex-wrap gap-2">
+            {historyRecords.map((course) => (
               <CoursePill key={course.id} course={course} onDelete={() => onDeleteCourse(course.id)} compact />
             ))}
           </div>
@@ -1397,6 +1436,30 @@ function ScheduleRow({
   );
 }
 
+function coursePillTone(course: Course): string {
+  if (course.program === 'double_major') return 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100';
+  if (course.program === 'minor') return 'border-amber-200 bg-amber-50 hover:bg-amber-100';
+
+  switch (course.category) {
+    case 'chinese':
+      return 'border-orange-200 bg-orange-50 hover:bg-orange-100';
+    case 'english':
+      return 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100';
+    case 'social':
+      return 'border-yellow-200 bg-yellow-50 hover:bg-yellow-100';
+    case 'pe':
+      return 'border-green-200 bg-green-50 hover:bg-green-100';
+    case 'gen_ed':
+      return 'border-purple-200 bg-purple-50 hover:bg-purple-100';
+    case 'compulsory':
+      return 'border-rose-200 bg-rose-50 hover:bg-rose-100';
+    case 'elective':
+      return 'border-sky-200 bg-sky-50 hover:bg-sky-100';
+    default:
+      return 'border-blue-200 bg-blue-50 hover:bg-blue-100';
+  }
+}
+
 function CoursePill({
   course,
   conflict = false,
@@ -1412,8 +1475,9 @@ function CoursePill({
   const courseMeta = isImportedHistory
     ? `${formatCredits(course.credits)} 學分・${course.grade || '修課紀錄'}`
     : `${formatCredits(course.credits)} 學分・${course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}`;
+  const toneClass = conflict ? 'border-red-300 bg-red-100' : coursePillTone(course);
   return (
-    <div className={`group rounded-md border px-2 py-1.5 ${conflict ? 'border-red-300 bg-red-100' : 'border-blue-200 bg-blue-50'}`}>
+    <div className={`group rounded-md border px-2 py-1.5 transition-colors ${toneClass}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className={`truncate font-semibold ${compact ? 'text-xs' : 'text-[12px]'} text-slate-900`}>{course.name}</p>
@@ -1535,25 +1599,19 @@ function OfferingModal({
 }
 
 function SchoolScheduleSyncModal({
-  semesters,
-  targetSemesterId,
   username,
   password,
   status,
   message,
-  onTargetSemesterChange,
   onUsernameChange,
   onPasswordChange,
   onClose,
   onImport,
 }: {
-  semesters: AppData['semesters'];
-  targetSemesterId: string;
   username: string;
   password: string;
   status: 'idle' | 'loading' | 'error' | 'success';
   message: string;
-  onTargetSemesterChange: (semesterId: string) => void;
   onUsernameChange: (username: string) => void;
   onPasswordChange: (password: string) => void;
   onClose: () => void;
@@ -1568,9 +1626,9 @@ function SchoolScheduleSyncModal({
             <div>
               <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
                 <KeyRound className="h-5 w-5 text-blue-600" />
-                同步校務課表
+                同步校務資料
               </h2>
-              <p className="mt-1 text-sm text-slate-500">取得最新選課清單並匯入指定學期。</p>
+              <p className="mt-1 text-sm text-slate-500">取得最新選課清單、歷年成績，並自動補查可辨識的歷史節次。</p>
             </div>
             <button onClick={onClose} disabled={isLoading} className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">✕</button>
           </div>
@@ -1582,21 +1640,6 @@ function SchoolScheduleSyncModal({
             onImport();
           }}
         >
-          <div>
-            <label className="block text-sm font-medium text-slate-700">匯入到</label>
-            <select
-              value={targetSemesterId}
-              onChange={(event) => onTargetSemesterChange(event.target.value)}
-              disabled={isLoading}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-            >
-              {semesters.map((semester) => (
-                <option key={semester.id} value={semester.id}>
-                  {semester.name}
-                </option>
-              ))}
-            </select>
-          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">校務系統帳號</label>
             <input
@@ -1638,99 +1681,7 @@ function SchoolScheduleSyncModal({
               className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoading ? '同步中...' : '匯入課表'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function HistoryImportModal({
-  username,
-  password,
-  status,
-  message,
-  onUsernameChange,
-  onPasswordChange,
-  onClose,
-  onImport,
-}: {
-  username: string;
-  password: string;
-  status: 'idle' | 'loading' | 'error' | 'success';
-  message: string;
-  onUsernameChange: (username: string) => void;
-  onPasswordChange: (password: string) => void;
-  onClose: () => void;
-  onImport: () => void;
-}) {
-  const isLoading = status === 'loading';
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="border-b border-slate-200 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
-                <BookOpen className="h-5 w-5 text-emerald-600" />
-                同步已修紀錄
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">匯入已修與修習中課程，並自動建立待重修需求。</p>
-            </div>
-            <button onClick={onClose} disabled={isLoading} className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">✕</button>
-          </div>
-        </div>
-        <form
-          className="space-y-4 p-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onImport();
-          }}
-        >
-          <div>
-            <label className="block text-sm font-medium text-slate-700">校務系統帳號</label>
-            <input
-              value={username}
-              onChange={(event) => onUsernameChange(event.target.value)}
-              disabled={isLoading}
-              autoComplete="username"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">校務系統密碼</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => onPasswordChange(event.target.value)}
-              disabled={isLoading}
-              autoComplete="current-password"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-            />
-          </div>
-          {message && (
-            <p className={`rounded-md px-3 py-2 text-sm ${status === 'error' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-              {message}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isLoading}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              關閉
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoading ? '匯入中...' : '匯入紀錄'}
+              {isLoading ? '同步中...' : '開始同步'}
             </button>
           </div>
         </form>

@@ -45,6 +45,7 @@ function normalizeHistoryRecord(record: AcademicHistoryRecord): AcademicHistoryR
     grade: record.grade || '',
     credits: Number.isFinite(record.credits) ? record.credits : 0,
     status: record.status || 'passed',
+    dimension: record.dimension || undefined,
   };
 }
 

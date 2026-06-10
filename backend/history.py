@@ -1,20 +1,58 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import requests
 from bs4 import BeautifulSoup, Tag
 
 try:
-    from .config import EDU_NEED_URL
+    from .config import SCORE_DISPLAY_ALL_URL
     from .ntust_common import login_to_target, normalize
     from .time_utils import now
 except ImportError:  # pragma: no cover
-    from config import EDU_NEED_URL
+    from config import SCORE_DISPLAY_ALL_URL
     from ntust_common import login_to_target, normalize
     from time_utils import now
 
+
+def extract_score_display_course_tables(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    for table in soup.find_all("table"):
+        table_rows = table.find_all("tr")
+        if not table_rows:
+            continue
+
+        header_cells = [normalize(cell.get_text(" ", strip=True)) for cell in table_rows[0].find_all(["td", "th"])]
+        if header_cells[:9] != ["序", "學年期", "課程代碼", "課程名稱", "學分數", "成績", "備註說明", "通識向度", "遠距教學課程"]:
+            continue
+
+        for tr in table_rows[1:]:
+            cells = [normalize(cell.get_text(" ", strip=True)) for cell in tr.find_all("td")]
+            if len(cells) < 6 or not cells[2]:
+                continue
+            ge_dimension = cells[7] if len(cells) > 7 else ""
+            rows.append(
+                {
+                    "category": f"通識向度 {ge_dimension}" if ge_dimension else "歷年學業成績",
+                    "course_code": cells[2],
+                    "course_name": cells[3],
+                    "academic_term": cells[1],
+                    "grade": cells[5],
+                    "earned_credits": _normalize_score_credit(cells[4]),
+                    "ge_dimension": ge_dimension,
+                }
+            )
+
+    return rows
+
+
 def extract_history_course_tables(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    score_rows = extract_score_display_course_tables(soup)
+    if score_rows:
+        return score_rows
+
     rows: list[dict[str, Any]] = []
 
     for title_cell in soup.select("td.TD_title1_C"):
@@ -46,10 +84,16 @@ def extract_history_course_tables(soup: BeautifulSoup) -> list[dict[str, Any]]:
                         "academic_term": cells[2],
                         "grade": cells[3],
                         "earned_credits": cells[4],
+                        "ge_dimension": "",
                     }
                 )
 
     return rows
+
+
+def _normalize_score_credit(value: str) -> str:
+    match = re.search(r"\d+(?:\.\d+)?", value)
+    return match.group(0) if match else value
 
 
 def extract_history_summary_texts(soup: BeautifulSoup) -> list[str]:
@@ -74,29 +118,13 @@ def fetch_history_records(username: str, password: str, verify_ssl: bool) -> dic
         }
     )
 
-    page_response = login_to_target(session, username, password, EDU_NEED_URL, verify_ssl)
+    page_response = login_to_target(session, username, password, SCORE_DISPLAY_ALL_URL, verify_ssl)
     soup = BeautifulSoup(page_response.text, "html.parser")
 
-    student_name = normalize(
-        soup.select_one("#ContentPlaceHolder1_Lal_StudentName").get_text(" ", strip=True)
-        if soup.select_one("#ContentPlaceHolder1_Lal_StudentName")
-        else ""
-    )
-    student_no = normalize(
-        soup.select_one("#ContentPlaceHolder1_Lal_StudentNo").get_text(" ", strip=True)
-        if soup.select_one("#ContentPlaceHolder1_Lal_StudentNo")
-        else ""
-    )
-    department = normalize(
-        soup.select_one("#ContentPlaceHolder1_Lal_Subject").get_text(" ", strip=True)
-        if soup.select_one("#ContentPlaceHolder1_Lal_Subject")
-        else ""
-    )
-    status = normalize(
-        soup.select_one("#ContentPlaceHolder1_Lal_Nowcondition").get_text(" ", strip=True)
-        if soup.select_one("#ContentPlaceHolder1_Lal_Nowcondition")
-        else ""
-    )
+    student_name = _extract_score_student_name(soup)
+    student_no = _extract_labeled_text(soup, "#ContentPlaceHolder1_Lal_StudentNo") or username
+    department = _extract_labeled_text(soup, "#ContentPlaceHolder1_Lal_Subject")
+    status = _extract_labeled_text(soup, "#ContentPlaceHolder1_Lal_Nowcondition")
 
     records = extract_history_course_tables(soup)
     summary_texts = extract_history_summary_texts(soup)
@@ -112,3 +140,16 @@ def fetch_history_records(username: str, password: str, verify_ssl: bool) -> dic
         "records": records,
     }
 
+
+def _extract_labeled_text(soup: BeautifulSoup, selector: str) -> str:
+    element = soup.select_one(selector)
+    return normalize(element.get_text(" ", strip=True) if element else "")
+
+
+def _extract_score_student_name(soup: BeautifulSoup) -> str:
+    excluded = {"登出", "登出系統", "Logout", "Log out", "Sign out", "English", "中文", "繁體中文", "簡體中文"}
+    for link in soup.select("ul.navbar-right a.nav-link"):
+        text = normalize(link.get_text(" ", strip=True))
+        if text and text not in excluded:
+            return text
+    return _extract_labeled_text(soup, "#ContentPlaceHolder1_Lal_StudentName")

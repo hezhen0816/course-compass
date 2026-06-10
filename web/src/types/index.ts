@@ -115,6 +115,7 @@ export interface AcademicHistoryRecord {
   grade: string;
   credits: number;
   status: AcademicHistoryStatus;
+  dimension?: GenEdDimension;
 }
 
 export interface AppData {
@@ -218,6 +219,7 @@ export interface HistoryCourseRecord {
   academic_term: string;
   grade: string;
   earned_credits: string;
+  ge_dimension?: string;
 }
 
 export interface HistoryImportResponse {
