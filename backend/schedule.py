@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import urldefrag, urljoin
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -128,6 +129,31 @@ def parse_course_list(html: str) -> dict[str, Any]:
     }
 
 
+def find_latest_course_list_url(html: str, base_url: str, fallback_url: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    candidates: list[tuple[int, str]] = []
+
+    for anchor in soup.find_all("a", href=True):
+        if not isinstance(anchor, Tag):
+            continue
+        text = normalize(anchor.get_text(" ", strip=True))
+        if "選課清單" not in text or "暑期" in text:
+            continue
+        semester_match = re.search(r"選課清單\((\d+)\)", text)
+        if not semester_match:
+            continue
+        href = str(anchor.get("href") or "")
+        absolute_url = urldefrag(urljoin(base_url, href)).url
+        if "/ChooseList/" not in absolute_url:
+            continue
+        candidates.append((int(semester_match.group(1)), absolute_url))
+
+    if not candidates:
+        return fallback_url
+
+    return max(candidates, key=lambda item: item[0])[1]
+
+
 def group_schedule_entries(courses: list[dict[str, Any]], slots: list[dict[str, Any]]) -> list[dict[str, Any]]:
     course_index = {course["course_name"]: course for course in courses}
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -234,6 +260,33 @@ def fetch_schedule(username: str, password: str, verify_ssl: bool) -> dict[str, 
 
     if "login" in page_response.url.lower() or "ssoam" in page_response.url:
         raise RuntimeError(f"無法進入選課清單頁面，目前停在 {page_response.url}")
+
+    latest_course_list_url = find_latest_course_list_url(
+        page_response.text,
+        page_response.url,
+        COURSE_LIST_URL,
+    )
+    if latest_course_list_url != urldefrag(page_response.url).url:
+        page_response = session.get(
+            latest_course_list_url,
+            timeout=DEFAULT_TIMEOUT,
+            allow_redirects=True,
+            verify=verify_ssl,
+        )
+        page_response.raise_for_status()
+
+        if "signin-oidc" in page_response.url:
+            page_response = submit_hidden_form(session, page_response, verify_ssl)
+            page_response = session.get(
+                latest_course_list_url,
+                timeout=DEFAULT_TIMEOUT,
+                allow_redirects=True,
+                verify=verify_ssl,
+            )
+            page_response.raise_for_status()
+
+        if "login" in page_response.url.lower() or "ssoam" in page_response.url:
+            raise RuntimeError(f"無法進入最新選課清單頁面，目前停在 {page_response.url}")
 
     extracted = parse_course_list(page_response.text)
     entries = group_schedule_entries(extracted["courses"], extracted["slots"])

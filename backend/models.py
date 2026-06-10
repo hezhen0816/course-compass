@@ -154,3 +154,60 @@ class TRRoomStatusResponse(BaseModel):
     busy_rooms: list[str]
     total_rooms: int
     note: str
+
+
+class CourseSemesterInfo(BaseModel):
+    semester: str
+    english_label: str | None = None
+    current: bool = False
+
+
+class CourseSearchResult(BaseModel):
+    semester: str
+    course_no: str
+    course_name: str
+    teacher: str
+    dimension: str
+    credits: float | None
+    require_option: str
+    classroom: str
+    node: str
+    contents: str
+    selected_count: int | None = None
+    capacity: int | None = None
+
+
+class RequirementOptionPayload(BaseModel):
+    name: str
+    credits: float | None = None
+    course_names: list[str] = Field(default_factory=list)
+
+
+class PendingRequirementPayload(BaseModel):
+    id: str
+    set_id: str
+    kind: str
+    title: str
+    credits: float | None = None
+    required_credits: float | None = None
+    course_names: list[str] = Field(default_factory=list)
+    options: list[RequirementOptionPayload] = Field(default_factory=list)
+    note: str = ""
+    course_code_prefix: str | None = None
+
+
+class RequirementSetPayload(BaseModel):
+    id: str
+    name: str
+    department: str = ""
+    source: str = "pdf"
+    source_file_name: str | None = None
+    total_credits: float | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class RequirementPdfImportResponse(BaseModel):
+    requirement_set: RequirementSetPayload
+    pending_requirements: list[PendingRequirementPayload]
+    warnings: list[str] = Field(default_factory=list)
+    raw_text_preview: str = ""

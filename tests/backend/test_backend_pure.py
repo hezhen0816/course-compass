@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from backend import moodle, snapshots, tr_rooms
-from backend.schedule import group_schedule_entries
+import pytest
+from fastapi.testclient import TestClient
+
+from backend import app as backend_app
+from backend import history, moodle, planner_pdf, snapshots, tr_rooms
+from backend.schedule import find_latest_course_list_url, group_schedule_entries
 
 
 def test_group_schedule_entries_orders_slots_and_preserves_metadata() -> None:
@@ -46,6 +51,31 @@ def test_group_schedule_entries_orders_slots_and_preserves_metadata() -> None:
             "accent": "compulsory",
         }
     ]
+
+
+def test_find_latest_course_list_url_prefers_highest_semester_list() -> None:
+    html = """
+    <a href="/ChooseList/D01/D01">選課清單</a>
+    <a href="/ChooseList/D03/D03">選課清單(1151)</a>
+    <a href="/ChooseList/D04/D04">選課清單(1142)</a>
+    <a href="/ChooseList/D02/D02">暑期選課清單(1151)</a>
+    """
+
+    assert find_latest_course_list_url(
+        html,
+        "https://courseselection.ntust.edu.tw/ChooseList/D01/D01",
+        "https://courseselection.ntust.edu.tw/ChooseList/D01/D01",
+    ) == "https://courseselection.ntust.edu.tw/ChooseList/D03/D03"
+
+
+def test_find_latest_course_list_url_falls_back_without_semester_link() -> None:
+    fallback_url = "https://courseselection.ntust.edu.tw/ChooseList/D01/D01"
+
+    assert find_latest_course_list_url(
+        '<a href="/ChooseList/D01/D01">選課清單</a>',
+        fallback_url,
+        fallback_url,
+    ) == fallback_url
 
 
 def test_tr_room_parsing_and_node_selection() -> None:
@@ -105,6 +135,45 @@ def test_moodle_assignment_filter_keeps_actionable_items_and_sorts() -> None:
     filtered = moodle.filter_moodle_assignment_items(items)
 
     assert [item["title"] for item in filtered] == ["作業一", "小考"]
+
+
+def test_history_parser_reads_edu_need_course_table() -> None:
+    soup = history.BeautifulSoup(
+        """
+        <table>
+          <tr><td class="TD_title1_C">其他選修</td></tr>
+          <tr><td>
+            <table>
+              <tr><td>課程代碼</td><td>課程名稱</td><td>學年期</td><td>成績</td><td>實得學分</td></tr>
+              <tr><td>CC101A</td><td>英文字彙與閱讀(上)</td><td>1141</td><td>B+</td><td>2</td></tr>
+              <tr><td>CC101B</td><td>英文字彙與閱讀(下)</td><td>1142</td><td>修習中</td><td>2</td></tr>
+            </table>
+          </td></tr>
+        </table>
+        """,
+        "html.parser",
+    )
+
+    rows = history.extract_history_course_tables(soup)
+
+    assert rows == [
+        {
+            "category": "其他選修",
+            "course_code": "CC101A",
+            "course_name": "英文字彙與閱讀(上)",
+            "academic_term": "1141",
+            "grade": "B+",
+            "earned_credits": "2",
+        },
+        {
+            "category": "其他選修",
+            "course_code": "CC101B",
+            "course_name": "英文字彙與閱讀(下)",
+            "academic_term": "1142",
+            "grade": "修習中",
+            "earned_credits": "2",
+        },
+    ]
 
 
 def test_supabase_load_snapshot_builds_encoded_query(monkeypatch) -> None:
@@ -172,3 +241,114 @@ def test_supabase_persist_snapshot_reuses_common_writer(monkeypatch) -> None:
         "imported_at": "2026-04-13T10:00:00+08:00",
         "student_name": "測試學生",
     }
+
+
+def test_requirement_pdf_parser_preserves_cs_choices() -> None:
+    pdf_path = Path("/Users/hezhen/Downloads/114double 資工.pdf")
+    if not pdf_path.exists():
+        pytest.skip("local sample PDF is not available")
+
+    parsed = planner_pdf.parse_requirement_pdf(pdf_path.read_bytes(), pdf_path.name)
+
+    assert parsed["requirement_set"]["name"] == "114學年度資訊工程系雙主修應修科目表"
+    assert parsed["requirement_set"]["total_credits"] == 47
+    choices = {item["title"]: item for item in parsed["pending_requirements"] if item["kind"] == "choice"}
+    assert choices["資訊工程導論或計算機概論"]["course_names"] == ["資訊工程導論", "計算機概論"]
+    assert choices["程式語言或編譯器設計"]["course_names"] == ["程式語言", "編譯器設計"]
+    assert any(item["title"] == "資料結構" for item in parsed["pending_requirements"])
+
+
+def test_requirement_pdf_parser_preserves_business_credit_pool() -> None:
+    pdf_path = Path("/Users/hezhen/Downloads/114double 企管.pdf")
+    if not pdf_path.exists():
+        pytest.skip("local sample PDF is not available")
+
+    parsed = planner_pdf.parse_requirement_pdf(pdf_path.read_bytes(), pdf_path.name)
+
+    assert parsed["requirement_set"]["name"] == "114學年度企業管理系雙主修應修科目表"
+    assert parsed["requirement_set"]["total_credits"] == 43
+    by_title = {item["title"]: item for item in parsed["pending_requirements"]}
+    assert by_title["會計學／會計學(上)／初級會計學"]["course_names"] == ["會計學", "會計學(上)", "初級會計學"]
+    assert by_title["BA 開頭專業課程"]["kind"] == "credit_pool"
+    assert by_title["BA 開頭專業課程"]["required_credits"] == 18
+    assert by_title["微積分"]["note"] == "基礎課程"
+
+
+def test_course_search_endpoint_supports_name_and_code(monkeypatch) -> None:
+    courses = [
+        {
+            "Semester": "1142",
+            "CourseNo": "CS3005301",
+            "CourseName": "物件導向程式設計",
+            "CourseTeacher": "戴文凱",
+            "CreditPoint": "3",
+            "RequireOption": "R",
+            "ClassRoomNo": "TR-311",
+            "Node": "T6,T7,T8",
+            "Contents": "學號單數",
+            "ChooseStudent": 43,
+            "Restrict2": "55",
+        },
+        {
+            "Semester": "1142",
+            "CourseNo": "CS1010301",
+            "CourseName": "物件導向程式設計實習",
+            "CourseTeacher": "戴文凱",
+            "CreditPoint": "1",
+            "RequireOption": "R",
+            "ClassRoomNo": "RB-509",
+            "Node": "W6,W7,W8",
+        },
+    ]
+    monkeypatch.setattr(
+        backend_app,
+        "fetch_query_courses_filtered",
+        lambda semester, course_no, course_name, verify_ssl: courses,
+    )
+    client = TestClient(backend_app.app)
+
+    by_name = client.get("/api/courses/search", params={"semester": "1142", "q": "物件導向程式設計", "mode": "name"})
+    by_code = client.get("/api/courses/search", params={"semester": "1142", "q": "CS3005301", "mode": "code"})
+
+    assert by_name.status_code == 200
+    assert [item["course_no"] for item in by_name.json()] == ["CS3005301"]
+    assert by_code.status_code == 200
+    assert by_code.json()[0]["node"] == "T6,T7,T8"
+
+
+def test_course_search_endpoint_merges_same_course_code_nodes(monkeypatch) -> None:
+    courses = [
+        {
+            "Semester": "1151",
+            "CourseNo": "CS2002302",
+            "CourseName": "資料結構",
+            "CourseTeacher": "陳冠宇",
+            "CreditPoint": "3",
+            "RequireOption": "R",
+            "ClassRoomNo": "",
+            "Node": "M3,M4",
+        },
+        {
+            "Semester": "1151",
+            "CourseNo": "CS2002302",
+            "CourseName": "資料結構",
+            "CourseTeacher": "陳冠宇",
+            "CreditPoint": "3",
+            "RequireOption": "R",
+            "ClassRoomNo": "",
+            "Node": "W4",
+        },
+    ]
+    monkeypatch.setattr(
+        backend_app,
+        "fetch_query_courses_filtered",
+        lambda semester, course_no, course_name, verify_ssl: courses,
+    )
+    client = TestClient(backend_app.app)
+
+    response = client.get("/api/courses/search", params={"semester": "1151", "q": "CS2002302", "mode": "code"})
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["course_no"] == "CS2002302"
+    assert response.json()[0]["node"] == "M3, M4, W4"

@@ -1,13 +1,50 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
-import type { AppData, Course } from '../types';
+import type { AcademicHistoryRecord, AppData, Course, PendingRequirement, RequirementSet } from '../types';
 import { INITIAL_SEMESTERS, DEFAULT_TARGETS } from '../constants';
 
 function normalizeCourse(course: Course): Course {
   return {
     ...course,
     program: course.program ?? 'home',
+    scheduledOffering: course.scheduledOffering
+      ? {
+          ...course.scheduledOffering,
+          slots: course.scheduledOffering.slots || parseNodeSlots(course.scheduledOffering.node),
+        }
+      : undefined,
+  };
+}
+
+function normalizeRequirementSet(set: RequirementSet): RequirementSet {
+  return {
+    ...set,
+    source: set.source ?? 'manual',
+    notes: set.notes || [],
+  };
+}
+
+function normalizeRequirement(requirement: PendingRequirement): PendingRequirement {
+  return {
+    ...requirement,
+    kind: requirement.kind ?? 'course',
+    courseNames: requirement.courseNames || [],
+    options: requirement.options || [],
+    note: requirement.note || '',
+  };
+}
+
+function normalizeHistoryRecord(record: AcademicHistoryRecord): AcademicHistoryRecord {
+  return {
+    ...record,
+    category: record.category || '',
+    courseCode: record.courseCode || '',
+    courseName: record.courseName || '',
+    academicTerm: record.academicTerm || '',
+    grade: record.grade || '',
+    credits: Number.isFinite(record.credits) ? record.credits : 0,
+    status: record.status || 'passed',
   };
 }
 
@@ -22,6 +59,9 @@ function normalizeAppData(rawData: AppData): AppData {
       ...DEFAULT_TARGETS,
       ...(rawData.targets || {}),
     },
+    requirementSets: (rawData.requirementSets || []).map(normalizeRequirementSet),
+    pendingRequirements: (rawData.pendingRequirements || []).map(normalizeRequirement),
+    historyRecords: (rawData.historyRecords || []).map(normalizeHistoryRecord),
   };
 }
 
@@ -29,7 +69,17 @@ function createEmptyAppData(): AppData {
   return normalizeAppData({
     semesters: INITIAL_SEMESTERS,
     targets: { ...DEFAULT_TARGETS },
+    requirementSets: [],
+    pendingRequirements: [],
+    historyRecords: [],
   });
+}
+
+function parseNodeSlots(node: string): string[] {
+  return (node || '')
+    .split(/[,、\s]+/)
+    .map((slot) => slot.trim().toUpperCase())
+    .filter(Boolean);
 }
 
 type UserDataRecord = {

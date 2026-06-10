@@ -11,6 +11,7 @@ export type CourseCategory =
 
 export type GenEdDimension = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'None';
 export type CourseProgram = 'home' | 'double_major' | 'minor' | 'other';
+export type RequirementKind = 'course' | 'choice' | 'course_group' | 'credit_pool';
 
 export interface GradingItem {
   id: string;
@@ -29,6 +30,19 @@ export interface CourseDetails {
   notes?: string;
 }
 
+export interface ScheduledOffering {
+  semester: string;
+  courseNo: string;
+  courseName: string;
+  teacher: string;
+  credits?: number | null;
+  classroom: string;
+  node: string;
+  slots: string[];
+  requireOption: string;
+  contents: string;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -38,6 +52,9 @@ export interface Course {
   dimension?: GenEdDimension; // For General Education
   grade?: string;
   details?: CourseDetails;
+  sourceRequirementId?: string;
+  sourceSetId?: string;
+  scheduledOffering?: ScheduledOffering;
 }
 
 export interface Semester {
@@ -59,9 +76,53 @@ export interface AppTargets {
   minor: number;
 }
 
+export interface RequirementOption {
+  name: string;
+  credits?: number | null;
+  courseNames: string[];
+}
+
+export interface RequirementSet {
+  id: string;
+  name: string;
+  department?: string;
+  source: 'pdf' | 'manual' | 'system';
+  sourceFileName?: string | null;
+  totalCredits?: number | null;
+  notes?: string[];
+}
+
+export interface PendingRequirement {
+  id: string;
+  setId: string;
+  kind: RequirementKind;
+  title: string;
+  credits?: number | null;
+  requiredCredits?: number | null;
+  courseNames: string[];
+  options: RequirementOption[];
+  note?: string;
+  courseCodePrefix?: string | null;
+}
+
+export type AcademicHistoryStatus = 'passed' | 'in_progress' | 'failed';
+
+export interface AcademicHistoryRecord {
+  category: string;
+  courseCode: string;
+  courseName: string;
+  academicTerm: string;
+  grade: string;
+  credits: number;
+  status: AcademicHistoryStatus;
+}
+
 export interface AppData {
   semesters: Semester[];
   targets: AppTargets;
+  requirementSets: RequirementSet[];
+  pendingRequirements: PendingRequirement[];
+  historyRecords: AcademicHistoryRecord[];
 }
 
 export interface PlannerStats {
@@ -76,4 +137,101 @@ export interface PlannerStats {
   doubleMajor: number;
   minor: number;
   genEdDimensions: Set<string>;
+}
+
+export interface CourseSearchResult {
+  semester: string;
+  course_no: string;
+  course_name: string;
+  teacher: string;
+  dimension: string;
+  credits: number | null;
+  require_option: string;
+  classroom: string;
+  node: string;
+  contents: string;
+  selected_count?: number | null;
+  capacity?: number | null;
+}
+
+export interface CourseSemesterInfo {
+  semester: string;
+  english_label?: string | null;
+  current: boolean;
+}
+
+export interface RequirementPdfImportResponse {
+  requirement_set: RequirementSet;
+  pending_requirements: PendingRequirement[];
+  warnings: string[];
+  raw_text_preview: string;
+}
+
+export interface ScheduleSyncRequest {
+  username: string;
+  password: string;
+  profile_key?: string | null;
+  persist_to_supabase: boolean;
+  verify_ssl: boolean;
+}
+
+export interface SyncedCourseRow {
+  course_code: string;
+  course_name: string;
+  credits: number | string;
+  required_type: string;
+  professor: string;
+  note: string;
+}
+
+export interface SyncedScheduleSlot {
+  weekday_key: string;
+  weekday_label: string;
+  period: string;
+  time: string;
+  course_name: string;
+  location: string;
+  raw: string;
+}
+
+export interface ScheduleSyncResponse {
+  profile_key: string;
+  school_account: string;
+  student_name?: string | null;
+  source_url: string;
+  page_title: string;
+  total_credits_text: string;
+  total_credits: number | null;
+  synced_at: string;
+  course_count: number;
+  scheduled_slot_count: number;
+  schedule_entry_count: number;
+  persisted_to_supabase: boolean;
+  courses: SyncedCourseRow[];
+  slots: SyncedScheduleSlot[];
+}
+
+export interface HistoryCourseRecord {
+  category: string;
+  course_code: string;
+  course_name: string;
+  academic_term: string;
+  grade: string;
+  earned_credits: string;
+}
+
+export interface HistoryImportResponse {
+  profile_key: string;
+  school_account: string;
+  student_name?: string | null;
+  student_no?: string | null;
+  department?: string | null;
+  status?: string | null;
+  source_url: string;
+  page_title: string;
+  imported_at: string;
+  record_count: number;
+  persisted_to_supabase: boolean;
+  summary_texts: string[];
+  records: HistoryCourseRecord[];
 }

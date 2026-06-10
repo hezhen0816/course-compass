@@ -46,7 +46,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onDemoLogin }) => {
             className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50"
           >
             <User className="w-4 h-4" />
-            直接進入功能演示
+            略過登入
           </button>
         </div>
       </div>
@@ -62,7 +62,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onDemoLogin }) => {
         <div className="text-center mb-8">
           <GraduationCap className="w-12 h-12 text-blue-600 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900">修課羅盤</h1>
-          <p className="text-gray-600 mt-2">請先登入以儲存資料，或使用功能演示快速體驗</p>
+          <p className="text-gray-600 mt-2">請先登入以儲存資料，或略過登入快速體驗</p>
         </div>
         
         <form onSubmit={handleAuth} className="space-y-4">
@@ -110,7 +110,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onDemoLogin }) => {
             className="mt-4 w-full flex justify-center items-center gap-2 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <User className="w-4 h-4" />
-            進入功能演示（不儲存資料）
+            略過登入
           </button>
         </div>
 

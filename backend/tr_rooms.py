@@ -86,6 +86,36 @@ def fetch_query_courses(semester: str, refresh: bool, verify_ssl: bool) -> list[
     return courses
 
 
+def fetch_query_courses_filtered(
+    semester: str,
+    *,
+    course_no: str = "",
+    course_name: str = "",
+    verify_ssl: bool,
+) -> list[dict[str, Any]]:
+    payload = query_course_payload(semester)
+    payload["CourseNo"] = course_no
+    payload["CourseName"] = course_name
+    response = requests.post(
+        QUERY_COURSE_API_URL,
+        json=payload,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
+            "Origin": "https://querycourse.ntust.edu.tw",
+            "Referer": "https://querycourse.ntust.edu.tw/querycourse/",
+            "User-Agent": "Mozilla/5.0",
+        },
+        timeout=DEFAULT_TIMEOUT,
+        verify=verify_ssl,
+    )
+    response.raise_for_status()
+    courses = response.json()
+    if not isinstance(courses, list):
+        raise RuntimeError("課程查詢系統回傳格式不是課程清單。")
+    return courses
+
+
 def normalize_room_code(room: str | None) -> str | None:
     normalized = normalize(room).upper()
     return normalized or None
@@ -181,4 +211,3 @@ def occupied_meetings(meetings: list[TRRoomMeeting], node: str | None) -> dict[s
         if meeting.node == node:
             occupied.setdefault(meeting.room, []).append(meeting)
     return occupied
-

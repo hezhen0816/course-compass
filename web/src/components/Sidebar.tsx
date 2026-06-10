@@ -10,7 +10,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ data, stats }) => {
   return (
-    <div className="lg:col-span-3 space-y-6">
+    <div className="space-y-4">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
         <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
           <Activity className="h-5 w-5 mr-2 text-blue-500" />
