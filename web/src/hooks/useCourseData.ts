@@ -49,9 +49,12 @@ function normalizeHistoryRecord(record: AcademicHistoryRecord): AcademicHistoryR
   };
 }
 
-function normalizeAppData(rawData: AppData): AppData {
+type StoredAppData = Partial<AppData> & Record<string, unknown>;
+
+function normalizeAppData(rawData: StoredAppData): AppData {
   return {
     ...rawData,
+    schemaVersion: 2,
     semesters: (rawData.semesters || INITIAL_SEMESTERS).map((semester) => ({
       ...semester,
       courses: (semester.courses || []).map(normalizeCourse),
@@ -68,8 +71,10 @@ function normalizeAppData(rawData: AppData): AppData {
 
 function createEmptyAppData(): AppData {
   return normalizeAppData({
+    schemaVersion: 2,
     semesters: INITIAL_SEMESTERS,
     targets: { ...DEFAULT_TARGETS },
+    settings: {},
     requirementSets: [],
     pendingRequirements: [],
     historyRecords: [],
@@ -84,7 +89,7 @@ function parseNodeSlots(node: string): string[] {
 }
 
 type UserDataRecord = {
-  content: AppData;
+  content: StoredAppData;
 };
 
 export function useCourseData(session: Session | null) {
@@ -155,7 +160,13 @@ export function useCourseData(session: Session | null) {
       const { error } = await client
         .from('user_data')
         .upsert(
-          [{ user_id: userID, content: normalizedData, updated_at: new Date().toISOString() }],
+          [{
+            user_id: userID,
+            content: normalizedData,
+            content_version: 2,
+            last_writer: 'web',
+            updated_at: new Date().toISOString(),
+          }],
           { onConflict: 'user_id' }
         );
 

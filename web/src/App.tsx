@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -37,6 +37,7 @@ import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { CourseDetailModal } from './components/CourseDetailModal';
 
 const DAY_COLUMNS = [
   { code: 'M', label: '一' },
@@ -665,6 +666,7 @@ export default function CoursePlannerWebApp() {
   const [schoolSyncStatus, setSchoolSyncStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
   const [schoolSyncMessage, setSchoolSyncMessage] = useState('');
   const [hasMigratedHistoryCourses, setHasMigratedHistoryCourses] = useState(false);
+  const [detailCourse, setDetailCourse] = useState<{ semesterId: string; course: Course } | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -994,6 +996,24 @@ export default function CoursePlannerWebApp() {
     }));
   };
 
+  const saveCourseDetail = (updatedCourse: Course) => {
+    if (!detailCourse) return;
+    setData((prev) => ({
+      ...prev,
+      semesters: prev.semesters.map((semester) => (
+        semester.id === detailCourse.semesterId
+          ? {
+              ...semester,
+              courses: semester.courses.map((course) => (
+                course.id === updatedCourse.id ? updatedCourse : course
+              )),
+            }
+          : semester
+      )),
+    }));
+    setDetailCourse(null);
+  };
+
   const deleteRequirement = (requirementId: string) => {
     setData((prev) => ({
       ...prev,
@@ -1195,6 +1215,7 @@ export default function CoursePlannerWebApp() {
               <WeeklySchedule
                 semester={activeSemester}
                 onDeleteCourse={(courseId) => deleteCourse(activeSemester.id, courseId)}
+                onOpenCourseDetail={(course) => setDetailCourse({ semesterId: activeSemester.id, course })}
               />
             )}
           </section>
@@ -1233,6 +1254,16 @@ export default function CoursePlannerWebApp() {
           onPasswordChange={setSchoolPassword}
           onClose={closeSchoolSyncModal}
           onImport={() => void syncSchoolData()}
+        />
+      )}
+
+      {detailCourse && (
+        <CourseDetailModal
+          isOpen
+          course={detailCourse.course}
+          semesterId={detailCourse.semesterId}
+          onClose={() => setDetailCourse(null)}
+          onSave={saveCourseDetail}
         />
       )}
 
@@ -1358,9 +1389,11 @@ function RequirementRow({
 function WeeklySchedule({
   semester,
   onDeleteCourse,
+  onOpenCourseDetail,
 }: {
   semester: AppData['semesters'][number];
   onDeleteCourse: (courseId: string) => void;
+  onOpenCourseDetail: (course: Course) => void;
 }) {
   const unscheduledPlanned = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && !isHistoryImportedCourse(course));
   const historyRecords = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && isHistoryImportedCourse(course));
@@ -1376,7 +1409,13 @@ function WeeklySchedule({
               </div>
             ))}
             {PERIODS.map((period) => (
-              <ScheduleRow key={period} period={period} semester={semester} onDeleteCourse={onDeleteCourse} />
+              <ScheduleRow
+                key={period}
+                period={period}
+                semester={semester}
+                onDeleteCourse={onDeleteCourse}
+                onOpenCourseDetail={onOpenCourseDetail}
+              />
             ))}
           </div>
         </div>
@@ -1387,7 +1426,13 @@ function WeeklySchedule({
           <h3 className="mb-2 text-sm font-semibold text-slate-700">未排入時間的規劃課程</h3>
           <div className="flex flex-wrap gap-2">
             {unscheduledPlanned.map((course) => (
-              <CoursePill key={course.id} course={course} onDelete={() => onDeleteCourse(course.id)} compact />
+              <CoursePill
+                key={course.id}
+                course={course}
+                onDelete={() => onDeleteCourse(course.id)}
+                onOpenDetail={() => onOpenCourseDetail(course)}
+                compact
+              />
             ))}
           </div>
         </div>
@@ -1398,7 +1443,13 @@ function WeeklySchedule({
           <h3 className="mb-2 text-sm font-semibold text-slate-700">修課紀錄（未補到節次）</h3>
           <div className="flex flex-wrap gap-2">
             {historyRecords.map((course) => (
-              <CoursePill key={course.id} course={course} onDelete={() => onDeleteCourse(course.id)} compact />
+              <CoursePill
+                key={course.id}
+                course={course}
+                onDelete={() => onDeleteCourse(course.id)}
+                onOpenDetail={() => onOpenCourseDetail(course)}
+                compact
+              />
             ))}
           </div>
         </div>
@@ -1411,10 +1462,12 @@ function ScheduleRow({
   period,
   semester,
   onDeleteCourse,
+  onOpenCourseDetail,
 }: {
   period: string;
   semester: AppData['semesters'][number];
   onDeleteCourse: (courseId: string) => void;
+  onOpenCourseDetail: (course: Course) => void;
 }) {
   return (
     <>
@@ -1426,7 +1479,13 @@ function ScheduleRow({
           <div key={slot} className={`min-h-24 border-b border-r border-slate-200 p-1.5 ${courses.length > 1 ? 'bg-red-50' : 'bg-white'}`}>
             <div className="space-y-1.5">
               {courses.map((course) => (
-                <CoursePill key={course.id} course={course} conflict={courses.length > 1} onDelete={() => onDeleteCourse(course.id)} />
+                <CoursePill
+                  key={course.id}
+                  course={course}
+                  conflict={courses.length > 1}
+                  onDelete={() => onDeleteCourse(course.id)}
+                  onOpenDetail={() => onOpenCourseDetail(course)}
+                />
               ))}
             </div>
           </div>
@@ -1465,19 +1524,34 @@ function CoursePill({
   conflict = false,
   compact = false,
   onDelete,
+  onOpenDetail,
 }: {
   course: Course;
   conflict?: boolean;
   compact?: boolean;
   onDelete: () => void;
+  onOpenDetail: () => void;
 }) {
   const isImportedHistory = isHistoryImportedCourse(course);
   const courseMeta = isImportedHistory
     ? `${formatCredits(course.credits)} 學分・${course.grade || '修課紀錄'}`
     : `${formatCredits(course.credits)} 學分・${course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}`;
   const toneClass = conflict ? 'border-red-300 bg-red-100' : coursePillTone(course);
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpenDetail();
+    }
+  };
   return (
-    <div className={`group rounded-md border px-2 py-1.5 transition-colors ${toneClass}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpenDetail}
+      onKeyDown={handleKeyDown}
+      className={`group cursor-pointer rounded-md border px-2 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${toneClass}`}
+      title="編輯課程詳細資訊"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className={`truncate font-semibold ${compact ? 'text-xs' : 'text-[12px]'} text-slate-900`}>{course.name}</p>
@@ -1489,7 +1563,10 @@ function CoursePill({
           )}
         </div>
         <button
-          onClick={onDelete}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
           className="rounded p-0.5 text-slate-400 opacity-100 hover:bg-white hover:text-red-600"
           title="移除課程"
         >

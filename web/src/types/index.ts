@@ -119,8 +119,11 @@ export interface AcademicHistoryRecord {
 }
 
 export interface AppData {
+  [key: string]: unknown;
+  schemaVersion: number;
   semesters: Semester[];
   targets: AppTargets;
+  settings?: Record<string, unknown>;
   requirementSets: RequirementSet[];
   pendingRequirements: PendingRequirement[];
   historyRecords: AcademicHistoryRecord[];
