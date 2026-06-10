@@ -153,7 +153,7 @@ struct PlannerTarget: Equatable {
 
     static let `default` = PlannerTarget(
         total: 133,
-        chinese: 3,
+        chinese: 6,
         english: 12,
         genEd: 16,
         peSemesters: 6,

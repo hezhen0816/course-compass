@@ -13,7 +13,7 @@ export const INITIAL_SEMESTERS: Semester[] = [
 
 export const DEFAULT_TARGETS: AppTargets = {
   total: 133,
-  chinese: 3,
+  chinese: 6,
   english: 12,
   gen_ed: 16,
   pe_semesters: 6,

@@ -10,11 +10,12 @@ interface CourseDetailModalProps {
   onClose: () => void;
   course: Course;
   semesterId: string;
+  semesterName?: string;
   onSave: (updatedCourse: Course) => void;
 }
 
-export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ 
-  isOpen, onClose, course, semesterId, onSave 
+export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
+  isOpen, onClose, course, semesterId, semesterName, onSave
 }) => {
   const [detailData, setDetailData] = useState<CourseDetails>(() => course.details || {
     professor: '',
@@ -28,6 +29,17 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
   const [openGradingMenuId, setOpenGradingMenuId] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const semesterLabel = semesterName || (
+    semesterId.startsWith('1-1') ? '大一上' :
+    semesterId.startsWith('1-2') ? '大一下' :
+    semesterId.startsWith('2-1') ? '大二上' :
+    semesterId.startsWith('2-2') ? '大二下' :
+    semesterId.startsWith('3-1') ? '大三上' :
+    semesterId.startsWith('3-2') ? '大三下' :
+    semesterId.startsWith('4-1') ? '大四上' :
+    semesterId.startsWith('4-2') ? '大四下' : semesterId
+  );
 
   const getCategoryColor = (cat: CourseCategory) => {
     switch (cat) {
@@ -153,14 +165,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
           <div>
             <div className="flex items-center space-x-2 text-sm opacity-80 mb-2">
               <span className="px-2 py-0.5 bg-black/10 rounded font-medium">
-                {semesterId.startsWith('1-1') ? '大一上' : 
-                 semesterId.startsWith('1-2') ? '大一下' :
-                 semesterId.startsWith('2-1') ? '大二上' :
-                 semesterId.startsWith('2-2') ? '大二下' :
-                 semesterId.startsWith('3-1') ? '大三上' :
-                 semesterId.startsWith('3-2') ? '大三下' :
-                 semesterId.startsWith('4-1') ? '大四上' :
-                 semesterId.startsWith('4-2') ? '大四下' : semesterId}
+                {semesterLabel}
               </span>
               <span>{course.credits} 學分</span>
             </div>

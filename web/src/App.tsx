@@ -293,8 +293,49 @@ function semesterIdForAcademicTerm(academicTerm: string, admissionYear: number |
   return `${grade}-${semesterPart}`;
 }
 
+function semesterNameForId(semesterId: string): string | null {
+  const [grade, semesterPart] = semesterId.split('-');
+  const gradeName = {
+    '1': '大一',
+    '2': '大二',
+    '3': '大三',
+    '4': '大四',
+  }[grade];
+  const termName = {
+    '1': '上',
+    '2': '下',
+  }[semesterPart];
+  return gradeName && termName ? `${gradeName}${termName}` : null;
+}
+
 function semesterIdForStudentTerm(academicTerm: string, studentNo: string): string | null {
   return semesterIdForAcademicTerm(academicTerm, inferAdmissionYearFromStudentNo(studentNo));
+}
+
+function semesterForStudentTerm(
+  semesters: AppData['semesters'],
+  academicTerm: string,
+  studentNo: string
+): AppData['semesters'][number] | null {
+  const inferredSemesterId = semesterIdForStudentTerm(academicTerm, studentNo);
+  if (!inferredSemesterId) return null;
+  const inferredSemesterName = semesterNameForId(inferredSemesterId);
+  return semesters.find((semester) => semester.id === inferredSemesterId)
+    || semesters.find((semester) => semester.name === inferredSemesterName)
+    || null;
+}
+
+function semesterForAcademicTerm(
+  semesters: AppData['semesters'],
+  academicTerm: string,
+  admissionYear: number | null
+): AppData['semesters'][number] | null {
+  const inferredSemesterId = semesterIdForAcademicTerm(academicTerm, admissionYear);
+  if (!inferredSemesterId) return null;
+  const inferredSemesterName = semesterNameForId(inferredSemesterId);
+  return semesters.find((semester) => semester.id === inferredSemesterId)
+    || semesters.find((semester) => semester.name === inferredSemesterName)
+    || null;
 }
 
 function historyRecordsFromImport(payload: HistoryImportResponse): AcademicHistoryRecord[] {
@@ -393,6 +434,38 @@ function courseFromHistoryRecord(record: AcademicHistoryRecord, lookup?: Histori
   };
 }
 
+function mergeCourseNotes(existingNotes: string | undefined, importedNotes: string | undefined): string {
+  return uniqueTextValues([
+    ...(existingNotes || '').split('\n'),
+    ...(importedNotes || '').split('\n'),
+  ]).join('\n');
+}
+
+function mergeCourseWithHistoryRecord(existingCourse: Course, historyCourse: Course): Course {
+  const existingDetails = existingCourse.details;
+  const historyDetails = historyCourse.details;
+  const existingGradingPolicy = existingDetails?.gradingPolicy || [];
+  return {
+    ...existingCourse,
+    name: historyCourse.name || existingCourse.name,
+    credits: historyCourse.credits || existingCourse.credits,
+    category: historyCourse.category === 'unclassified' ? existingCourse.category : historyCourse.category,
+    program: existingCourse.program ?? historyCourse.program,
+    dimension: historyCourse.dimension ?? existingCourse.dimension,
+    grade: historyCourse.grade || existingCourse.grade,
+    scheduledOffering: historyCourse.scheduledOffering ?? existingCourse.scheduledOffering,
+    details: {
+      professor: historyDetails?.professor || existingDetails?.professor || '',
+      email: existingDetails?.email || historyDetails?.email || '',
+      location: historyDetails?.location || existingDetails?.location || '',
+      time: historyDetails?.time || existingDetails?.time || '',
+      link: existingDetails?.link || historyDetails?.link || '',
+      gradingPolicy: existingGradingPolicy.length > 0 ? existingGradingPolicy : historyDetails?.gradingPolicy || [],
+      notes: mergeCourseNotes(existingDetails?.notes, historyDetails?.notes),
+    },
+  };
+}
+
 function mergeHistoryRecordsIntoSemesters(
   semesters: AppData['semesters'],
   records: AcademicHistoryRecord[],
@@ -405,7 +478,6 @@ function mergeHistoryRecordsIntoSemesters(
   scheduledHistoryCourseCount: number;
 } {
   const admissionYear = inferAdmissionYearFromStudentNo(studentNo) ?? fallbackAdmissionYear(records);
-  const semesterIds = new Set(semesters.map((semester) => semester.id));
   let firstSemesterId: string | null = null;
   let importedCourseCount = 0;
   let scheduledHistoryCourseCount = 0;
@@ -417,21 +489,29 @@ function mergeHistoryRecordsIntoSemesters(
   }));
 
   records.forEach((record) => {
-    const semesterId = semesterIdForAcademicTerm(record.academicTerm, admissionYear);
-    if (!semesterId || !semesterIds.has(semesterId)) return;
-    const targetSemester = nextSemesters.find((semester) => semester.id === semesterId);
+    const targetSemester = semesterForAcademicTerm(nextSemesters, record.academicTerm, admissionYear);
     if (!targetSemester) return;
 
-    const historyKey = `${semesterId}-${record.academicTerm}-${historyRecordKey(record)}`;
+    const historyKey = `${targetSemester.id}-${record.academicTerm}-${historyRecordKey(record)}`;
     if (seenHistoryKeys.has(historyKey)) return;
     seenHistoryKeys.add(historyKey);
 
-    if (targetSemester.courses.some((course) => courseMatchesHistoryRecord(course, record))) return;
     const course = courseFromHistoryRecord(record, lookups.get(historicalLookupKey(record)));
+    const existingCourseIndex = targetSemester.courses.findIndex((item) => courseMatchesHistoryRecord(item, record));
+    if (existingCourseIndex >= 0) {
+      targetSemester.courses = targetSemester.courses.map((item, index) => (
+        index === existingCourseIndex ? mergeCourseWithHistoryRecord(item, course) : item
+      ));
+      importedCourseCount += 1;
+      if (course.scheduledOffering?.slots.length) scheduledHistoryCourseCount += 1;
+      if (!firstSemesterId) firstSemesterId = targetSemester.id;
+      return;
+    }
+
     targetSemester.courses = [...targetSemester.courses, course];
     importedCourseCount += 1;
     if (course.scheduledOffering?.slots.length) scheduledHistoryCourseCount += 1;
-    if (!firstSemesterId) firstSemesterId = semesterId;
+    if (!firstSemesterId) firstSemesterId = targetSemester.id;
   });
 
   return { semesters: nextSemesters, firstSemesterId, importedCourseCount, scheduledHistoryCourseCount };
@@ -666,7 +746,7 @@ export default function CoursePlannerWebApp() {
   const [schoolSyncStatus, setSchoolSyncStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
   const [schoolSyncMessage, setSchoolSyncMessage] = useState('');
   const [hasMigratedHistoryCourses, setHasMigratedHistoryCourses] = useState(false);
-  const [detailCourse, setDetailCourse] = useState<{ semesterId: string; course: Course } | null>(null);
+  const [detailCourse, setDetailCourse] = useState<{ semesterId: string; semesterName: string; course: Course } | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -899,9 +979,9 @@ export default function CoursePlannerWebApp() {
 
   const handleSchoolUsernameChange = (username: string) => {
     setSchoolUsername(username);
-    const inferredSemesterId = semesterIdForStudentTerm(querySemester, username);
-    if (inferredSemesterId && data.semesters.some((semester) => semester.id === inferredSemesterId)) {
-      setSchoolSyncMessage(`已依學號與查詢學期 ${querySemester} 推算最新課表會匯入「${data.semesters.find((semester) => semester.id === inferredSemesterId)?.name}」。`);
+    const inferredSemester = semesterForStudentTerm(data.semesters, querySemester, username);
+    if (inferredSemester) {
+      setSchoolSyncMessage(`已依學號與查詢學期 ${querySemester} 推算最新課表會匯入「${inferredSemester.name}」。`);
       setSchoolSyncStatus('idle');
     }
   };
@@ -915,19 +995,13 @@ export default function CoursePlannerWebApp() {
       return;
     }
 
-    const inferredSemesterId = semesterIdForStudentTerm(querySemester, username);
-    const importSemesterId = inferredSemesterId && data.semesters.some((semester) => semester.id === inferredSemesterId) ? inferredSemesterId : null;
-    if (!importSemesterId) {
+    const targetSemester = semesterForStudentTerm(data.semesters, querySemester, username);
+    if (!targetSemester) {
       setSchoolSyncStatus('error');
       setSchoolSyncMessage(`無法依帳號與查詢學期 ${querySemester} 推算匯入學期，請確認校務帳號是學號格式。`);
       return;
     }
-    const targetSemester = data.semesters.find((semester) => semester.id === importSemesterId);
-    if (!targetSemester) {
-      setSchoolSyncStatus('error');
-      setSchoolSyncMessage('找不到要匯入的學期。');
-      return;
-    }
+    const importSemesterId = targetSemester.id;
 
     if (targetSemester.courses.length > 0 && !window.confirm(`匯入會覆蓋「${targetSemester.name}」目前的 ${targetSemester.courses.length} 門課，確定繼續嗎？`)) {
       return;
@@ -1215,7 +1289,7 @@ export default function CoursePlannerWebApp() {
               <WeeklySchedule
                 semester={activeSemester}
                 onDeleteCourse={(courseId) => deleteCourse(activeSemester.id, courseId)}
-                onOpenCourseDetail={(course) => setDetailCourse({ semesterId: activeSemester.id, course })}
+                onOpenCourseDetail={(course) => setDetailCourse({ semesterId: activeSemester.id, semesterName: activeSemester.name, course })}
               />
             )}
           </section>
@@ -1262,6 +1336,7 @@ export default function CoursePlannerWebApp() {
           isOpen
           course={detailCourse.course}
           semesterId={detailCourse.semesterId}
+          semesterName={detailCourse.semesterName}
           onClose={() => setDetailCourse(null)}
           onSave={saveCourseDetail}
         />
@@ -1396,6 +1471,8 @@ function WeeklySchedule({
   onOpenCourseDetail: (course: Course) => void;
 }) {
   const unscheduledPlanned = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && !isHistoryImportedCourse(course));
+  const unscheduledLegacy = unscheduledPlanned.filter((course) => !course.scheduledOffering);
+  const unscheduledManual = unscheduledPlanned.filter((course) => course.scheduledOffering);
   const historyRecords = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && isHistoryImportedCourse(course));
   return (
     <div className="p-4">
@@ -1421,11 +1498,29 @@ function WeeklySchedule({
         </div>
       </div>
 
-      {unscheduledPlanned.length > 0 && (
+      {unscheduledManual.length > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-4">
           <h3 className="mb-2 text-sm font-semibold text-slate-700">未排入時間的規劃課程</h3>
           <div className="flex flex-wrap gap-2">
-            {unscheduledPlanned.map((course) => (
+            {unscheduledManual.map((course) => (
+              <CoursePill
+                key={course.id}
+                course={course}
+                onDelete={() => onDeleteCourse(course.id)}
+                onOpenDetail={() => onOpenCourseDetail(course)}
+                compact
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {unscheduledLegacy.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <h3 className="mb-1 text-sm font-semibold text-slate-700">舊資料課程（未提供節次）</h3>
+          <p className="mb-2 text-xs text-slate-500">這些課程來自舊版規劃資料，只保留課名與學分；可點開補上教師、教室或課程連結。</p>
+          <div className="flex flex-wrap gap-2">
+            {unscheduledLegacy.map((course) => (
               <CoursePill
                 key={course.id}
                 course={course}
@@ -1533,9 +1628,11 @@ function CoursePill({
   onOpenDetail: () => void;
 }) {
   const isImportedHistory = isHistoryImportedCourse(course);
+  const hasScheduleData = Boolean(course.scheduledOffering);
+  const teacher = course.scheduledOffering?.teacher || course.details?.professor;
   const courseMeta = isImportedHistory
     ? `${formatCredits(course.credits)} 學分・${course.grade || '修課紀錄'}`
-    : `${formatCredits(course.credits)} 學分・${course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}`;
+    : `${formatCredits(course.credits)} 學分・${teacher || (hasScheduleData ? '未列教師' : '未提供節次/教師')}`;
   const toneClass = conflict ? 'border-red-300 bg-red-100' : coursePillTone(course);
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
