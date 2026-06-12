@@ -157,6 +157,7 @@ export function joinOfficialInitialSelectionCourse(
     body: JSON.stringify({
       username,
       course_no: courseNo,
+      confirmed: true,
       profile_key: username,
       verify_ssl: false,
     }),
@@ -174,6 +175,7 @@ export function addOfficialInitialSelectionWaitlistCourse(
     body: JSON.stringify({
       username,
       course_no: courseNo,
+      confirmed: true,
       profile_key: username,
       verify_ssl: false,
     }),
@@ -191,6 +193,7 @@ export function removeOfficialInitialSelectionCourse(
     body: JSON.stringify({
       username,
       course_no: courseNo,
+      confirmed: true,
       profile_key: username,
       verify_ssl: false,
     }),
@@ -208,6 +211,7 @@ export function reorderOfficialInitialSelectionCourses(
     body: JSON.stringify({
       username,
       ordered_course_nos: orderedCourseNos,
+      confirmed: true,
       profile_key: username,
       verify_ssl: false,
     }),

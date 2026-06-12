@@ -274,6 +274,7 @@ def test_official_selection_action_uses_saved_credentials_for_session(monkeypatc
         json={
             "username": "B11430207",
             "course_no": "CS2002302",
+            "confirmed": True,
             "profile_key": "B11430207",
             "verify_ssl": False,
         },
@@ -285,6 +286,32 @@ def test_official_selection_action_uses_saved_credentials_for_session(monkeypatc
         ("ensure_session", "B11430207", "saved-password", False),
         ("add_course_to_waitlist", "CS2002302"),
     ]
+
+
+def test_official_selection_action_requires_explicit_confirmation(monkeypatch) -> None:
+    client_called = False
+
+    def fail_if_client_created(profile_key: str) -> object:
+        nonlocal client_called
+        client_called = True
+        raise AssertionError("official client should not be created without confirmation")
+
+    monkeypatch.setattr(backend_app, "get_official_selection_client", fail_if_client_created)
+    client = TestClient(backend_app.app)
+
+    response = client.post(
+        "/api/official-selection/a02/add-to-waitlist",
+        json={
+            "username": "B11430207",
+            "course_no": "CS2002302",
+            "profile_key": "B11430207",
+            "verify_ssl": False,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "明確確認" in response.json()["detail"]
+    assert client_called is False
 
 
 def test_school_credentials_status_reads_service_role_table_without_password(monkeypatch) -> None:

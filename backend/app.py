@@ -219,6 +219,11 @@ def _ensure_official_session(
     client.ensure_session(username, resolved_password, verify_ssl)
 
 
+def _require_official_action_confirmation(confirmed: bool) -> None:
+    if not confirmed:
+        raise HTTPException(status_code=400, detail="官方選課操作需要使用者明確確認後才能送出。")
+
+
 @app.get("/api/school-credentials", response_model=SchoolCredentialsResponse)
 def get_saved_school_credentials(authorization: str | None = Header(default=None)) -> SchoolCredentialsResponse:
     user_id, access_token = _current_user_context(authorization)
@@ -658,6 +663,7 @@ def join_initial_selection_course(
     authorization: str | None = Header(default=None),
 ) -> OfficialSelectionSyncResponse:
     try:
+        _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
         _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
@@ -681,6 +687,7 @@ def add_initial_selection_waitlist_course(
     authorization: str | None = Header(default=None),
 ) -> OfficialSelectionSyncResponse:
     try:
+        _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
         _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
@@ -704,6 +711,7 @@ def remove_initial_selection_course(
     authorization: str | None = Header(default=None),
 ) -> OfficialSelectionSyncResponse:
     try:
+        _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
         _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
@@ -727,6 +735,7 @@ def reorder_initial_selection_courses(
     authorization: str | None = Header(default=None),
 ) -> OfficialSelectionSyncResponse:
     try:
+        _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
         _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)

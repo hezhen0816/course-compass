@@ -50,6 +50,7 @@ class OfficialSelectionKeepAliveRequest(BaseModel):
 class OfficialSelectionCourseActionRequest(BaseModel):
     username: str = Field(min_length=1)
     course_no: str = Field(min_length=1)
+    confirmed: bool = False
     password: str | None = None
     profile_key: str | None = None
     verify_ssl: bool = DEFAULT_VERIFY_SSL
@@ -58,6 +59,7 @@ class OfficialSelectionCourseActionRequest(BaseModel):
 class OfficialSelectionPriorityUpdateRequest(BaseModel):
     username: str = Field(min_length=1)
     ordered_course_nos: list[str] = Field(min_length=1)
+    confirmed: bool = False
     password: str | None = None
     profile_key: str | None = None
     verify_ssl: bool = DEFAULT_VERIFY_SSL
