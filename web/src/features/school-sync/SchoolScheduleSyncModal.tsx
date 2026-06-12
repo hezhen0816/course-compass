@@ -1,6 +1,7 @@
 import { KeyRound, Loader2 } from 'lucide-react';
 
 export function SchoolScheduleSyncModal({
+  mode = 'school-data',
   username,
   password,
   status,
@@ -10,6 +11,7 @@ export function SchoolScheduleSyncModal({
   onClose,
   onImport,
 }: {
+  mode?: 'school-data' | 'official-selection';
   username: string;
   password: string;
   status: 'idle' | 'loading' | 'error' | 'success';
@@ -20,6 +22,7 @@ export function SchoolScheduleSyncModal({
   onImport: () => void;
 }) {
   const isLoading = status === 'loading';
+  const isOfficialSelection = mode === 'official-selection';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
       <div className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl">
@@ -28,9 +31,13 @@ export function SchoolScheduleSyncModal({
             <div>
               <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
                 <KeyRound className="h-5 w-5 text-blue-600" />
-                同步校務資料
+                {isOfficialSelection ? '同步官方初選資料' : '同步校務資料'}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">取得最新選課清單、歷年成績，並自動補查可辨識的歷史節次。</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {isOfficialSelection
+                  ? '讀取官方初選登記頁的待選、志願與功課表狀態，不會送出選課。'
+                  : '取得最新選課清單、歷年成績，並自動補查可辨識的歷史節次。'}
+              </p>
             </div>
             <button onClick={onClose} disabled={isLoading} className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">✕</button>
           </div>
@@ -65,11 +72,21 @@ export function SchoolScheduleSyncModal({
             <p className="mt-1 text-xs text-slate-500">密碼僅用於本次同步，不會寫入雲端資料。</p>
           </div>
           <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-            <p className="font-medium">本次同步會更新：</p>
+            <p className="font-medium">{isOfficialSelection ? '本次同步會讀取：' : '本次同步會更新：'}</p>
             <ul className="mt-1 list-disc space-y-1 pl-5">
-              <li>目前查詢學期的選課清單</li>
-              <li>歷年成績與已修紀錄</li>
-              <li>可辨識課程的歷史節次</li>
+              {isOfficialSelection ? (
+                <>
+                  <li>官方初選待選清單</li>
+                  <li>已登記志願序</li>
+                  <li>官方功課表與選課清單快照</li>
+                </>
+              ) : (
+                <>
+                  <li>目前查詢學期的選課清單</li>
+                  <li>歷年成績與已修紀錄</li>
+                  <li>可辨識課程的歷史節次</li>
+                </>
+              )}
             </ul>
             <p className="mt-2 text-xs text-blue-700">不會自動送出選課、不會排程重試。</p>
           </div>
@@ -93,7 +110,7 @@ export function SchoolScheduleSyncModal({
               className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoading ? '同步中...' : '開始同步'}
+              {isLoading ? '同步中...' : isOfficialSelection ? '同步官方初選' : '開始同步'}
             </button>
           </div>
         </form>

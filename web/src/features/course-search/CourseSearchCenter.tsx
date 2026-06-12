@@ -58,6 +58,8 @@ type CourseSearchCenterProps = {
   onExportResults: () => void;
   onAddRequirement: (offering: CourseSearchResult) => void;
   onScheduleOffering: (offering: CourseSearchResult) => void;
+  officialActionCourseNo: string | null;
+  onOfficialRegister: (offering: CourseSearchResult) => void;
   onOpenRequirement: (requirement: PendingRequirement) => void;
   onDeleteRequirement: (requirementId: string) => void;
   onOpenPlanning: () => void;
@@ -103,6 +105,8 @@ export function CourseSearchCenter({
   onExportResults,
   onAddRequirement,
   onScheduleOffering,
+  officialActionCourseNo,
+  onOfficialRegister,
   onOpenRequirement,
   onDeleteRequirement,
   onOpenPlanning,
@@ -296,7 +300,7 @@ export function CourseSearchCenter({
         )}
 
         <div className="overflow-x-auto">
-          <table className="min-w-[880px] w-full border-separate border-spacing-0 text-sm">
+          <table className="min-w-[980px] w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
                 <th className="border-b border-slate-200 px-3 py-3">課碼</th>
@@ -325,8 +329,10 @@ export function CourseSearchCenter({
                   conflicts={findConflicts(offering, data, activeSemesterId)}
                   alreadyAdded={Boolean(findScheduledCourseByOffering(offering, data, activeSemesterId))}
                   alreadyPending={pendingSelectionNames.has(normalizeName(offering.course_name))}
+                  officialActionCourseNo={officialActionCourseNo}
                   onAddRequirement={() => onAddRequirement(offering)}
                   onSchedule={() => onScheduleOffering(offering)}
+                  onOfficialRegister={() => onOfficialRegister(offering)}
                 />
               ))}
             </tbody>
@@ -389,18 +395,23 @@ function CourseResultRow({
   conflicts,
   alreadyAdded,
   alreadyPending,
+  officialActionCourseNo,
   onAddRequirement,
   onSchedule,
+  onOfficialRegister,
 }: {
   offering: CourseSearchResult;
   conflicts: Course[];
   alreadyAdded: boolean;
   alreadyPending: boolean;
+  officialActionCourseNo: string | null;
   onAddRequirement: () => void;
   onSchedule: () => void;
+  onOfficialRegister: () => void;
 }) {
   const slots = parseNodeSlots(offering.node);
   const status = capacityStatus(offering);
+  const isOfficialActionLoading = officialActionCourseNo === offering.course_no.trim().toUpperCase();
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50">
       <td className="border-b border-slate-100 px-3 py-3 font-medium text-blue-600">{offering.course_no || '未列'}</td>
@@ -434,14 +445,22 @@ function CourseResultRow({
             disabled={alreadyPending}
             className="rounded-md border border-blue-300 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
           >
-            {alreadyPending ? '已待選' : '加入待選'}
+            {alreadyPending ? '已待選' : '本地待選'}
           </button>
           <button
             onClick={onSchedule}
             disabled={alreadyAdded}
             className="rounded-md border border-emerald-300 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
           >
-            {alreadyAdded ? '已加入' : '排入課表'}
+            {alreadyAdded ? '已加入' : '本地草稿'}
+          </button>
+          <button
+            onClick={onOfficialRegister}
+            disabled={!offering.course_no || isOfficialActionLoading}
+            className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+          >
+            {isOfficialActionLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+            {isOfficialActionLoading ? '送出中' : '送官方待選'}
           </button>
         </div>
       </td>

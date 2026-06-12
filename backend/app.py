@@ -15,6 +15,8 @@ try:
         HistoryImportResponse,
         MoodleAssignmentsRequest,
         MoodleAssignmentsResponse,
+        OfficialSelectionCourseActionRequest,
+        OfficialSelectionPriorityUpdateRequest,
         OfficialSelectionSyncRequest,
         OfficialSelectionSyncResponse,
         CourseSearchResult,
@@ -58,6 +60,8 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         HistoryImportResponse,
         MoodleAssignmentsRequest,
         MoodleAssignmentsResponse,
+        OfficialSelectionCourseActionRequest,
+        OfficialSelectionPriorityUpdateRequest,
         OfficialSelectionSyncRequest,
         OfficialSelectionSyncResponse,
         CourseSearchResult,
@@ -469,6 +473,82 @@ def sync_initial_selection_workspace(request: OfficialSelectionSyncRequest) -> O
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
         payload = client.fetch_a02_workspace(request.username, request.password, request.verify_ssl)
+        return OfficialSelectionSyncResponse.model_validate(
+            {
+                **payload,
+                "profile_key": profile_key,
+                "school_account": request.username,
+            }
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/official-selection/a02/join", response_model=OfficialSelectionSyncResponse)
+def join_initial_selection_course(request: OfficialSelectionCourseActionRequest) -> OfficialSelectionSyncResponse:
+    try:
+        profile_key = request.profile_key or request.username
+        client = get_official_selection_client(profile_key)
+        payload = client.join_course(request.course_no, request.verify_ssl)
+        return OfficialSelectionSyncResponse.model_validate(
+            {
+                **payload,
+                "profile_key": profile_key,
+                "school_account": request.username,
+            }
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/official-selection/a02/add-to-waitlist", response_model=OfficialSelectionSyncResponse)
+def add_initial_selection_waitlist_course(request: OfficialSelectionCourseActionRequest) -> OfficialSelectionSyncResponse:
+    try:
+        profile_key = request.profile_key or request.username
+        client = get_official_selection_client(profile_key)
+        payload = client.add_course_to_waitlist(request.course_no, request.verify_ssl)
+        return OfficialSelectionSyncResponse.model_validate(
+            {
+                **payload,
+                "profile_key": profile_key,
+                "school_account": request.username,
+            }
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/official-selection/a02/remove", response_model=OfficialSelectionSyncResponse)
+def remove_initial_selection_course(request: OfficialSelectionCourseActionRequest) -> OfficialSelectionSyncResponse:
+    try:
+        profile_key = request.profile_key or request.username
+        client = get_official_selection_client(profile_key)
+        payload = client.remove_course(request.course_no, request.verify_ssl)
+        return OfficialSelectionSyncResponse.model_validate(
+            {
+                **payload,
+                "profile_key": profile_key,
+                "school_account": request.username,
+            }
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/official-selection/a02/reorder", response_model=OfficialSelectionSyncResponse)
+def reorder_initial_selection_courses(request: OfficialSelectionPriorityUpdateRequest) -> OfficialSelectionSyncResponse:
+    try:
+        profile_key = request.profile_key or request.username
+        client = get_official_selection_client(profile_key)
+        payload = client.reorder_registered_courses(request.ordered_course_nos, request.verify_ssl)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,

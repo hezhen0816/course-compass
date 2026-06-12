@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Course, CourseSearchResult, PendingRequirement } from './types';
-import { importRequirementsPdf, searchCourses } from './api';
+import type { Course, CourseSearchResult, OfficialSelectionSyncResponse, PendingRequirement } from './types';
+import {
+  addOfficialInitialSelectionWaitlistCourse,
+  importRequirementsPdf,
+  joinOfficialInitialSelectionCourse,
+  removeOfficialInitialSelectionCourse,
+  reorderOfficialInitialSelectionCourses,
+  searchCourses,
+  syncOfficialInitialSelection,
+} from './api';
 import { useAuth } from './hooks/useAuth';
 import { useCourseData } from './hooks/useCourseData';
 import { AuthPage } from './components/AuthPage';
@@ -138,6 +146,12 @@ export default function CoursePlannerWebApp() {
       hasMigratedHistoryCoursesRef.current = true;
     },
   });
+  const [schoolSyncModalMode, setSchoolSyncModalMode] = useState<'school-data' | 'official-selection'>('school-data');
+  const [officialSelection, setOfficialSelection] = useState<OfficialSelectionSyncResponse | null>(null);
+  const [officialSelectionStatus, setOfficialSelectionStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
+  const [officialSelectionMessage, setOfficialSelectionMessage] = useState('');
+  const [officialActionCourseNo, setOfficialActionCourseNo] = useState<string | null>(null);
+  const [officialOrderStatus, setOfficialOrderStatus] = useState<'idle' | 'loading'>('idle');
   const [detailCourse, setDetailCourse] = useState<{ semesterId: string; semesterName: string; course: Course } | null>(null);
   const [plannerMessage, setPlannerMessage] = useState('');
 
@@ -432,6 +446,131 @@ export default function CoursePlannerWebApp() {
     });
   };
 
+  const openSchoolDataSync = () => {
+    setSchoolSyncModalMode('school-data');
+    openSchoolSyncModal();
+  };
+
+  const openOfficialSelectionSync = (message?: string) => {
+    const nextMessage = typeof message === 'string' ? message : '';
+    setSchoolSyncModalMode('official-selection');
+    setOfficialSelectionStatus(nextMessage ? 'error' : 'idle');
+    setOfficialSelectionMessage(nextMessage);
+    openSchoolSyncModal();
+  };
+
+  const submitOfficialSelectionCourse = async (
+    action: 'waitlist' | 'join' | 'remove',
+    courseNo: string,
+    courseName: string,
+  ) => {
+    const normalizedCourseNo = courseNo.trim().toUpperCase();
+    if (!normalizedCourseNo) {
+      window.alert('缺少課碼，無法送出官方選課請求。');
+      return;
+    }
+
+    const username = officialSelection?.school_account || schoolUsername.trim();
+    if (!officialSelection?.session_valid || !username) {
+      openOfficialSelectionSync('請先同步官方初選資料，取得有效官方 session 後再送出登記。');
+      return;
+    }
+
+    const actionLabel = action === 'waitlist'
+      ? '加入官方待選清單'
+      : action === 'join'
+        ? '加入官方初選登記'
+        : '取消官方初選登記';
+    const confirmed = window.confirm(
+      `即將${actionLabel}：${normalizedCourseNo} ${courseName || ''}\n\n只會送出一次，不會自動重試、輪詢名額或排程送出。確定繼續？`,
+    );
+    if (!confirmed) return;
+
+    setOfficialActionCourseNo(normalizedCourseNo);
+    setOfficialSelectionStatus('loading');
+    setOfficialSelectionMessage(`正在${actionLabel}...`);
+    try {
+      const payload = action === 'join'
+        ? await joinOfficialInitialSelectionCourse(username, normalizedCourseNo)
+        : action === 'waitlist'
+          ? await addOfficialInitialSelectionWaitlistCourse(username, normalizedCourseNo)
+          : await removeOfficialInitialSelectionCourse(username, normalizedCourseNo);
+      setOfficialSelection(payload);
+      setOfficialSelectionStatus('success');
+      setOfficialSelectionMessage(`官方已回傳最新狀態：已登記 ${payload.registered_count} 門，待加入 ${payload.available_count} 門。`);
+      setPlannerMessage(`官方已${action === 'waitlist' ? '加入待選' : action === 'join' ? '加入登記' : '取消登記'}：${normalizedCourseNo}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '官方選課請求失敗。';
+      setOfficialSelectionStatus('error');
+      setOfficialSelectionMessage(message);
+      window.alert(message);
+    } finally {
+      setOfficialActionCourseNo(null);
+    }
+  };
+
+  const saveOfficialSelectionOrder = async (orderedCourseNos: string[]) => {
+    const username = officialSelection?.school_account || schoolUsername.trim();
+    if (!officialSelection?.session_valid || !username) {
+      openOfficialSelectionSync('請先同步官方初選資料，取得有效官方 session 後再儲存志願序。');
+      return;
+    }
+
+    const normalizedCourseNos = orderedCourseNos
+      .map((courseNo) => courseNo.trim().toUpperCase())
+      .filter(Boolean);
+    if (normalizedCourseNos.length !== officialSelection.registered_courses.length) {
+      window.alert('官方志願序資料不完整，請重新同步後再調整。');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `即將儲存官方志願序：\n${normalizedCourseNos.map((courseNo, index) => `${index + 1}. ${courseNo}`).join('\n')}\n\n只會送出一次，不會自動重試、輪詢名額或排程送出。確定繼續？`,
+    );
+    if (!confirmed) return;
+
+    setOfficialOrderStatus('loading');
+    setOfficialSelectionStatus('loading');
+    setOfficialSelectionMessage('正在儲存官方志願序...');
+    try {
+      const payload = await reorderOfficialInitialSelectionCourses(username, normalizedCourseNos);
+      setOfficialSelection(payload);
+      setOfficialSelectionStatus('success');
+      setOfficialSelectionMessage(`官方已回傳最新志願序：已登記 ${payload.registered_count} 門。`);
+      setPlannerMessage('官方志願序已儲存。');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '官方志願序儲存失敗。';
+      setOfficialSelectionStatus('error');
+      setOfficialSelectionMessage(message);
+      window.alert(message);
+    } finally {
+      setOfficialOrderStatus('idle');
+    }
+  };
+
+  const syncOfficialSelectionData = async () => {
+    const username = schoolUsername.trim();
+    const password = schoolPassword.trim();
+    if (!username || !password) {
+      setOfficialSelectionStatus('error');
+      setOfficialSelectionMessage('請輸入校務系統帳號與密碼。');
+      return;
+    }
+
+    setOfficialSelectionStatus('loading');
+    setOfficialSelectionMessage('正在讀取官方初選登記頁...');
+    try {
+      const payload = await syncOfficialInitialSelection(username, password);
+      setOfficialSelection(payload);
+      setOfficialSelectionStatus('success');
+      setOfficialSelectionMessage(`已同步官方初選：已登記 ${payload.registered_count} 門，待加入 ${payload.available_count} 門。`);
+      setSchoolPassword('');
+    } catch (error) {
+      setOfficialSelectionStatus('error');
+      setOfficialSelectionMessage(error instanceof Error ? error.message : '官方初選同步失敗。');
+    }
+  };
+
   if (authLoading || (session && dataLoading)) {
     return <div className="min-h-screen flex items-center justify-center bg-gray-50">載入中...</div>;
   }
@@ -497,6 +636,8 @@ export default function CoursePlannerWebApp() {
             onExportResults={exportCourseResults}
             onAddRequirement={addOfferingAsRequirement}
             onScheduleOffering={addCourseToSemester}
+            officialActionCourseNo={officialActionCourseNo}
+            onOfficialRegister={(offering) => void submitOfficialSelectionCourse('waitlist', offering.course_no, offering.course_name)}
             onOpenRequirement={(requirement) => void scheduleRequirementOrChooseOffering(requirement)}
             onDeleteRequirement={deleteRequirement}
             onOpenPlanning={() => setActivePage('planning')}
@@ -511,7 +652,15 @@ export default function CoursePlannerWebApp() {
             planningMode={planningMode}
             plannerMessage={plannerMessage}
             requirementStatuses={requirementStatuses}
+            officialSelection={officialSelection}
+            officialSelectionStatus={officialSelectionStatus}
+            officialActionCourseNo={officialActionCourseNo}
+            officialOrderStatus={officialOrderStatus}
             onModeChange={setPlanningMode}
+            onOpenOfficialSelectionSync={() => openOfficialSelectionSync()}
+            onJoinOfficialCourse={(courseNo, courseName) => void submitOfficialSelectionCourse('join', courseNo, courseName)}
+            onRemoveOfficialCourse={(courseNo, courseName) => void submitOfficialSelectionCourse('remove', courseNo, courseName)}
+            onSaveOfficialOrder={(orderedCourseNos) => void saveOfficialSelectionOrder(orderedCourseNos)}
             onOpenRequirement={(requirement) => void scheduleRequirementOrChooseOffering(requirement)}
             onDeleteRequirement={deleteRequirement}
             onMoveRequirement={moveRequirement}
@@ -527,7 +676,7 @@ export default function CoursePlannerWebApp() {
             selectionTargetLabel={selectionTargetLabel}
             syncStatus={schoolSyncStatus}
             syncMessage={schoolSyncMessage}
-            onOpenSchoolSync={openSchoolSyncModal}
+            onOpenSchoolSync={openSchoolDataSync}
             onSaveTargets={(targets) => {
               setData((prev) => ({ ...prev, targets }));
             }}
@@ -562,10 +711,11 @@ export default function CoursePlannerWebApp() {
         planningMode={planningMode}
         importPreview={importPreview}
         isSchoolSyncOpen={isSchoolSyncOpen}
+        schoolSyncMode={schoolSyncModalMode}
         schoolUsername={schoolUsername}
         schoolPassword={schoolPassword}
-        schoolSyncStatus={schoolSyncStatus}
-        schoolSyncMessage={schoolSyncMessage}
+        schoolSyncStatus={schoolSyncModalMode === 'official-selection' ? officialSelectionStatus : schoolSyncStatus}
+        schoolSyncMessage={schoolSyncModalMode === 'official-selection' ? officialSelectionMessage : schoolSyncMessage}
         detailCourse={detailCourse}
         isOnboardingOpen={isOnboardingOpen}
         onCloseOffering={() => setActiveRequirement(null)}
@@ -575,7 +725,13 @@ export default function CoursePlannerWebApp() {
         onSchoolUsernameChange={handleSchoolUsernameChange}
         onSchoolPasswordChange={setSchoolPassword}
         onCloseSchoolSync={closeSchoolSyncModal}
-        onSyncSchoolData={() => void syncSchoolData()}
+        onSyncSchoolData={() => {
+          if (schoolSyncModalMode === 'official-selection') {
+            void syncOfficialSelectionData();
+            return;
+          }
+          void syncSchoolData();
+        }}
         onCloseCourseDetail={() => setDetailCourse(null)}
         onSaveCourseDetail={saveCourseDetail}
         onCloseOnboarding={handleCloseOnboarding}

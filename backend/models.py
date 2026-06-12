@@ -41,6 +41,20 @@ class OfficialSelectionSyncRequest(BaseModel):
     verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
+class OfficialSelectionCourseActionRequest(BaseModel):
+    username: str = Field(min_length=1)
+    course_no: str = Field(min_length=1)
+    profile_key: str | None = None
+    verify_ssl: bool = DEFAULT_VERIFY_SSL
+
+
+class OfficialSelectionPriorityUpdateRequest(BaseModel):
+    username: str = Field(min_length=1)
+    ordered_course_nos: list[str] = Field(min_length=1)
+    profile_key: str | None = None
+    verify_ssl: bool = DEFAULT_VERIFY_SSL
+
+
 class CourseRow(BaseModel):
     course_code: str
     course_name: str

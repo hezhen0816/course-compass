@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2, Clock, Trash2 } from 'lucide-react';
-import type { AppData, Course, PendingRequirement, PlannerStats } from '../../types';
+import { ArrowDown, ArrowUp, CheckCircle2, Clock, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import type { AppData, Course, OfficialSelectionSyncResponse, PendingRequirement, PlannerStats } from '../../types';
 import {
   DAY_COLUMNS,
   PERIODS,
@@ -43,6 +43,7 @@ type ScheduleSegment = {
   lane: number;
   laneCount: number;
 };
+type WorkspaceSource = 'draft' | 'official';
 
 const PERIOD_INDEX = new Map(PERIODS.map((period, index) => [period, index]));
 
@@ -212,7 +213,15 @@ export function PlanningWorkspace({
   planningMode,
   plannerMessage,
   requirementStatuses,
+  officialSelection,
+  officialSelectionStatus,
+  officialActionCourseNo,
+  officialOrderStatus,
   onModeChange,
+  onOpenOfficialSelectionSync,
+  onJoinOfficialCourse,
+  onRemoveOfficialCourse,
+  onSaveOfficialOrder,
   onOpenRequirement,
   onDeleteRequirement,
   onMoveRequirement,
@@ -225,13 +234,22 @@ export function PlanningWorkspace({
   planningMode: PlanningMode;
   plannerMessage: string;
   requirementStatuses: Map<string, RequirementStatus>;
+  officialSelection: OfficialSelectionSyncResponse | null;
+  officialSelectionStatus: 'idle' | 'loading' | 'error' | 'success';
+  officialActionCourseNo: string | null;
+  officialOrderStatus: 'idle' | 'loading';
   onModeChange: (mode: PlanningMode) => void;
+  onOpenOfficialSelectionSync: () => void;
+  onJoinOfficialCourse: (courseNo: string, courseName: string) => void;
+  onRemoveOfficialCourse: (courseNo: string, courseName: string) => void;
+  onSaveOfficialOrder: (orderedCourseNos: string[]) => void;
   onOpenRequirement: (requirement: PendingRequirement) => void;
   onDeleteRequirement: (requirementId: string) => void;
   onMoveRequirement: (requirementId: string, direction: -1 | 1) => void;
   onMoveCourse: (courseId: string, direction: -1 | 1) => void;
   onDeleteCourse: (courseId: string) => void;
 }) {
+  const [workspaceSource, setWorkspaceSource] = useState<WorkspaceSource>('official');
   const courses = activeSemester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
   const pendingCredits = data.pendingRequirements.reduce((sum, requirement) => (
     sum + (requirement.requiredCredits ?? requirement.credits ?? 0)
@@ -243,6 +261,11 @@ export function PlanningWorkspace({
   const competitionCount = planningMode === 'lottery' ? slotGroups.length + nameGroups.length : 0;
   const sortedRequirements = data.pendingRequirements;
   const scheduledById = new Map(courses.map((course, index) => [course.id, index + 1]));
+  const activeWorkspaceSource = officialSelection ? workspaceSource : 'draft';
+  const isOfficialMode = activeWorkspaceSource === 'official';
+  const totalPlanningItems = isOfficialMode && officialSelection
+    ? officialSelection.registered_count + officialSelection.available_count
+    : courses.length + sortedRequirements.length;
   const modeOptions: Array<{ value: PlanningMode; label: string }> = [
     { value: 'lottery', label: '初選志願' },
     { value: 'addDrop', label: '加退選' },
@@ -261,6 +284,36 @@ export function PlanningWorkspace({
             </p>
           </div>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <button
+              type="button"
+              onClick={onOpenOfficialSelectionSync}
+              disabled={officialSelectionStatus === 'loading'}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${officialSelectionStatus === 'loading' ? 'animate-spin' : ''}`} />
+              同步官方初選
+            </button>
+            {officialSelection && (
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                {[
+                  { value: 'draft' as const, label: '本地草稿' },
+                  { value: 'official' as const, label: '官方資料' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setWorkspaceSource(option.value)}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                      activeWorkspaceSource === option.value
+                        ? 'bg-white text-blue-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
               {modeOptions.map((option) => (
                 <button
@@ -289,8 +342,17 @@ export function PlanningWorkspace({
           </div>
         )}
         <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-          目前顯示的是本地保存的選課草稿；送出前會重新請求官方選課系統資料，並以官方回應為準。
+          {isOfficialMode
+            ? '目前顯示的是官方同步資料；加入、取消或儲存志願序時才會送出一次官方請求。'
+            : '目前顯示的是本地保存的選課草稿；送出前會重新請求官方選課系統資料，並以官方回應為準。'}
         </div>
+        {officialSelection && (
+          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <OfficialSelectionMetric label="官方已登記" value={`${officialSelection.registered_count} 門`} />
+            <OfficialSelectionMetric label="官方待加入" value={`${officialSelection.available_count} 門`} />
+            <OfficialSelectionMetric label="同步時間" value={formatSyncTime(officialSelection.synced_at)} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-0 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
@@ -301,17 +363,31 @@ export function PlanningWorkspace({
               <p className="mt-1 text-xs text-slate-500">{planningModeLabel(planningMode)}模式 · 最多可管理 30 個志願</p>
             </div>
             <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-              {courses.length + sortedRequirements.length} 項
+              {totalPlanningItems} 項
             </span>
           </div>
 
           <div className="mt-4 space-y-4">
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-700">本地草稿課表</h4>
-                <span className="text-xs text-slate-500">{courses.length} 門・{formatCredits(activeCredits)} 學分</span>
+                <h4 className="text-sm font-semibold text-slate-700">
+                  {isOfficialMode ? '官方登記志願清單' : '本地草稿課表'}
+                </h4>
+                <span className="text-xs text-slate-500">
+                  {isOfficialMode
+                    ? `${officialSelection?.registered_count || 0} 門`
+                    : `${courses.length} 門・${formatCredits(activeCredits)} 學分`}
+                </span>
               </div>
-              {courses.length === 0 ? (
+              {isOfficialMode && officialSelection ? (
+                <OfficialRegisteredList
+                  selection={officialSelection}
+                  actionCourseNo={officialActionCourseNo}
+                  orderStatus={officialOrderStatus}
+                  onRemoveOfficialCourse={onRemoveOfficialCourse}
+                  onSaveOfficialOrder={onSaveOfficialOrder}
+                />
+              ) : courses.length === 0 ? (
                 <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
                   從查詢結果按「排入課表」後，課程會先存在本地草稿。
                 </div>
@@ -336,10 +412,18 @@ export function PlanningWorkspace({
 
             <div className="border-t border-slate-100 pt-4">
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-700">待排需求</h4>
-                <span className="text-xs text-slate-500">{formatCredits(pendingCredits)} 學分</span>
+                <h4 className="text-sm font-semibold text-slate-700">{isOfficialMode ? '官方待選清單' : '待排需求'}</h4>
+                <span className="text-xs text-slate-500">
+                  {isOfficialMode ? `${officialSelection?.available_count || 0} 門` : `${formatCredits(pendingCredits)} 學分`}
+                </span>
               </div>
-              {sortedRequirements.length === 0 ? (
+              {isOfficialMode && officialSelection ? (
+                <OfficialAvailableList
+                  selection={officialSelection}
+                  actionCourseNo={officialActionCourseNo}
+                  onJoinOfficialCourse={onJoinOfficialCourse}
+                />
+              ) : sortedRequirements.length === 0 ? (
                 <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
                   查詢課程後加入待選，或匯入 PDF 產生待排需求。
                 </div>
@@ -369,9 +453,11 @@ export function PlanningWorkspace({
           <div className="border-b border-slate-100 p-4">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">週課表預覽</h3>
+                <h3 className="text-base font-semibold text-slate-900">{isOfficialMode ? '官方功課表' : '週課表預覽'}</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  本地草稿 · {courses.length} 門課 · {formatCredits(activeCredits)} 學分
+                  {isOfficialMode
+                    ? `官方同步 · ${officialSelection?.schedule_rows.length || 0} 節次列 · ${formatSyncTime(officialSelection?.synced_at || '')}`
+                    : `本地草稿 · ${courses.length} 門課 · ${formatCredits(activeCredits)} 學分`}
                 </p>
               </div>
               <p className="text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
@@ -379,6 +465,7 @@ export function PlanningWorkspace({
           </div>
           <PlanningScheduleGrid
             semester={activeSemester}
+            officialScheduleRows={isOfficialMode ? officialSelection?.schedule_rows : undefined}
             mode={planningMode}
             courseRanks={scheduledById}
             onDeleteCourse={onDeleteCourse}
@@ -468,13 +555,195 @@ export function PlanningWorkspace({
   );
 }
 
+function OfficialSelectionMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function OfficialRegisteredList({
+  selection,
+  actionCourseNo,
+  orderStatus,
+  onRemoveOfficialCourse,
+  onSaveOfficialOrder,
+}: {
+  selection: OfficialSelectionSyncResponse;
+  actionCourseNo: string | null;
+  orderStatus: 'idle' | 'loading';
+  onRemoveOfficialCourse: (courseNo: string, courseName: string) => void;
+  onSaveOfficialOrder: (orderedCourseNos: string[]) => void;
+}) {
+  const originalOrder = selection.registered_courses.map((course) => course.course_no.trim().toUpperCase()).join('|');
+  const draftSyncKey = `${selection.synced_at}:${originalOrder}`;
+  const [draftState, setDraftState] = useState({
+    syncKey: draftSyncKey,
+    courses: selection.registered_courses,
+  });
+  const draftCourses = draftState.syncKey === draftSyncKey ? draftState.courses : selection.registered_courses;
+
+  if (selection.registered_courses.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-blue-200 bg-blue-50 px-3 py-4 text-center text-sm text-blue-700">
+        官方目前沒有已登記志願。
+      </div>
+    );
+  }
+
+  const draftOrder = draftCourses.map((course) => course.course_no.trim().toUpperCase()).join('|');
+  const isDirty = originalOrder !== draftOrder;
+  const isOrderSaving = orderStatus === 'loading';
+  const moveDraftCourse = (index: number, direction: -1 | 1) => {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= draftCourses.length || isOrderSaving) return;
+    const nextCourses = [...draftCourses];
+    const [item] = nextCourses.splice(index, 1);
+    nextCourses.splice(nextIndex, 0, item);
+    setDraftState({ syncKey: draftSyncKey, courses: nextCourses });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md border border-blue-100 bg-blue-50 p-2">
+        <p className="text-xs text-blue-700">
+          先在這裡調整本地排序，按「儲存志願序」才會送到官方系統。
+        </p>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => onSaveOfficialOrder(draftCourses.map((course) => course.course_no))}
+            disabled={!isDirty || isOrderSaving}
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            {isOrderSaving && <Loader2 className="h-3 w-3 animate-spin" />}
+            儲存志願序
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraftState({ syncKey: draftSyncKey, courses: selection.registered_courses })}
+            disabled={!isDirty || isOrderSaving}
+            className="rounded-md border border-blue-200 bg-white px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            還原
+          </button>
+        </div>
+      </div>
+
+      {draftCourses.map((course, index) => {
+        const normalizedCourseNo = course.course_no.trim().toUpperCase();
+        const isLoading = actionCourseNo === normalizedCourseNo || isOrderSaving;
+        return (
+        <div key={`${course.raw_priority}-${course.course_no}`} className={`rounded-md border p-3 ${
+          isDirty ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+              {index + 1}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-900">{course.course_name}</p>
+              <p className="mt-1 truncate text-xs text-slate-500">{course.course_no}</p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => moveDraftCourse(index, -1)}
+                disabled={index === 0 || isOrderSaving}
+                className="rounded p-1 text-slate-400 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="提高官方志願序"
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveDraftCourse(index, 1)}
+                disabled={index === draftCourses.length - 1 || isOrderSaving}
+                className="rounded p-1 text-slate-400 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="降低官方志願序"
+              >
+                <ArrowDown className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => onRemoveOfficialCourse(course.course_no, course.course_name)}
+              disabled={isLoading}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+              取消
+            </button>
+          </div>
+        </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OfficialAvailableList({
+  selection,
+  actionCourseNo,
+  onJoinOfficialCourse,
+}: {
+  selection: OfficialSelectionSyncResponse;
+  actionCourseNo: string | null;
+  onJoinOfficialCourse: (courseNo: string, courseName: string) => void;
+}) {
+  if (selection.available_courses.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+        官方目前沒有待加入課程。
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {selection.available_courses.map((course) => {
+        const normalizedCourseNo = course.course_no.trim().toUpperCase();
+        const isLoading = actionCourseNo === normalizedCourseNo;
+        return (
+        <div key={course.course_no} className="rounded-md border border-slate-200 bg-white p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900">{course.course_name}</p>
+              <p className="mt-1 truncate text-xs text-slate-500">{course.course_no}・{course.teacher || '未列教師'}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onJoinOfficialCourse(course.course_no, course.course_name)}
+              disabled={isLoading}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+              加入登記
+            </button>
+          </div>
+        </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatSyncTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '剛剛';
+  return date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+}
+
 function PlanningScheduleGrid({
   semester,
+  officialScheduleRows,
   mode,
   courseRanks,
   onDeleteCourse,
 }: {
   semester?: AppData['semesters'][number];
+  officialScheduleRows?: Record<string, string>[];
   mode: PlanningMode;
   courseRanks: Map<string, number>;
   onDeleteCourse: (courseId: string) => void;
@@ -484,6 +753,15 @@ function PlanningScheduleGrid({
   const unscheduled = courses.filter((course) => !course.scheduledOffering?.slots.length);
   const visibleDays = showWeekend ? DAY_COLUMNS : WEEKDAY_COLUMNS;
   const scheduleSegments = buildScheduleSegments(courses, visibleDays);
+  if (officialScheduleRows?.length) {
+    return (
+      <OfficialScheduleTable
+        rows={officialScheduleRows}
+        showWeekend={showWeekend}
+        onToggleWeekend={() => setShowWeekend((current) => !current)}
+      />
+    );
+  }
   return (
     <div className="p-4">
       <div className="mb-3 flex items-center justify-end">
@@ -572,6 +850,126 @@ function PlanningScheduleGrid({
       )}
     </div>
   );
+}
+
+function OfficialScheduleTable({
+  rows,
+  showWeekend,
+  onToggleWeekend,
+}: {
+  rows: Record<string, string>[];
+  showWeekend: boolean;
+  onToggleWeekend: () => void;
+}) {
+  const visibleWeekdays = showWeekend ? OFFICIAL_WEEKDAYS : OFFICIAL_WEEKDAYS.slice(0, 5);
+  return (
+    <div className="p-4">
+      <div className="mb-3 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={onToggleWeekend}
+          aria-pressed={showWeekend}
+          className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+            showWeekend
+              ? 'border-blue-200 bg-blue-50 text-blue-700'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <span className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${
+            showWeekend ? 'bg-blue-600' : 'bg-slate-300'
+          }`}>
+            <span className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
+              showWeekend ? 'translate-x-3' : ''
+            }`} />
+          </span>
+          顯示週末
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[760px] w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="w-14 border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">節次</th>
+              <th className="w-20 border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">時間</th>
+              {visibleWeekdays.map((weekday) => (
+                <th key={weekday.label} className="border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">
+                  {weekday.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${getOfficialScheduleCell(row, '節次') || index}-${getOfficialScheduleCell(row, '時間') || index}`}>
+                <td className="border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">
+                  {getOfficialScheduleCell(row, '節次') || index + 1}
+                </td>
+                <td className="whitespace-pre-line border border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs leading-tight text-slate-500">
+                  {formatOfficialTime(getOfficialScheduleCell(row, '時間'))}
+                </td>
+                {visibleWeekdays.map((weekday) => {
+                  const value = getOfficialScheduleCell(row, weekday.label);
+                  return (
+                    <td
+                      key={weekday.label}
+                      className={`h-16 border border-slate-200 px-2 py-2 align-top ${
+                        value ? 'bg-blue-50 text-slate-900' : 'bg-white text-slate-400'
+                      }`}
+                    >
+                      {value ? (
+                        <div className="rounded-md border border-blue-100 bg-white px-2 py-1.5 text-xs font-medium leading-relaxed text-slate-900 shadow-sm">
+                          {value}
+                        </div>
+                      ) : null}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const OFFICIAL_WEEKDAYS = [
+  { label: '星期一', aliases: ['星期一', '週一', '禮拜一', '一'] },
+  { label: '星期二', aliases: ['星期二', '週二', '禮拜二', '二'] },
+  { label: '星期三', aliases: ['星期三', '週三', '禮拜三', '三'] },
+  { label: '星期四', aliases: ['星期四', '週四', '禮拜四', '四'] },
+  { label: '星期五', aliases: ['星期五', '週五', '禮拜五', '五'] },
+  { label: '星期六', aliases: ['星期六', '週六', '禮拜六', '六'] },
+  { label: '星期日', aliases: ['星期日', '星期天', '週日', '週天', '禮拜日', '禮拜天', '日', '天'] },
+];
+const OFFICIAL_SCHEDULE_COLUMNS = ['節次', '時間', ...OFFICIAL_WEEKDAYS.map((weekday) => weekday.label)];
+
+function compactOfficialKey(value: string): string {
+  return value.replace(/\s+/g, '').replace(/[：:]/g, '');
+}
+
+function getOfficialScheduleCell(row: Record<string, string>, label: string): string {
+  const aliases = OFFICIAL_WEEKDAYS.find((weekday) => weekday.label === label)?.aliases || [label];
+  const directLabels = label === '節次' || label === '時間' ? [label] : aliases;
+  for (const key of directLabels) {
+    const value = row[key];
+    if (value) return value;
+  }
+
+  const compactAliases = directLabels.map(compactOfficialKey);
+  const matched = Object.entries(row).find(([key, value]) => (
+    Boolean(value) && compactAliases.some((alias) => compactOfficialKey(key) === alias)
+  ));
+  if (matched?.[1]) return matched[1];
+
+  const columnIndex = OFFICIAL_SCHEDULE_COLUMNS.indexOf(label);
+  if (columnIndex < 0) return '';
+  return Object.values(row)[columnIndex] || '';
+}
+
+function formatOfficialTime(value: string | undefined): string {
+  if (!value) return '';
+  return value.replace(/~/g, '\n').replace(/～/g, '\n');
 }
 
 function ScheduleBackgroundCell({

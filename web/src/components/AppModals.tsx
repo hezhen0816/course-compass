@@ -17,6 +17,7 @@ type AppModalsProps = {
   planningMode: PlanningMode;
   importPreview: ApiImportPreview | null;
   isSchoolSyncOpen: boolean;
+  schoolSyncMode: 'school-data' | 'official-selection';
   schoolUsername: string;
   schoolPassword: string;
   schoolSyncStatus: 'idle' | 'loading' | 'error' | 'success';
@@ -47,6 +48,7 @@ export function AppModals({
   planningMode,
   importPreview,
   isSchoolSyncOpen,
+  schoolSyncMode,
   schoolUsername,
   schoolPassword,
   schoolSyncStatus,
@@ -88,6 +90,7 @@ export function AppModals({
 
       {isSchoolSyncOpen && (
         <SchoolScheduleSyncModal
+          mode={schoolSyncMode}
           username={schoolUsername}
           password={schoolPassword}
           status={schoolSyncStatus}

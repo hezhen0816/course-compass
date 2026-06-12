@@ -10,18 +10,51 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 try:
-    from .config import DEFAULT_TIMEOUT, INITIAL_SELECTION_URL
-    from .ntust_common import login_to_target, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
+    from .config import (
+        COURSE_LIST_URL,
+        DEFAULT_TIMEOUT,
+        INITIAL_SELECTION_JOIN_URL,
+        INITIAL_SELECTION_REMOVE_URL,
+        INITIAL_SELECTION_SAVE_INDEX_URL,
+        INITIAL_SELECTION_URL,
+    )
+    from .ntust_common import login, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
+    from .schedule import find_latest_course_list_url, parse_course_list
     from .time_utils import now
 except ImportError:  # pragma: no cover
-    from config import DEFAULT_TIMEOUT, INITIAL_SELECTION_URL
-    from ntust_common import login_to_target, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
+    from config import (
+        COURSE_LIST_URL,
+        DEFAULT_TIMEOUT,
+        INITIAL_SELECTION_JOIN_URL,
+        INITIAL_SELECTION_REMOVE_URL,
+        INITIAL_SELECTION_SAVE_INDEX_URL,
+        INITIAL_SELECTION_URL,
+    )
+    from ntust_common import login, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
+    from schedule import find_latest_course_list_url, parse_course_list
     from time_utils import now
 
 
 MIN_LOGIN_INTERVAL_SECONDS = 10
 MAX_LOGINS_PER_MINUTE = 5
 MAX_CLIENT_IDLE_SECONDS = 30 * 60
+OFFICIAL_SCHEDULE_HEADERS = ["節次", "時間", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+OFFICIAL_SCHEDULE_PERIODS = [
+    ("1", "08:10～09:00"),
+    ("2", "9:10～10:00"),
+    ("3", "10:20～11:10"),
+    ("4", "11:20～12:10"),
+    ("5", "12:20～13:10"),
+    ("6", "13:20～14:10"),
+    ("7", "14:20～15:10"),
+    ("8", "15:30～16:20"),
+    ("9", "16:30～17:20"),
+    ("10", "17:30～18:20"),
+    ("A", "18:25～19:15"),
+    ("B", "19:20～20:10"),
+    ("C", "20:15～21:05"),
+    ("D", "21:10～22:00"),
+]
 
 _clients: dict[str, "OfficialSelectionClient"] = {}
 _clients_lock = threading.Lock()
@@ -70,27 +103,89 @@ class OfficialSelectionClient:
             page_response = self.ensure_session(username, password, verify_ssl)
             if page_response.url.rstrip("/") != INITIAL_SELECTION_URL.rstrip("/"):
                 page_response = self._get_workspace_page(verify_ssl)
-            return {
-                **parse_a02_workspace(page_response.text),
-                "source_url": page_response.url,
-                "synced_at": now().isoformat(),
-                "session_valid": True,
+            return self._workspace_payload(page_response, verify_ssl)
+
+    def join_course(self, course_no: str, verify_ssl: bool) -> dict[str, Any]:
+        return self._submit_course_action(
+            course_no=course_no,
+            endpoint=INITIAL_SELECTION_JOIN_URL,
+            action_type=1,
+            verify_ssl=verify_ssl,
+        )
+
+    def add_course_to_waitlist(self, course_no: str, verify_ssl: bool) -> dict[str, Any]:
+        return self._submit_course_action(
+            course_no=course_no,
+            endpoint=INITIAL_SELECTION_JOIN_URL,
+            action_type=3,
+            verify_ssl=verify_ssl,
+        )
+
+    def remove_course(self, course_no: str, verify_ssl: bool) -> dict[str, Any]:
+        return self._submit_course_action(
+            course_no=course_no,
+            endpoint=INITIAL_SELECTION_REMOVE_URL,
+            action_type=2,
+            verify_ssl=verify_ssl,
+        )
+
+    def reorder_registered_courses(self, ordered_course_nos: list[str], verify_ssl: bool) -> dict[str, Any]:
+        normalized_course_nos = [
+            course_no.strip().upper()
+            for course_no in ordered_course_nos
+            if course_no.strip()
+        ]
+        if not normalized_course_nos:
+            raise RuntimeError("缺少官方志願序資料，無法儲存。")
+        if len(normalized_course_nos) != len(set(normalized_course_nos)):
+            raise RuntimeError("官方志願序包含重複課碼，請重新同步後再試。")
+
+        with self.lock:
+            self.last_used_at = time.time()
+            page_response = self._get_workspace_page(verify_ssl)
+            payload = parse_a02_workspace(page_response.text)
+            registered_courses = payload["registered_courses"]
+            current_by_no = {
+                str(course["course_no"]).strip().upper(): course
+                for course in registered_courses
             }
+            if set(current_by_no) != set(normalized_course_nos):
+                raise RuntimeError("官方志願清單已變更，請重新同步後再調整志願序。")
+
+            rows = [["志願序", "課碼", "課程名稱", "取消加入"]]
+            for index, course_no in enumerate(normalized_course_nos, start=1):
+                course = current_by_no[course_no]
+                rows.append([str(index), course_no, str(course.get("course_name") or ""), "取消加入"])
+
+            response = self.session.post(
+                INITIAL_SELECTION_SAVE_INDEX_URL,
+                data=_arraydata_form_rows(rows),
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Referer": INITIAL_SELECTION_URL,
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                timeout=DEFAULT_TIMEOUT,
+                allow_redirects=True,
+                verify=verify_ssl,
+            )
+            response.raise_for_status()
+            response = self._complete_callback_if_needed(response, verify_ssl)
+            if _is_auth_response(response):
+                self.is_logged_in = False
+                raise RuntimeError("Session 已失效，請重新同步官方初選資料後再送出。")
+            return self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
 
     def ensure_session(self, username: str, password: str, verify_ssl: bool) -> requests.Response:
         if self._check_session_quick(verify_ssl):
             return self._get_workspace_page(verify_ssl)
 
         self._check_login_rate_limit()
-        page_response = login_to_target(self.session, username, password, INITIAL_SELECTION_URL, verify_ssl)
-        page_response = self._complete_callback_if_needed(page_response, verify_ssl)
-        if _is_auth_response(page_response):
-            raise RuntimeError(f"登入後無法進入初選登記頁，目前停在 {page_response.url}")
-
+        login(self.session, username, password, verify_ssl)
         self.is_logged_in = True
         self.last_login_at = time.time()
         self.login_times.append(self.last_login_at)
-        return page_response
+        return self._get_workspace_page(verify_ssl)
 
     def keep_alive(self, verify_ssl: bool) -> bool:
         try:
@@ -123,6 +218,38 @@ class OfficialSelectionClient:
             raise RuntimeError("Session 已失效，請重新登入官方選課系統。")
         self.is_logged_in = True
         return response
+
+    def _submit_course_action(
+        self,
+        course_no: str,
+        endpoint: str,
+        action_type: int,
+        verify_ssl: bool,
+    ) -> dict[str, Any]:
+        normalized_course_no = course_no.strip().upper()
+        if not normalized_course_no:
+            raise RuntimeError("缺少課碼，無法送出官方選課請求。")
+        with self.lock:
+            self.last_used_at = time.time()
+            self._get_workspace_page(verify_ssl)
+            response = self.session.post(
+                endpoint,
+                data={"CourseNo": normalized_course_no, "type": action_type},
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Referer": INITIAL_SELECTION_URL,
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                timeout=DEFAULT_TIMEOUT,
+                allow_redirects=True,
+                verify=verify_ssl,
+            )
+            response.raise_for_status()
+            response = self._complete_callback_if_needed(response, verify_ssl)
+            if _is_auth_response(response):
+                self.is_logged_in = False
+                raise RuntimeError("Session 已失效，請重新同步官方初選資料後再送出。")
+            return self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
 
     def _check_session_quick(self, verify_ssl: bool) -> bool:
         try:
@@ -162,12 +289,73 @@ class OfficialSelectionClient:
         if len(self.login_times) >= MAX_LOGINS_PER_MINUTE:
             raise RuntimeError("登入太頻繁，請稍後再試。")
 
+    def _workspace_payload(self, page_response: requests.Response, verify_ssl: bool) -> dict[str, Any]:
+        payload = parse_a02_workspace(page_response.text)
+        if not _schedule_rows_have_weekday_data(payload["schedule_rows"]):
+            fallback_rows = self._fetch_course_list_schedule_rows(verify_ssl)
+            if fallback_rows:
+                payload["schedule_rows"] = fallback_rows
+                payload["notices"].append("官方功課表由選課清單頁補齊。")
+        return {
+            **payload,
+            "source_url": page_response.url,
+            "synced_at": now().isoformat(),
+            "session_valid": True,
+        }
+
+    def _fetch_course_list_schedule_rows(self, verify_ssl: bool) -> list[dict[str, str]]:
+        try:
+            response = self.session.get(
+                COURSE_LIST_URL,
+                timeout=DEFAULT_TIMEOUT,
+                allow_redirects=True,
+                verify=verify_ssl,
+            )
+            response.raise_for_status()
+            if "signin-oidc" in response.url:
+                submit_hidden_form(self.session, response, verify_ssl)
+                response = self.session.get(
+                    COURSE_LIST_URL,
+                    timeout=DEFAULT_TIMEOUT,
+                    allow_redirects=True,
+                    verify=verify_ssl,
+                )
+                response.raise_for_status()
+            if _is_auth_response(response):
+                return []
+
+            latest_course_list_url = find_latest_course_list_url(response.text, response.url, COURSE_LIST_URL)
+            if latest_course_list_url != response.url.split("#", 1)[0]:
+                response = self.session.get(
+                    latest_course_list_url,
+                    timeout=DEFAULT_TIMEOUT,
+                    allow_redirects=True,
+                    verify=verify_ssl,
+                )
+                response.raise_for_status()
+                if "signin-oidc" in response.url:
+                    submit_hidden_form(self.session, response, verify_ssl)
+                    response = self.session.get(
+                        latest_course_list_url,
+                        timeout=DEFAULT_TIMEOUT,
+                        allow_redirects=True,
+                        verify=verify_ssl,
+                    )
+                    response.raise_for_status()
+                if _is_auth_response(response):
+                    return []
+
+            extracted = parse_course_list(response.text)
+            return _schedule_rows_from_slots(extracted["slots"])
+        except (RuntimeError, requests.RequestException):
+            return []
+
 
 def parse_a02_workspace(html: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "html.parser")
     available = _parse_available_courses(soup)
     registered = _parse_registered_courses(soup)
-    schedule_rows = _parse_generic_table_rows(soup.select_one("#loginModal table"))
+    schedule_rows = _parse_schedule_table_rows(soup.select_one("#loginModal table"))
     selection_list_rows = _parse_generic_table_rows(soup.select_one("#loginModal2 table"))
     required_preset_rows = _parse_generic_table_rows(soup.select_one("#DetermineTable"))
 
@@ -182,6 +370,41 @@ def parse_a02_workspace(html: str) -> dict[str, Any]:
         "required_preset_rows": required_preset_rows,
         "notices": _parse_notice_texts(soup),
     }
+
+
+def _schedule_rows_have_weekday_data(rows: list[dict[str, str]]) -> bool:
+    weekdays = OFFICIAL_SCHEDULE_HEADERS[2:]
+    return any(any(row.get(weekday) for weekday in weekdays) for row in rows)
+
+
+def _schedule_rows_from_slots(slots: list[dict[str, Any]]) -> list[dict[str, str]]:
+    rows = [
+        {header: "" for header in OFFICIAL_SCHEDULE_HEADERS}
+        for _period, _time in OFFICIAL_SCHEDULE_PERIODS
+    ]
+    period_index = {period: index for index, (period, _time) in enumerate(OFFICIAL_SCHEDULE_PERIODS)}
+    for index, (period, time_text) in enumerate(OFFICIAL_SCHEDULE_PERIODS):
+        rows[index]["節次"] = period
+        rows[index]["時間"] = time_text
+
+    for slot in slots:
+        period = str(slot.get("period") or "").strip()
+        weekday = str(slot.get("weekday_label") or "").strip()
+        course_name = str(slot.get("course_name") or "").strip()
+        if period not in period_index or weekday not in OFFICIAL_SCHEDULE_HEADERS or not course_name:
+            continue
+        row = rows[period_index[period]]
+        row[weekday] = "、".join([value for value in [row[weekday], course_name] if value])
+
+    return rows
+
+
+def _arraydata_form_rows(rows: list[list[str]]) -> list[tuple[str, str]]:
+    fields: list[tuple[str, str]] = []
+    for row_index, row in enumerate(rows):
+        for column_index, value in enumerate(row):
+            fields.append((f"Arraydata[{row_index}][{column_index}]", value))
+    return fields
 
 
 def _parse_available_courses(soup: BeautifulSoup) -> list[dict[str, str]]:
@@ -230,6 +453,35 @@ def _parse_registered_courses(soup: BeautifulSoup) -> list[dict[str, str | int |
             }
         )
     return courses
+
+
+def _parse_schedule_table_rows(table: Tag | None) -> list[dict[str, str]]:
+    rows = _extract_html_table_rows(table)
+    if not rows:
+        return []
+
+    header_index = next(
+        (index for index, row in enumerate(rows) if {"節次", "星期一"}.issubset(set(row))),
+        0,
+    )
+    headers = rows[header_index]
+    result: list[dict[str, str]] = []
+    for cells in rows[header_index + 1:]:
+        if not any(cells):
+            continue
+        if len(cells) >= len(OFFICIAL_SCHEDULE_HEADERS):
+            result.append({
+                OFFICIAL_SCHEDULE_HEADERS[index]: cells[index]
+                for index in range(len(OFFICIAL_SCHEDULE_HEADERS))
+            })
+            continue
+        result.append(
+            {
+                headers[index] if index < len(headers) and headers[index] else f"欄位{index + 1}": value
+                for index, value in enumerate(cells)
+            }
+        )
+    return result
 
 
 def _parse_generic_table_rows(table: Tag | None) -> list[dict[str, str]]:

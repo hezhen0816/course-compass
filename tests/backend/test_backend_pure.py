@@ -125,6 +125,85 @@ def test_official_selection_parser_reads_a02_workspace_div_tables() -> None:
     assert parsed["notices"] == ["請直接拖拉「登記志願清單」中的課程來變更志願序。"]
 
 
+def test_official_selection_parser_maps_schedule_weekday_columns_by_position() -> None:
+    html = """
+    <html>
+      <body>
+        <div id="loginModal">
+          <table>
+            <tr>
+              <th>節次</th><th>時間</th><th>星期一</th><th>星期二</th><th>星期三</th>
+              <th>星期四</th><th>星期五</th><th>星期六</th><th>星期日</th>
+            </tr>
+            <tr>
+              <td>6</td><td>13:20～14:10</td><td></td><td>體育(撞球)(上)（1）</td><td></td>
+              <td>數位系統設計</td><td></td><td></td><td></td>
+            </tr>
+            <tr>
+              <td>7</td><td>14:20～15:10</td><td></td><td>體育(撞球)(上)（1）</td><td></td>
+              <td>數位系統設計</td><td></td><td></td><td></td>
+            </tr>
+          </table>
+        </div>
+      </body>
+    </html>
+    """
+
+    parsed = official_selection.parse_a02_workspace(html)
+
+    assert parsed["schedule_rows"][0]["時間"] == "13:20～14:10"
+    assert parsed["schedule_rows"][0]["星期二"] == "體育(撞球)(上)（1）"
+    assert parsed["schedule_rows"][0]["星期四"] == "數位系統設計"
+    assert parsed["schedule_rows"][1]["星期二"] == "體育(撞球)(上)（1）"
+
+
+def test_official_selection_schedule_rows_from_synced_slots() -> None:
+    rows = official_selection._schedule_rows_from_slots(
+        [
+            {
+                "weekday_label": "星期二",
+                "period": "6",
+                "course_name": "體育(撞球)(上)",
+            },
+            {
+                "weekday_label": "星期二",
+                "period": "7",
+                "course_name": "體育(撞球)(上)",
+            },
+            {
+                "weekday_label": "星期四",
+                "period": "6",
+                "course_name": "數位系統設計",
+            },
+        ]
+    )
+
+    assert rows[5]["節次"] == "6"
+    assert rows[5]["星期二"] == "體育(撞球)(上)"
+    assert rows[5]["星期四"] == "數位系統設計"
+    assert rows[6]["星期二"] == "體育(撞球)(上)"
+
+
+def test_official_selection_arraydata_form_rows_matches_saveidx_shape() -> None:
+    rows = official_selection._arraydata_form_rows(
+        [
+            ["志願序", "課碼", "課程名稱", "取消加入"],
+            ["1", "PE127A022", "體育(撞球)(上)", "取消加入"],
+        ]
+    )
+
+    assert rows == [
+        ("Arraydata[0][0]", "志願序"),
+        ("Arraydata[0][1]", "課碼"),
+        ("Arraydata[0][2]", "課程名稱"),
+        ("Arraydata[0][3]", "取消加入"),
+        ("Arraydata[1][0]", "1"),
+        ("Arraydata[1][1]", "PE127A022"),
+        ("Arraydata[1][2]", "體育(撞球)(上)"),
+        ("Arraydata[1][3]", "取消加入"),
+    ]
+
+
 def test_tr_room_parsing_and_node_selection() -> None:
     meetings = tr_rooms.build_tr_meetings(
         [

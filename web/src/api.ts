@@ -84,3 +84,58 @@ export function syncOfficialInitialSelection(username: string, password: string)
     }),
   });
 }
+
+export function joinOfficialInitialSelectionCourse(username: string, courseNo: string): Promise<OfficialSelectionSyncResponse> {
+  return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username,
+      course_no: courseNo,
+      profile_key: username,
+      verify_ssl: false,
+    }),
+  });
+}
+
+export function addOfficialInitialSelectionWaitlistCourse(username: string, courseNo: string): Promise<OfficialSelectionSyncResponse> {
+  return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/add-to-waitlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username,
+      course_no: courseNo,
+      profile_key: username,
+      verify_ssl: false,
+    }),
+  });
+}
+
+export function removeOfficialInitialSelectionCourse(username: string, courseNo: string): Promise<OfficialSelectionSyncResponse> {
+  return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username,
+      course_no: courseNo,
+      profile_key: username,
+      verify_ssl: false,
+    }),
+  });
+}
+
+export function reorderOfficialInitialSelectionCourses(
+  username: string,
+  orderedCourseNos: string[],
+): Promise<OfficialSelectionSyncResponse> {
+  return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username,
+      ordered_course_nos: orderedCourseNos,
+      profile_key: username,
+      verify_ssl: false,
+    }),
+  });
+}
