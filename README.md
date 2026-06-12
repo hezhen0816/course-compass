@@ -1,24 +1,26 @@
 # Course Compass 修課羅盤 Workspace
 
-這個 repo 明確分成兩條產品線與三個共享支援區：
+這個 repo 明確分成兩條產品線與共享支援區：
 
 - `web/`：React + Vite 的課程與學分規劃 Web 版
 - `ios/`：SwiftUI 原生 iPhone App
 - `backend/`：Python 同步服務
 - `supabase/`：migration 與資料庫結構
+- `docs/`：產品定義、UX audit、設計 QA 與參考圖
 - `test_artifacts/`：測試素材與校務頁面樣本
 
-`backend/`、`supabase/`、`test_artifacts/` 都維持在根目錄，方便兩端共用。
+`backend/`、`supabase/`、`docs/`、`test_artifacts/` 都維持在根目錄，方便兩端共用。根目錄只放 workspace 總控設定與跨端文件，不放 build output 或臨時截圖。
 
 ## 目錄角色
 
 ### Web
 
 - 專注在大螢幕操作最有價值的流程
-- 提供課程規劃、HTML 匯入、學分門檻設定、課程細節與成績試算
+- 提供課程查詢、選課工作台、HTML 匯入、學分門檻設定、課程細節與成績試算
+- 透過 backend 執行校務同步與使用者確認式官方選課操作
 - 使用雲端帳號保存 `public.user_data`
 
-詳細說明在 [web/README.md](/Users/hezhen/Project/course_planner/web/README.md)。
+詳細說明在 [web/README.md](web/README.md)。
 
 ### iOS
 
@@ -26,13 +28,14 @@
 - 提供首頁摘要、每週課表、手機版學分規劃與設定
 - 額外串接同步服務，從校務系統抓課表與歷史修課紀錄
 
-詳細說明在 [ios/README.md](/Users/hezhen/Project/course_planner/ios/README.md)。
+詳細說明在 [ios/README.md](ios/README.md)。
 
 ### Backend
 
 - `FastAPI` 提供課表同步與歷史修課匯入 API
 - 以校務帳密登入校務系統抓資料
 - 將同步結果寫入 `schedule_sync_snapshots` 與 `history_import_snapshots`
+- 使用已保存校務帳密恢復 session，並執行使用者確認式官方初選操作
 - 入口仍是 `backend/app.py`；SSO/課表、Moodle、TR 空教室、Supabase snapshot 存取已拆成 backend 內部模組
 
 ### Supabase
@@ -50,6 +53,12 @@
 
 - `test_artifacts/course_selection/`：課表與選課頁樣本
 - `test_artifacts/edu_need_history/`：歷史修課紀錄頁樣本
+
+### Docs
+
+- `docs/product_redefinition.md`：目前產品定位、頁面職責與官方選課邊界
+- `docs/web_ux_low_risk_audit.md`：歷史 Web UX audit，保留當時觀察與低風險建議
+- `docs/design/`：設計 QA 記錄與參考圖片
 
 ## 開發指令
 
@@ -72,7 +81,7 @@ npm run check
 ### Web 安裝
 
 ```bash
-cd /Users/hezhen/Project/course_planner/web
+cd web
 npm install
 ```
 
@@ -81,7 +90,6 @@ Web 會從 repo 根目錄讀取 `.env`，不需要另外複製一份到 `web/`�
 ### Backend 安裝
 
 ```bash
-cd /Users/hezhen/Project/course_planner
 python3 -m venv .venv
 .venv/bin/pip install -r backend/requirements-dev.txt
 cp .env.example .env
@@ -107,7 +115,7 @@ NTUST_VERIFY_SSL=false
 - Web 不會讀取或保存校務密碼明文；官方選課 session 過期時由後端使用已保存密文重新登入
 - iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`；SQL migration 不會直接刪除既有 plaintext，後端會在下一次 authenticated credential use 時加密遷移到 `public.school_credentials` 並清除舊欄位
 
-資料表與快照 schema 在 [backend/supabase_schema.sql](/Users/hezhen/Project/course_planner/backend/supabase_schema.sql)，migration 在 [supabase/migrations](/Users/hezhen/Project/course_planner/supabase/migrations)。
+資料表與快照 schema 在 [backend/supabase_schema.sql](backend/supabase_schema.sql)，migration 在 [supabase/migrations](supabase/migrations)。
 
 ## API
 
@@ -136,5 +144,6 @@ npm run ios:build
 ## 維護原則
 
 1. Web 與 iOS 不共用畫面與互動流程，只共用資料規則。
-2. `backend/`、`supabase/`、`test_artifacts/` 維持根目錄，作為共享基礎設施。
+2. `backend/`、`supabase/`、`docs/`、`test_artifacts/` 維持根目錄，作為共享基礎設施與決策紀錄。
 3. 新功能優先先判斷屬於 Web 還是 iOS，再決定落點。
+4. build output、暫存截圖與本機快取不進 repo；可重現的測試 fixture 才放入 `test_artifacts/`。

@@ -10,14 +10,14 @@
 ## 啟動
 
 ```bash
-cd /Users/hezhen/Project/course_planner
+# 從 repo 根目錄
 npm run ios:open
 ```
 
 ## 驗證編譯
 
 ```bash
-cd /Users/hezhen/Project/course_planner
+# 從 repo 根目錄
 npm run ios:build
 ```
 

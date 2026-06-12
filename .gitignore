@@ -28,6 +28,7 @@ dist-ssr
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Local test/debug artifacts
 test_artifacts/**/.venv/

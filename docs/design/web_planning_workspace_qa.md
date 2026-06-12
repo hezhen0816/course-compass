@@ -1,9 +1,11 @@
+# Web Planning Workspace Design QA
+
 **Findings**
 - No actionable P0/P1/P2 findings remain.
 
 **Source Visual Truth**
-- `/Users/hezhen/GitHub/course_planner/前端參考圖/待選清單與志願排序.png`
-- `/Users/hezhen/GitHub/course_planner/前端參考圖/課表規劃.png`
+- `/Users/hezhen/GitHub/course_planner/docs/design/reference-images/待選清單與志願排序.png`
+- `/Users/hezhen/GitHub/course_planner/docs/design/reference-images/課表規劃.png`
 
 **Implementation Evidence**
 - Local URL: `http://localhost:5173/`
