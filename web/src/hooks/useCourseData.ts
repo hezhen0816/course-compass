@@ -51,11 +51,14 @@ function normalizeHistoryRecord(record: AcademicHistoryRecord): AcademicHistoryR
 
 function normalizeSelectionPlan(plan: SelectionPlan | undefined): SelectionPlan | undefined {
   if (!plan) return undefined;
+  const officialSelectionCache = plan.officialSelectionCache
+    ? { ...plan.officialSelectionCache, session_valid: false }
+    : undefined;
   return {
     targetAcademicTerm: plan.targetAcademicTerm || '',
     targetLabel: plan.targetLabel || '',
     courses: (plan.courses || []).map(normalizeCourse),
-    officialSelectionCache: plan.officialSelectionCache || undefined,
+    officialSelectionCache,
     updatedAt: plan.updatedAt || undefined,
   };
 }

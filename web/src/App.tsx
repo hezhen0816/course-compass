@@ -188,7 +188,7 @@ export default function CoursePlannerWebApp() {
     if (officialSelection || !data.selectionPlan?.officialSelectionCache) return;
     setOfficialSelection(data.selectionPlan.officialSelectionCache);
     setOfficialSelectionStatus('success');
-    setOfficialSelectionMessage('已載入上次同步的官方初選快取；送出前仍以官方最新回應為準。');
+    setOfficialSelectionMessage('已載入上次同步的官方初選快取；快取不代表 session 仍有效，送出時會使用保存帳密重新登入，否則需重新同步。');
   }, [data.selectionPlan?.officialSelectionCache, officialSelection]);
 
   const updateOfficialSelection = (payload: OfficialSelectionSyncResponse) => {

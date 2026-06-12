@@ -96,7 +96,7 @@
 - `FuturePlanItem`：長期修課規劃中的預計修課，不等同於目前選課志願。
 - `GraduationRequirement`：畢業門檻與分類規則。
 
-目前選課工作台使用 `selectionPlan` 保存本地草稿，避免污染 `semesters` 裡的歷史修課與未來規劃。後續若要完整支援長期修課規劃，應再設計 `FuturePlanItem` 的資料結構。
+目前選課工作台使用 `selectionPlan` 保存本地草稿，避免污染 `semesters` 裡的歷史修課與未來規劃。`selectionPlan.officialSelectionCache` 只作為上次官方清單快照；重新開啟 App 後不可把快取中的 `session_valid` 視為有效 session。後續若要完整支援長期修課規劃，應再設計 `FuturePlanItem` 的資料結構。
 
 ## 校務帳號與密碼保存
 
