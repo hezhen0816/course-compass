@@ -6,6 +6,7 @@
     "web:build": "npm --prefix web run build",
     "web:lint": "npm --prefix web run lint",
     "dev": "npm run web:dev",
+    "dev:all": "bash scripts/dev.sh",
     "build": "npm run web:build",
     "lint": "npm run web:lint",
     "backend:dev": "python3 -m uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000 --env-file .env",

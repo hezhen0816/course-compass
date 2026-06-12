@@ -56,6 +56,7 @@
 
 ```bash
 npm run web:dev
+npm run dev:all
 npm run web:build
 npm run web:lint
 npm run ios:open
@@ -64,6 +65,8 @@ npm run backend:dev
 npm run backend:check
 npm run check
 ```
+
+`npm run dev:all` 會優先使用 repo `.venv/bin/python`，若不存在則使用 `/Users/hezhen/.venvs/course_planner/bin/python` 啟動 backend。
 
 ### Web 安裝
 
