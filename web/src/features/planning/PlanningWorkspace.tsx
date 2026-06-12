@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Trash2 } from 'lucide-react';
 import type { AppData, Course, PendingRequirement, PlannerStats } from '../../types';
 import {
@@ -12,6 +13,38 @@ import {
   normalizeName,
   requirementCourseCode,
 } from '../../domain/planner';
+
+const WEEKDAY_COLUMNS = DAY_COLUMNS.filter((day) => day.code !== 'S' && day.code !== 'U');
+const PERIOD_TIME_LABELS: Record<string, { start: string; end: string }> = {
+  '1': { start: '08:10', end: '09:00' },
+  '2': { start: '09:10', end: '10:00' },
+  '3': { start: '10:20', end: '11:10' },
+  '4': { start: '11:20', end: '12:10' },
+  '5': { start: '12:20', end: '13:10' },
+  '6': { start: '13:20', end: '14:10' },
+  '7': { start: '14:20', end: '15:10' },
+  '8': { start: '15:30', end: '16:20' },
+  '9': { start: '16:30', end: '17:20' },
+  '10': { start: '17:30', end: '18:20' },
+  A: { start: '18:25', end: '19:15' },
+  B: { start: '19:20', end: '20:10' },
+  C: { start: '20:15', end: '21:05' },
+  D: { start: '21:10', end: '22:00' },
+};
+const PERIOD_ROW_HEIGHT = 96;
+
+type DayColumn = typeof DAY_COLUMNS[number];
+type ScheduleSegment = {
+  id: string;
+  course: Course;
+  dayCode: string;
+  startIndex: number;
+  span: number;
+  lane: number;
+  laneCount: number;
+};
+
+const PERIOD_INDEX = new Map(PERIODS.map((period, index) => [period, index]));
 
 function ScheduleLegend() {
   const items = [
@@ -72,6 +105,106 @@ function getNameGroups(courses: Course[]) {
   return Array.from(groups.values()).filter((coursesInGroup) => coursesInGroup.length > 1);
 }
 
+function slotParts(slot: string): { dayCode: string; period: string; periodIndex: number } | null {
+  const normalized = slot.trim().toUpperCase();
+  const dayCode = normalized.charAt(0);
+  const period = normalized.slice(1);
+  const periodIndex = PERIOD_INDEX.get(period);
+  if (!dayCode || periodIndex === undefined) return null;
+  return { dayCode, period, periodIndex };
+}
+
+function buildScheduleSegments(courses: Course[], visibleDays: DayColumn[]): ScheduleSegment[] {
+  const visibleDayCodes = new Set(visibleDays.map((day) => day.code));
+  const draftSegments = courses.flatMap((course) => {
+    const byDay = new Map<string, number[]>();
+    (course.scheduledOffering?.slots || []).forEach((slot) => {
+      const parts = slotParts(slot);
+      if (!parts || !visibleDayCodes.has(parts.dayCode)) return;
+      byDay.set(parts.dayCode, [...(byDay.get(parts.dayCode) || []), parts.periodIndex]);
+    });
+
+    return Array.from(byDay.entries()).flatMap(([dayCode, indexes]) => {
+      const sortedIndexes = Array.from(new Set(indexes)).sort((left, right) => left - right);
+      const segments: Array<Omit<ScheduleSegment, 'lane' | 'laneCount'>> = [];
+      let startIndex: number | null = null;
+      let previousIndex: number | null = null;
+
+      sortedIndexes.forEach((index) => {
+        if (startIndex === null || previousIndex === null || index !== previousIndex + 1) {
+          if (startIndex !== null && previousIndex !== null) {
+            segments.push({
+              id: `${course.id}-${dayCode}-${startIndex}`,
+              course,
+              dayCode,
+              startIndex,
+              span: previousIndex - startIndex + 1,
+            });
+          }
+          startIndex = index;
+        }
+        previousIndex = index;
+      });
+
+      if (startIndex !== null && previousIndex !== null) {
+        segments.push({
+          id: `${course.id}-${dayCode}-${startIndex}`,
+          course,
+          dayCode,
+          startIndex,
+          span: previousIndex - startIndex + 1,
+        });
+      }
+
+      return segments;
+    });
+  });
+
+  return visibleDays.flatMap((day) => assignScheduleLanes(
+    draftSegments.filter((segment) => segment.dayCode === day.code)
+  ));
+}
+
+function assignScheduleLanes(segments: Array<Omit<ScheduleSegment, 'lane' | 'laneCount'>>): ScheduleSegment[] {
+  const sorted = [...segments].sort((left, right) => (
+    left.startIndex - right.startIndex || left.span - right.span || left.course.name.localeCompare(right.course.name)
+  ));
+  const result: ScheduleSegment[] = [];
+  let cluster: Array<Omit<ScheduleSegment, 'lane' | 'laneCount'>> = [];
+  let clusterEnd = -1;
+
+  const flushCluster = () => {
+    if (cluster.length === 0) return;
+    const laneEnds: number[] = [];
+    const assigned = cluster.map((segment) => {
+      const start = segment.startIndex;
+      const end = segment.startIndex + segment.span;
+      let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+      if (lane < 0) {
+        lane = laneEnds.length;
+        laneEnds.push(end);
+      } else {
+        laneEnds[lane] = end;
+      }
+      return { ...segment, lane, laneCount: 1 };
+    });
+    const laneCount = Math.max(1, laneEnds.length);
+    result.push(...assigned.map((segment) => ({ ...segment, laneCount })));
+    cluster = [];
+    clusterEnd = -1;
+  };
+
+  sorted.forEach((segment) => {
+    const segmentEnd = segment.startIndex + segment.span;
+    if (cluster.length > 0 && segment.startIndex >= clusterEnd) flushCluster();
+    cluster.push(segment);
+    clusterEnd = Math.max(clusterEnd, segmentEnd);
+  });
+  flushCluster();
+
+  return result;
+}
+
 export function PlanningWorkspace({
   data,
   stats,
@@ -83,6 +216,7 @@ export function PlanningWorkspace({
   onOpenRequirement,
   onDeleteRequirement,
   onMoveRequirement,
+  onMoveCourse,
   onDeleteCourse,
 }: {
   data: AppData;
@@ -95,6 +229,7 @@ export function PlanningWorkspace({
   onOpenRequirement: (requirement: PendingRequirement) => void;
   onDeleteRequirement: (requirementId: string) => void;
   onMoveRequirement: (requirementId: string, direction: -1 | 1) => void;
+  onMoveCourse: (courseId: string, direction: -1 | 1) => void;
   onDeleteCourse: (courseId: string) => void;
 }) {
   const courses = activeSemester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
@@ -158,7 +293,7 @@ export function PlanningWorkspace({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-0 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-0 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
         <aside className="border-b border-slate-200 p-4 xl:border-b-0 xl:border-r">
           <div className="flex items-start justify-between">
             <div>
@@ -182,12 +317,16 @@ export function PlanningWorkspace({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {courses.map((course) => (
+                  {courses.map((course, index) => (
                     <PlanningListCourse
                       key={course.id}
                       course={course}
                       rank={scheduledById.get(course.id) || 0}
                       mode={planningMode}
+                      onMoveUp={() => onMoveCourse(course.id, -1)}
+                      onMoveDown={() => onMoveCourse(course.id, 1)}
+                      canMoveUp={index > 0}
+                      canMoveDown={index < courses.length - 1}
                       onDelete={() => onDeleteCourse(course.id)}
                     />
                   ))}
@@ -340,27 +479,76 @@ function PlanningScheduleGrid({
   courseRanks: Map<string, number>;
   onDeleteCourse: (courseId: string) => void;
 }) {
+  const [showWeekend, setShowWeekend] = useState(false);
   const courses = semester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
   const unscheduled = courses.filter((course) => !course.scheduledOffering?.slots.length);
+  const visibleDays = showWeekend ? DAY_COLUMNS : WEEKDAY_COLUMNS;
+  const scheduleSegments = buildScheduleSegments(courses, visibleDays);
   return (
     <div className="p-4">
+      <div className="mb-3 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setShowWeekend((current) => !current)}
+          aria-pressed={showWeekend}
+          className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+            showWeekend
+              ? 'border-blue-200 bg-blue-50 text-blue-700'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <span className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${
+            showWeekend ? 'bg-blue-600' : 'bg-slate-300'
+          }`}>
+            <span className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
+              showWeekend ? 'translate-x-3' : ''
+            }`} />
+          </span>
+          顯示週末
+        </button>
+      </div>
       <div className="overflow-x-auto">
-        <div className="min-w-[900px]">
-          <div className="grid grid-cols-[72px_repeat(7,minmax(112px,1fr))] border-l border-t border-slate-200 text-sm">
-            <div className="border-b border-r border-slate-200 bg-slate-50 p-2 font-medium text-slate-500">時間</div>
-            {DAY_COLUMNS.map((day) => (
-              <div key={day.code} className="border-b border-r border-slate-200 bg-slate-50 p-2 text-center font-semibold text-slate-700">
+        <div style={{ minWidth: showWeekend ? 900 : 700 }}>
+          <div
+            className="grid border-l border-t border-slate-200 text-sm"
+            style={{
+              gridTemplateColumns: `72px repeat(${visibleDays.length}, minmax(118px, 1fr))`,
+              gridTemplateRows: `40px repeat(${PERIODS.length}, ${PERIOD_ROW_HEIGHT}px)`,
+            }}
+          >
+            <div className="z-10 border-b border-r border-slate-200 bg-slate-50 p-2 font-medium text-slate-500">時間</div>
+            {visibleDays.map((day, dayIndex) => (
+              <div
+                key={day.code}
+                className="z-10 border-b border-r border-slate-200 bg-slate-50 p-2 text-center font-semibold text-slate-700"
+                style={{ gridColumn: dayIndex + 2, gridRow: 1 }}
+              >
                 星期{day.label}
               </div>
             ))}
-            {PERIODS.map((period) => (
-              <PlanningScheduleRow
+            {PERIODS.map((period, periodIndex) => (
+              <PeriodTimeCell
                 key={period}
                 period={period}
-                courses={courses}
+                row={periodIndex + 2}
+              />
+            ))}
+            {PERIODS.flatMap((period, periodIndex) => visibleDays.map((day, dayIndex) => (
+              <ScheduleBackgroundCell
+                key={`${day.code}${period}`}
+                dayIndex={dayIndex}
+                row={periodIndex + 2}
+                isConflict={courses.filter((course) => course.scheduledOffering?.slots.includes(`${day.code}${period}`)).length > 1}
                 mode={mode}
-                courseRanks={courseRanks}
-                onDeleteCourse={onDeleteCourse}
+              />
+            )))}
+            {scheduleSegments.map((segment) => (
+              <PlanningScheduleEvent
+                key={segment.id}
+                segment={segment}
+                dayIndex={visibleDays.findIndex((day) => day.code === segment.dayCode)}
+                mode={mode}
+                rank={courseRanks.get(segment.course.id) || 0}
               />
             ))}
           </div>
@@ -386,150 +574,102 @@ function PlanningScheduleGrid({
   );
 }
 
-function PlanningScheduleRow({
-  period,
-  courses,
+function ScheduleBackgroundCell({
+  dayIndex,
+  row,
+  isConflict,
   mode,
-  courseRanks,
-  onDeleteCourse,
 }: {
-  period: string;
-  courses: Course[];
+  dayIndex: number;
+  row: number;
+  isConflict: boolean;
   mode: PlanningMode;
-  courseRanks: Map<string, number>;
-  onDeleteCourse: (courseId: string) => void;
 }) {
+  const cellTone = isConflict
+    ? mode === 'lottery' ? 'bg-amber-50/60' : 'bg-red-50'
+    : 'bg-white';
   return (
-    <>
-      <div className="border-b border-r border-slate-200 bg-slate-50 p-2 text-center font-semibold text-slate-600">{period}</div>
-      {DAY_COLUMNS.map((day) => {
-        const slot = `${day.code}${period}`;
-        const slotCourses = courses.filter((course) => course.scheduledOffering?.slots.includes(slot));
-        const hasOverlap = slotCourses.length > 1;
-        const cellTone = hasOverlap
-          ? mode === 'lottery' ? 'bg-amber-50/70' : 'bg-red-50'
-          : 'bg-white';
-        return (
-          <div key={slot} className={`min-h-24 border-b border-r border-slate-200 p-1.5 ${cellTone}`}>
-            {hasOverlap ? (
-              <PlanningOverlapGroup
-                courses={slotCourses}
-                mode={mode}
-                courseRanks={courseRanks}
-                onDeleteCourse={onDeleteCourse}
-              />
-            ) : (
-              <div className="space-y-1.5">
-                {slotCourses.map((course) => (
-                  <PlanningScheduleCard
-                    key={course.id}
-                    course={course}
-                    rank={courseRanks.get(course.id) || 0}
-                    onDelete={() => onDeleteCourse(course.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </>
+    <div
+      className={`border-b border-r border-slate-200 ${cellTone}`}
+      style={{ gridColumn: dayIndex + 2, gridRow: row }}
+    />
   );
 }
 
-function PlanningScheduleCard({
-  course,
-  rank,
-  onDelete,
+function PeriodTimeCell({
+  period,
+  row,
 }: {
-  course: Course;
-  rank: number;
-  onDelete: () => void;
+  period: string;
+  row: number;
 }) {
-  const tone = coursePillTone(course);
+  const time = PERIOD_TIME_LABELS[period];
   return (
     <div
-      className={`w-full rounded-md border px-2 py-1.5 text-left shadow-sm ${tone}`}
+      className="z-10 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center"
+      style={{ gridColumn: 1, gridRow: row }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
-          {rank}
-        </span>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete();
-          }}
-          className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-red-600"
-          title="移除課程"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <p className="mt-1 truncate text-xs font-semibold text-slate-900">{course.name}</p>
-      <p className="truncate text-[11px] text-slate-500">
-        {course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}
-      </p>
+      <p className="text-sm font-semibold text-slate-700">{period}</p>
+      {time && (
+        <p className="mt-1 leading-tight text-[10px] font-medium text-slate-400">
+          {time.start}
+          <br />
+          {time.end}
+        </p>
+      )}
     </div>
   );
 }
 
-function PlanningOverlapGroup({
-  courses,
+function PlanningScheduleEvent({
+  segment,
+  dayIndex,
   mode,
-  courseRanks,
-  onDeleteCourse,
+  rank,
 }: {
-  courses: Course[];
+  segment: ScheduleSegment;
+  dayIndex: number;
   mode: PlanningMode;
-  courseRanks: Map<string, number>;
-  onDeleteCourse: (courseId: string) => void;
+  rank: number;
 }) {
-  const isLottery = mode === 'lottery';
-  const tone = isLottery
-    ? 'border-amber-300 bg-amber-50 text-amber-900'
-    : 'border-red-300 bg-red-50 text-red-900';
-  const badgeTone = isLottery
-    ? 'bg-amber-100 text-amber-800'
-    : 'bg-red-100 text-red-800';
+  const { course } = segment;
+  const tone = coursePillTone(course);
+  const hasOverlap = segment.laneCount > 1;
+  const eventTone = hasOverlap
+    ? mode === 'lottery' ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-red-300 bg-red-50 text-red-900'
+    : tone;
+  const width = hasOverlap ? `calc(100% - ${18 + segment.lane * 14}px)` : 'calc(100% - 8px)';
+  const marginLeft = hasOverlap ? `${4 + segment.lane * 14}px` : '4px';
+  const teacher = course.scheduledOffering?.teacher || course.details?.professor || '未列教師';
 
   return (
-    <div className={`rounded-md border p-2 shadow-sm ${tone}`}>
-      <div className="flex items-center justify-between gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${badgeTone}`}>
-          {isLottery ? '競爭組' : '衝堂'}
+    <div
+      className={`z-20 my-1 overflow-hidden rounded-md border px-2 py-1.5 text-left shadow-sm ${eventTone}`}
+      style={{
+        gridColumn: dayIndex + 2,
+        gridRow: `${segment.startIndex + 2} / span ${segment.span}`,
+        width,
+        marginLeft,
+        zIndex: 20 + segment.lane,
+      }}
+      title={`${rank}. ${course.name}・${teacher}・${displaySlots(course.scheduledOffering?.slots || [])}`}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className={`flex h-5 min-w-5 items-center justify-center rounded-full text-[11px] font-bold ${
+          hasOverlap && mode === 'lottery' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-700'
+        }`}>
+          {rank}
         </span>
-        <span className="text-[11px] font-medium opacity-75">{courses.length} 門同時段</span>
+        {hasOverlap && (
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+            mode === 'lottery' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {mode === 'lottery' ? '競' : '衝'}
+          </span>
+        )}
       </div>
-      <p className="mt-1 text-[11px] opacity-75">
-        {isLottery ? '抽中一門後，其餘同時段志願會失效。' : '送出前需移除重疊課程。'}
-      </p>
-      <div className="mt-2 space-y-1">
-        {courses.map((course) => (
-          <div key={course.id} className="rounded border border-white/80 bg-white px-2 py-1">
-            <div className="flex items-start gap-2">
-              <span className={`mt-0.5 flex h-5 min-w-5 items-center justify-center rounded-full text-[11px] font-bold ${badgeTone}`}>
-                {courseRanks.get(course.id) || 0}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-slate-900">{course.name}</p>
-                <p className="truncate text-[11px] text-slate-500">
-                  {course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onDeleteCourse(course.id)}
-                className="rounded p-0.5 text-slate-400 hover:bg-slate-50 hover:text-red-600"
-                title="移除課程"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      <p className="mt-1 truncate text-xs font-semibold text-slate-900">{course.name}</p>
+      {!hasOverlap && <p className="truncate text-[11px] opacity-75">{teacher}</p>}
     </div>
   );
 }
@@ -539,11 +679,19 @@ function PlanningListCourse({
   rank,
   mode,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }: {
   course: Course;
   rank: number;
   mode: PlanningMode;
   onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const slots = course.scheduledOffering?.slots || [];
   return (
@@ -564,11 +712,31 @@ function PlanningListCourse({
             {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}
           </p>
         </div>
+        <div className="flex shrink-0 flex-col gap-1">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+            title="志願序上移"
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+            title="志願序下移"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
         <button
           type="button"
           onClick={onDelete}
           className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-          title="移除課程"
+          title="退回待排需求"
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -805,7 +973,7 @@ function CoursePill({
             onDelete();
           }}
           className="rounded p-0.5 text-slate-400 opacity-100 hover:bg-white hover:text-red-600"
-          title="移除課程"
+          title="退回待排需求"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>

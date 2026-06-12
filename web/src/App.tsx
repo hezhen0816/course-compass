@@ -42,6 +42,32 @@ import {
 
 const SELECTION_PLAN_SEMESTER_ID = '__selection_plan__';
 
+function requirementFromSelectionCourse(course: Course): PendingRequirement {
+  const courseNo = course.scheduledOffering?.courseNo || null;
+  return {
+    id: `manual-${courseNo || normalizeName(course.name) || 'course'}-${nextPlannerId()}`,
+    setId: MANUAL_SET_ID,
+    kind: 'course',
+    title: course.name,
+    credits: course.credits,
+    requiredCredits: course.credits,
+    courseNames: [course.name],
+    options: [{ name: course.name, credits: course.credits, courseNames: [course.name] }],
+    note: courseNo ? `從本地草稿課表退回：${courseNo}` : '從本地草稿課表退回',
+    courseCodePrefix: courseNo,
+  };
+}
+
+function hasRequirementForCourse(requirements: PendingRequirement[], course: Course): boolean {
+  const courseNo = course.scheduledOffering?.courseNo.trim().toUpperCase() || '';
+  const courseName = normalizeName(course.name);
+  return requirements.some((requirement) => (
+    Boolean(courseNo && requirementCourseCode(requirement) === courseNo)
+    || normalizeName(requirement.title) === courseName
+    || requirement.courseNames.some((name) => normalizeName(name) === courseName)
+  ));
+}
+
 export default function CoursePlannerWebApp() {
   const { session, loading: authLoading } = useAuth();
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -302,23 +328,68 @@ export default function CoursePlannerWebApp() {
   };
 
   const deleteSelectionCourse = (courseId: string) => {
-    setData((prev) => ({
-      ...prev,
-      selectionPlan: prev.selectionPlan
-        ? {
+    const deletedCourse = selectionCourses.find((course) => course.id === courseId);
+    setData((prev) => {
+      const shouldRestoreRequirement = deletedCourse && !hasRequirementForCourse(prev.pendingRequirements, deletedCourse);
+      return {
+        ...prev,
+        requirementSets: shouldRestoreRequirement ? ensureManualSet(prev) : prev.requirementSets,
+        pendingRequirements: shouldRestoreRequirement
+          ? [...prev.pendingRequirements, requirementFromSelectionCourse(deletedCourse)]
+          : prev.pendingRequirements,
+        selectionPlan: prev.selectionPlan
+          ? {
+              ...prev.selectionPlan,
+              courses: prev.selectionPlan.courses.filter((course) => course.id !== courseId),
+              updatedAt: new Date().toISOString(),
+            }
+          : undefined,
+        semesters: prev.selectionPlan
+          ? prev.semesters
+          : prev.semesters.map((semester) => (
+              semester.id === activeSemester?.id
+                ? { ...semester, courses: semester.courses.filter((course) => course.id !== courseId) }
+                : semester
+            )),
+      };
+    });
+    if (deletedCourse) setPlannerMessage(`已退回待排需求：${deletedCourse.name}`);
+  };
+
+  const moveSelectionCourse = (courseId: string, direction: -1 | 1) => {
+    const moveCourse = (courses: Course[]) => {
+      const currentIndex = courses.findIndex((course) => course.id === courseId);
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= courses.length) return courses;
+      const nextCourses = [...courses];
+      const [course] = nextCourses.splice(currentIndex, 1);
+      nextCourses.splice(nextIndex, 0, course);
+      return nextCourses;
+    };
+
+    setData((prev) => {
+      if (prev.selectionPlan) {
+        const nextCourses = moveCourse(prev.selectionPlan.courses);
+        if (nextCourses === prev.selectionPlan.courses) return prev;
+        return {
+          ...prev,
+          selectionPlan: {
             ...prev.selectionPlan,
-            courses: prev.selectionPlan.courses.filter((course) => course.id !== courseId),
+            courses: nextCourses,
             updatedAt: new Date().toISOString(),
-          }
-        : undefined,
-      semesters: prev.selectionPlan
-        ? prev.semesters
-        : prev.semesters.map((semester) => (
-            semester.id === activeSemester?.id
-              ? { ...semester, courses: semester.courses.filter((course) => course.id !== courseId) }
-              : semester
-          )),
-    }));
+          },
+        };
+      }
+
+      return {
+        ...prev,
+        semesters: prev.semesters.map((semester) => (
+          semester.id === activeSemester?.id
+            ? { ...semester, courses: moveCourse(semester.courses) }
+            : semester
+        )),
+      };
+    });
   };
 
   const saveCourseDetail = (updatedCourse: Course) => {
@@ -444,6 +515,7 @@ export default function CoursePlannerWebApp() {
             onOpenRequirement={(requirement) => void scheduleRequirementOrChooseOffering(requirement)}
             onDeleteRequirement={deleteRequirement}
             onMoveRequirement={moveRequirement}
+            onMoveCourse={moveSelectionCourse}
             onDeleteCourse={deleteSelectionCourse}
           />
         )}
