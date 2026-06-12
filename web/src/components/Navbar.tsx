@@ -37,9 +37,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems: Array<{ page: AppPage; label: string }> = [
     { page: 'course-search', label: '課程查詢' },
-    { page: 'planning', label: `課表規劃 ${pendingCount}` },
-    { page: 'graduation', label: '畢業門檻' },
-    { page: 'history', label: '歷史修課' },
+    { page: 'planning', label: `選課工作台 ${pendingCount}` },
+    { page: 'graduation', label: '畢業進度' },
+    { page: 'history', label: '修課軌跡' },
     { page: 'settings', label: '設定' },
   ];
 
@@ -91,7 +91,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div className="grid grid-cols-3 items-center gap-1 sm:flex sm:w-auto">
               <button
-                onClick={() => alert('新版規劃以左側待修池為主：可上傳雙主修 PDF、用課名或課碼搜尋開課，再加入待修或排入目前學期。')}
+                onClick={() => alert('平台分成課程查詢、選課工作台、畢業進度與修課軌跡。選課工作台只輔助目前選課學期，不會自動搶課。')}
                 className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 title="匯入說明"
               >

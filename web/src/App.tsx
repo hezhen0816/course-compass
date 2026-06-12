@@ -10,6 +10,7 @@ import { PagePlaceholder } from './components/PagePlaceholder';
 import { SafetyNotice } from './components/SafetyNotice';
 import { CourseSearchCenter } from './features/course-search/CourseSearchCenter';
 import { useCourseSearch } from './features/course-search/useCourseSearch';
+import { CourseTimelinePage } from './features/history/CourseTimelinePage';
 import { PlanningWorkspace } from './features/planning/PlanningWorkspace';
 import { usePlannerStats } from './features/planning/usePlannerStats';
 import { useSchoolSync } from './features/school-sync/useSchoolSync';
@@ -21,9 +22,11 @@ import {
   type RequirementStatus,
   courseFromOffering,
   displaySlots,
+  fallbackAdmissionYear,
   findConflicts,
   findScheduledCourseByOffering,
   getRequirementStatus,
+  inferAdmissionYearFromStudentNo,
   isHistoryImportedCourse,
   mergeHistoryRecordsIntoSemesters,
   normalizeImportPreview,
@@ -31,8 +34,13 @@ import {
   nextPlannerId,
   parseNodeSlots,
   requirementCourseCode,
+  resolveSemesterById,
+  semesterIdForAcademicTerm,
+  semesterNameForId,
   ensureManualSet,
 } from './domain/planner';
+
+const SELECTION_PLAN_SEMESTER_ID = '__selection_plan__';
 
 export default function CoursePlannerWebApp() {
   const { session, loading: authLoading } = useAuth();
@@ -125,14 +133,31 @@ export default function CoursePlannerWebApp() {
 
   const stats = usePlannerStats(data);
 
-  const activeSemester = data.semesters.find((semester) => semester.id === activeSemesterId) || data.semesters[0];
+  const activeSemester = resolveSemesterById(data.semesters, activeSemesterId) || data.semesters[0];
+  const admissionYear = inferAdmissionYearFromStudentNo(schoolUsername) ?? fallbackAdmissionYear(data.historyRecords);
+  const inferredSelectionSemesterId = semesterIdForAcademicTerm(querySemester, admissionYear);
+  const inferredSelectionSemesterName = inferredSelectionSemesterId ? semesterNameForId(inferredSelectionSemesterId) : null;
+  const selectionTargetLabel = `${currentCourseSemesterLabel || querySemester}${inferredSelectionSemesterName ? ` · 推定${inferredSelectionSemesterName}` : ' · 設定校務帳號後可推定年級'}`;
+  const legacySelectionCourses = useMemo(() => (
+    activeSemester?.courses.filter((course) => !isHistoryImportedCourse(course)) || []
+  ), [activeSemester]);
+  const selectionCourses = data.selectionPlan?.courses ?? legacySelectionCourses;
+  const selectionSemester = useMemo(() => ({
+    id: SELECTION_PLAN_SEMESTER_ID,
+    name: selectionTargetLabel,
+    courses: selectionCourses,
+  }), [selectionCourses, selectionTargetLabel]);
+  const selectionData = useMemo(() => ({
+    ...data,
+    semesters: [...data.semesters, selectionSemester],
+  }), [data, selectionSemester]);
   const requirementStatuses = useMemo(() => {
     const map = new Map<string, RequirementStatus>();
     data.pendingRequirements.forEach((requirement) => {
-      map.set(requirement.id, getRequirementStatus(requirement, data));
+      map.set(requirement.id, getRequirementStatus(requirement, selectionData));
     });
     return map;
-  }, [data]);
+  }, [data.pendingRequirements, selectionData]);
   const completedRequirements = Array.from(requirementStatuses.values()).filter((status) => status.completed).length;
   const pendingSelectionCredits = data.pendingRequirements.reduce((sum, requirement) => (
     sum + (requirement.requiredCredits ?? requirement.credits ?? 0)
@@ -140,9 +165,9 @@ export default function CoursePlannerWebApp() {
   const pendingSelectionNames = useMemo(() => (
     new Set(data.pendingRequirements.flatMap((requirement) => requirement.courseNames.map(normalizeName)))
   ), [data.pendingRequirements]);
-  const activeSemesterCredits = activeSemester?.courses.reduce((sum, course) => (
+  const activeSemesterCredits = selectionCourses.reduce((sum, course) => (
     sum + (course.category === 'pe' ? 0 : course.credits)
-  ), 0) || 0;
+  ), 0);
 
   const handleCloseOnboarding = () => {
     setIsOnboardingOpen(false);
@@ -198,28 +223,28 @@ export default function CoursePlannerWebApp() {
   };
 
   const addCourseToSemester = (offering: CourseSearchResult, requirement?: PendingRequirement, force = false) => {
-    if (findScheduledCourseByOffering(offering, data, activeSemesterId)) {
+    if (findScheduledCourseByOffering(offering, selectionData, SELECTION_PLAN_SEMESTER_ID)) {
       return false;
     }
-    const conflicts = findConflicts(offering, data, activeSemesterId);
+    const conflicts = findConflicts(offering, selectionData, SELECTION_PLAN_SEMESTER_ID);
     if (conflicts.length > 0 && !force && planningMode !== 'lottery') {
       const names = conflicts.map((course) => course.name).join('、');
       if (!window.confirm(`這門課與 ${names} 衝堂，仍要排入嗎？`)) return false;
     }
     const course = courseFromOffering(offering, requirement);
-    const targetSemesterName = data.semesters.find((semester) => semester.id === activeSemesterId)?.name || activeSemesterId;
     setData((prev) => ({
       ...prev,
-      semesters: prev.semesters.map((semester) => (
-        semester.id === activeSemesterId
-          ? { ...semester, courses: [...semester.courses, course] }
-          : semester
-      )),
+      selectionPlan: {
+        targetAcademicTerm: querySemester,
+        targetLabel: selectionTargetLabel,
+        courses: [...(prev.selectionPlan?.courses ?? selectionCourses), course],
+        updatedAt: new Date().toISOString(),
+      },
       pendingRequirements: requirement?.setId === MANUAL_SET_ID
         ? prev.pendingRequirements.filter((item) => item.id !== requirement.id)
         : prev.pendingRequirements,
     }));
-    setPlannerMessage(`已排入 ${targetSemesterName}：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
+    setPlannerMessage(`已加入本地草稿：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
     return true;
   };
 
@@ -276,14 +301,23 @@ export default function CoursePlannerWebApp() {
     setImportPreview(null);
   };
 
-  const deleteCourse = (semesterId: string, courseId: string) => {
+  const deleteSelectionCourse = (courseId: string) => {
     setData((prev) => ({
       ...prev,
-      semesters: prev.semesters.map((semester) => (
-        semester.id === semesterId
-          ? { ...semester, courses: semester.courses.filter((course) => course.id !== courseId) }
-          : semester
-      )),
+      selectionPlan: prev.selectionPlan
+        ? {
+            ...prev.selectionPlan,
+            courses: prev.selectionPlan.courses.filter((course) => course.id !== courseId),
+            updatedAt: new Date().toISOString(),
+          }
+        : undefined,
+      semesters: prev.selectionPlan
+        ? prev.semesters
+        : prev.semesters.map((semester) => (
+            semester.id === activeSemester?.id
+              ? { ...semester, courses: semester.courses.filter((course) => course.id !== courseId) }
+              : semester
+          )),
     }));
   };
 
@@ -342,7 +376,7 @@ export default function CoursePlannerWebApp() {
         syncStatus={session ? syncStatus : 'idle'}
         isDemoMode={isDemoMode}
         activePage={activePage}
-        pendingCount={data.pendingRequirements.length}
+        pendingCount={data.pendingRequirements.length + selectionCourses.length}
         onPageChange={setActivePage}
         onOpenHelp={() => setIsOnboardingOpen(true)}
         onExitDemo={() => setIsDemoMode(false)}
@@ -353,7 +387,7 @@ export default function CoursePlannerWebApp() {
 
         {activePage === 'course-search' && (
           <CourseSearchCenter
-            data={data}
+            data={selectionData}
             courseSemesters={courseSemesters}
             querySemester={querySemester}
             currentCourseSemesterLabel={currentCourseSemesterLabel}
@@ -377,7 +411,7 @@ export default function CoursePlannerWebApp() {
             requirementStatuses={requirementStatuses}
             pendingSelectionNames={pendingSelectionNames}
             activeSemesterCredits={activeSemesterCredits}
-            activeSemesterId={activeSemesterId}
+            activeSemesterId={SELECTION_PLAN_SEMESTER_ID}
             onQuerySemesterChange={handleQuerySemesterChange}
             onManualModeChange={handleManualModeChange}
             onManualQueryChange={setManualQuery}
@@ -402,30 +436,23 @@ export default function CoursePlannerWebApp() {
           <PlanningWorkspace
             data={data}
             stats={stats}
-            activeSemester={activeSemester}
-            activeSemesterId={activeSemesterId}
+            activeSemester={selectionSemester}
             planningMode={planningMode}
             plannerMessage={plannerMessage}
             requirementStatuses={requirementStatuses}
             onModeChange={setPlanningMode}
-            onSemesterChange={setActiveSemesterId}
             onOpenRequirement={(requirement) => void scheduleRequirementOrChooseOffering(requirement)}
             onDeleteRequirement={deleteRequirement}
             onMoveRequirement={moveRequirement}
-            onDeleteCourse={(courseId) => {
-              if (activeSemester) deleteCourse(activeSemester.id, courseId);
-            }}
-            onOpenCourseDetail={(course) => {
-              if (activeSemester) {
-                setDetailCourse({ semesterId: activeSemester.id, semesterName: activeSemester.name, course });
-              }
-            }}
+            onDeleteCourse={deleteSelectionCourse}
           />
         )}
 
         {activePage === 'settings' && (
           <SettingsPage
             initialSettings={data.targets}
+            schoolUsername={schoolUsername}
+            selectionTargetLabel={selectionTargetLabel}
             syncStatus={schoolSyncStatus}
             syncMessage={schoolSyncMessage}
             onOpenSchoolSync={openSchoolSyncModal}
@@ -437,27 +464,29 @@ export default function CoursePlannerWebApp() {
 
         {activePage === 'graduation' && (
           <PagePlaceholder
-            title="畢業門檻"
-            description="目前門檻設定已移到設定頁；後續這裡會整理成畢業進度與缺口檢查。"
+            title="畢業進度"
+            description="這裡會專注顯示畢業條件完成度、缺口學分與尚未滿足的課程類別；門檻數字改到設定頁維護。"
           />
         )}
 
         {activePage === 'history' && (
-          <PagePlaceholder
-            title="歷史修課"
-            description="後續會把已修課程與未來預計安排集中到這裡，避免混在課表規劃流程。"
+          <CourseTimelinePage
+            data={data}
+            onOpenCourseDetail={(semesterId, semesterName, course) => {
+              setDetailCourse({ semesterId, semesterName, course });
+            }}
           />
         )}
       </main>
 
       <AppModals
         activeRequirement={activeRequirement}
-        activeSemesterId={activeSemesterId}
-        activeSemesterName={activeSemester?.name || activeSemesterId}
+        activeSemesterId={SELECTION_PLAN_SEMESTER_ID}
+        activeSemesterName={selectionTargetLabel}
         offeringStatus={offeringStatus}
         offeringError={offeringError}
         offeringResults={offeringResults}
-        data={data}
+        data={selectionData}
         planningMode={planningMode}
         importPreview={importPreview}
         isSchoolSyncOpen={isSchoolSyncOpen}

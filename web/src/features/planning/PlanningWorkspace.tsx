@@ -1,4 +1,3 @@
-import { type KeyboardEvent } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Trash2 } from 'lucide-react';
 import type { AppData, Course, PendingRequirement, PlannerStats } from '../../types';
 import {
@@ -77,32 +76,26 @@ export function PlanningWorkspace({
   data,
   stats,
   activeSemester,
-  activeSemesterId,
   planningMode,
   plannerMessage,
   requirementStatuses,
   onModeChange,
-  onSemesterChange,
   onOpenRequirement,
   onDeleteRequirement,
   onMoveRequirement,
   onDeleteCourse,
-  onOpenCourseDetail,
 }: {
   data: AppData;
   stats: PlannerStats;
   activeSemester?: AppData['semesters'][number];
-  activeSemesterId: string;
   planningMode: PlanningMode;
   plannerMessage: string;
   requirementStatuses: Map<string, RequirementStatus>;
   onModeChange: (mode: PlanningMode) => void;
-  onSemesterChange: (semesterId: string) => void;
   onOpenRequirement: (requirement: PendingRequirement) => void;
   onDeleteRequirement: (requirementId: string) => void;
   onMoveRequirement: (requirementId: string, direction: -1 | 1) => void;
   onDeleteCourse: (courseId: string) => void;
-  onOpenCourseDetail: (course: Course) => void;
 }) {
   const courses = activeSemester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
   const pendingCredits = data.pendingRequirements.reduce((sum, requirement) => (
@@ -126,7 +119,7 @@ export function PlanningWorkspace({
       <div className="border-b border-slate-200 p-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">課表規劃</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">選課工作台</p>
             <h2 className="mt-1 text-xl font-semibold text-slate-950">待選清單、志願排序與課表預覽</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-500">
               {planningModeDescription(planningMode)}
@@ -148,15 +141,10 @@ export function PlanningWorkspace({
                 </button>
               ))}
             </div>
-            <select
-              value={activeSemesterId}
-              onChange={(event) => onSemesterChange(event.target.value)}
-              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-            >
-              {data.semesters.map((semester) => (
-                <option key={semester.id} value={semester.id}>{semester.name}</option>
-              ))}
-            </select>
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+              <span className="text-slate-500">本地草稿目標：</span>
+              <span className="font-medium text-slate-900">{activeSemester?.name || '尚未建立學期'}</span>
+            </div>
           </div>
         </div>
         <ScheduleLegend />
@@ -165,6 +153,9 @@ export function PlanningWorkspace({
             {plannerMessage}
           </div>
         )}
+        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          目前顯示的是本地保存的選課草稿；送出前會重新請求官方選課系統資料，並以官方回應為準。
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-0 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
@@ -182,12 +173,12 @@ export function PlanningWorkspace({
           <div className="mt-4 space-y-4">
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-700">已排入課表</h4>
+                <h4 className="text-sm font-semibold text-slate-700">本地草稿課表</h4>
                 <span className="text-xs text-slate-500">{courses.length} 門・{formatCredits(activeCredits)} 學分</span>
               </div>
               {courses.length === 0 ? (
                 <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-                  從查詢結果按「排入課表」後，課程會出現在這裡。
+                  從查詢結果按「排入課表」後，課程會先存在本地草稿。
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -197,7 +188,6 @@ export function PlanningWorkspace({
                       course={course}
                       rank={scheduledById.get(course.id) || 0}
                       mode={planningMode}
-                      onOpen={() => onOpenCourseDetail(course)}
                       onDelete={() => onDeleteCourse(course.id)}
                     />
                   ))}
@@ -242,7 +232,7 @@ export function PlanningWorkspace({
               <div>
                 <h3 className="text-base font-semibold text-slate-900">週課表預覽</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  {activeSemester?.name || '未選學期'} · {courses.length} 門課 · {formatCredits(activeCredits)} 學分
+                  本地草稿 · {courses.length} 門課 · {formatCredits(activeCredits)} 學分
                 </p>
               </div>
               <p className="text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
@@ -253,7 +243,6 @@ export function PlanningWorkspace({
             mode={planningMode}
             courseRanks={scheduledById}
             onDeleteCourse={onDeleteCourse}
-            onOpenCourseDetail={onOpenCourseDetail}
           />
         </div>
 
@@ -307,6 +296,7 @@ export function PlanningWorkspace({
                 <>
                   <li>同一時段可放多個志願，抽中一門後其餘同時段會失效。</li>
                   <li>志願序可超過 25 學分，但中籤後系統會受學分上限影響。</li>
+                  <li>正式送出前會重新比對官方選課清單與名額狀態。</li>
                   <li>體育、國文、熱門通識建議放多個備案。</li>
                 </>
               ) : planningMode === 'addDrop' ? (
@@ -344,13 +334,11 @@ function PlanningScheduleGrid({
   mode,
   courseRanks,
   onDeleteCourse,
-  onOpenCourseDetail,
 }: {
   semester?: AppData['semesters'][number];
   mode: PlanningMode;
   courseRanks: Map<string, number>;
   onDeleteCourse: (courseId: string) => void;
-  onOpenCourseDetail: (course: Course) => void;
 }) {
   const courses = semester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
   const unscheduled = courses.filter((course) => !course.scheduledOffering?.slots.length);
@@ -373,7 +361,6 @@ function PlanningScheduleGrid({
                 mode={mode}
                 courseRanks={courseRanks}
                 onDeleteCourse={onDeleteCourse}
-                onOpenCourseDetail={onOpenCourseDetail}
               />
             ))}
           </div>
@@ -390,7 +377,6 @@ function PlanningScheduleGrid({
                 course={course}
                 compact
                 onDelete={() => onDeleteCourse(course.id)}
-                onOpenDetail={() => onOpenCourseDetail(course)}
               />
             ))}
           </div>
@@ -406,14 +392,12 @@ function PlanningScheduleRow({
   mode,
   courseRanks,
   onDeleteCourse,
-  onOpenCourseDetail,
 }: {
   period: string;
   courses: Course[];
   mode: PlanningMode;
   courseRanks: Map<string, number>;
   onDeleteCourse: (courseId: string) => void;
-  onOpenCourseDetail: (course: Course) => void;
 }) {
   return (
     <>
@@ -427,19 +411,25 @@ function PlanningScheduleRow({
           : 'bg-white';
         return (
           <div key={slot} className={`min-h-24 border-b border-r border-slate-200 p-1.5 ${cellTone}`}>
-            <div className="space-y-1.5">
-              {slotCourses.map((course) => (
-                <PlanningScheduleCard
-                  key={course.id}
-                  course={course}
-                  rank={courseRanks.get(course.id) || 0}
-                  overlap={hasOverlap}
-                  mode={mode}
-                  onDelete={() => onDeleteCourse(course.id)}
-                  onOpen={() => onOpenCourseDetail(course)}
-                />
-              ))}
-            </div>
+            {hasOverlap ? (
+              <PlanningOverlapGroup
+                courses={slotCourses}
+                mode={mode}
+                courseRanks={courseRanks}
+                onDeleteCourse={onDeleteCourse}
+              />
+            ) : (
+              <div className="space-y-1.5">
+                {slotCourses.map((course) => (
+                  <PlanningScheduleCard
+                    key={course.id}
+                    course={course}
+                    rank={courseRanks.get(course.id) || 0}
+                    onDelete={() => onDeleteCourse(course.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
@@ -450,31 +440,19 @@ function PlanningScheduleRow({
 function PlanningScheduleCard({
   course,
   rank,
-  overlap,
-  mode,
   onDelete,
-  onOpen,
 }: {
   course: Course;
   rank: number;
-  overlap: boolean;
-  mode: PlanningMode;
   onDelete: () => void;
-  onOpen: () => void;
 }) {
-  const tone = overlap
-    ? mode === 'lottery' ? 'border-amber-300 bg-white' : 'border-red-300 bg-white'
-    : coursePillTone(course);
+  const tone = coursePillTone(course);
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`w-full rounded-md border px-2 py-1.5 text-left shadow-sm transition-colors hover:shadow ${tone}`}
+    <div
+      className={`w-full rounded-md border px-2 py-1.5 text-left shadow-sm ${tone}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className={`flex h-5 min-w-5 items-center justify-center rounded-full text-[11px] font-bold ${
-          overlap && mode === 'lottery' ? 'bg-amber-100 text-amber-700' : overlap ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-        }`}>
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
           {rank}
         </span>
         <button
@@ -493,12 +471,66 @@ function PlanningScheduleCard({
       <p className="truncate text-[11px] text-slate-500">
         {course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}
       </p>
-      {overlap && (
-        <p className={`mt-1 text-[11px] font-medium ${mode === 'lottery' ? 'text-amber-700' : 'text-red-700'}`}>
-          {mode === 'lottery' ? '競爭志願' : '衝堂'}
-        </p>
-      )}
-    </button>
+    </div>
+  );
+}
+
+function PlanningOverlapGroup({
+  courses,
+  mode,
+  courseRanks,
+  onDeleteCourse,
+}: {
+  courses: Course[];
+  mode: PlanningMode;
+  courseRanks: Map<string, number>;
+  onDeleteCourse: (courseId: string) => void;
+}) {
+  const isLottery = mode === 'lottery';
+  const tone = isLottery
+    ? 'border-amber-300 bg-amber-50 text-amber-900'
+    : 'border-red-300 bg-red-50 text-red-900';
+  const badgeTone = isLottery
+    ? 'bg-amber-100 text-amber-800'
+    : 'bg-red-100 text-red-800';
+
+  return (
+    <div className={`rounded-md border p-2 shadow-sm ${tone}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${badgeTone}`}>
+          {isLottery ? '競爭組' : '衝堂'}
+        </span>
+        <span className="text-[11px] font-medium opacity-75">{courses.length} 門同時段</span>
+      </div>
+      <p className="mt-1 text-[11px] opacity-75">
+        {isLottery ? '抽中一門後，其餘同時段志願會失效。' : '送出前需移除重疊課程。'}
+      </p>
+      <div className="mt-2 space-y-1">
+        {courses.map((course) => (
+          <div key={course.id} className="rounded border border-white/80 bg-white px-2 py-1">
+            <div className="flex items-start gap-2">
+              <span className={`mt-0.5 flex h-5 min-w-5 items-center justify-center rounded-full text-[11px] font-bold ${badgeTone}`}>
+                {courseRanks.get(course.id) || 0}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-slate-900">{course.name}</p>
+                <p className="truncate text-[11px] text-slate-500">
+                  {course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onDeleteCourse(course.id)}
+                className="rounded p-0.5 text-slate-400 hover:bg-slate-50 hover:text-red-600"
+                title="移除課程"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -506,13 +538,11 @@ function PlanningListCourse({
   course,
   rank,
   mode,
-  onOpen,
   onDelete,
 }: {
   course: Course;
   rank: number;
   mode: PlanningMode;
-  onOpen: () => void;
   onDelete: () => void;
 }) {
   const slots = course.scheduledOffering?.slots || [];
@@ -524,7 +554,7 @@ function PlanningListCourse({
         }`}>
           {rank}
         </div>
-        <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1 text-left">
           <p className="truncate text-sm font-semibold text-slate-900">{course.name}</p>
           <p className="mt-1 text-xs text-slate-500">
             {formatCredits(course.credits)} 學分
@@ -533,7 +563,7 @@ function PlanningListCourse({
           <p className="mt-1 truncate text-xs text-slate-500">
             {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}
           </p>
-        </button>
+        </div>
         <button
           type="button"
           onClick={onDelete}
@@ -742,13 +772,11 @@ function CoursePill({
   conflict = false,
   compact = false,
   onDelete,
-  onOpenDetail,
 }: {
   course: Course;
   conflict?: boolean;
   compact?: boolean;
   onDelete: () => void;
-  onOpenDetail: () => void;
 }) {
   const isImportedHistory = isHistoryImportedCourse(course);
   const hasScheduleData = Boolean(course.scheduledOffering);
@@ -757,20 +785,9 @@ function CoursePill({
     ? `${formatCredits(course.credits)} 學分・${course.grade || '修課紀錄'}`
     : `${formatCredits(course.credits)} 學分・${teacher || (hasScheduleData ? '未列教師' : '未提供節次/教師')}`;
   const toneClass = conflict ? 'border-red-300 bg-red-100' : coursePillTone(course);
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onOpenDetail();
-    }
-  };
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpenDetail}
-      onKeyDown={handleKeyDown}
-      className={`group cursor-pointer rounded-md border px-2 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${toneClass}`}
-      title="編輯課程詳細資訊"
+      className={`group rounded-md border px-2 py-1.5 ${toneClass}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">

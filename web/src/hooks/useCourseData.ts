@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
-import type { AcademicHistoryRecord, AppData, Course, PendingRequirement, RequirementSet } from '../types';
+import type { AcademicHistoryRecord, AppData, Course, PendingRequirement, RequirementSet, SelectionPlan } from '../types';
 import { INITIAL_SEMESTERS, DEFAULT_TARGETS } from '../constants';
 
 function normalizeCourse(course: Course): Course {
@@ -49,6 +49,16 @@ function normalizeHistoryRecord(record: AcademicHistoryRecord): AcademicHistoryR
   };
 }
 
+function normalizeSelectionPlan(plan: SelectionPlan | undefined): SelectionPlan | undefined {
+  if (!plan) return undefined;
+  return {
+    targetAcademicTerm: plan.targetAcademicTerm || '',
+    targetLabel: plan.targetLabel || '',
+    courses: (plan.courses || []).map(normalizeCourse),
+    updatedAt: plan.updatedAt || undefined,
+  };
+}
+
 type StoredAppData = Partial<AppData> & Record<string, unknown>;
 
 function normalizeAppData(rawData: StoredAppData): AppData {
@@ -63,6 +73,7 @@ function normalizeAppData(rawData: StoredAppData): AppData {
       ...DEFAULT_TARGETS,
       ...(rawData.targets || {}),
     },
+    selectionPlan: normalizeSelectionPlan(rawData.selectionPlan),
     requirementSets: (rawData.requirementSets || []).map(normalizeRequirementSet),
     pendingRequirements: (rawData.pendingRequirements || []).map(normalizeRequirement),
     historyRecords: (rawData.historyRecords || []).map(normalizeHistoryRecord),
@@ -75,6 +86,7 @@ function createEmptyAppData(): AppData {
     semesters: INITIAL_SEMESTERS,
     targets: { ...DEFAULT_TARGETS },
     settings: {},
+    selectionPlan: undefined,
     requirementSets: [],
     pendingRequirements: [],
     historyRecords: [],

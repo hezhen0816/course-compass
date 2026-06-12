@@ -163,12 +163,13 @@ def search_courses(
         for course in courses:
             course_no = str(course.get("CourseNo") or "")
             course_name = str(course.get("CourseName") or "")
-            if mode == "name" and _normalize_course_lookup_text(course_name) != normalized_query:
+            normalized_course_name = _normalize_course_lookup_text(course_name)
+            if mode == "name" and normalized_query not in normalized_course_name:
                 continue
             if mode == "code" and normalized_query not in course_no.lower():
                 continue
             filtered.append(_course_search_result(course))
-        return _merge_course_search_results(filtered)
+        return _sort_course_search_results(_merge_course_search_results(filtered), q)
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"課程查詢系統請求失敗：{exc}") from exc
     except RuntimeError as exc:
@@ -248,6 +249,19 @@ def _merge_course_search_results(courses: list[CourseSearchResult]) -> list[Cour
         existing.capacity = _max_optional_int(existing.capacity, course.capacity)
 
     return list(merged.values())
+
+
+def _sort_course_search_results(courses: list[CourseSearchResult], query: str) -> list[CourseSearchResult]:
+    normalized_query = _normalize_course_lookup_text(query)
+    return sorted(
+        courses,
+        key=lambda course: (
+            _normalize_course_lookup_text(course.course_name) != normalized_query,
+            course.course_no,
+            course.course_name,
+            course.teacher,
+        ),
+    )
 
 
 def _merge_token_text(left: str, right: str) -> str:

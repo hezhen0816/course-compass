@@ -264,7 +264,7 @@ export function CourseSearchCenter({
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-slate-950">課程查詢中心</h2>
-            <p className="mt-1 text-sm text-slate-500">查詢開課資料，加入待選清單，並進行課表規劃。</p>
+            <p className="mt-1 text-sm text-slate-500">查詢官方開課資料，加入待選清單，再交給選課工作台排序與檢查。</p>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <span>
@@ -365,12 +365,12 @@ export function CourseSearchCenter({
           )}
         </div>
         <div className="space-y-2 border-t border-slate-100 p-4">
-          <p className="text-xs text-slate-500">已選學分：{formatCredits(activeSemesterCredits)} 學分</p>
+          <p className="text-xs text-slate-500">本地草稿學分：{formatCredits(activeSemesterCredits)} 學分</p>
           <button
             onClick={onOpenPlanning}
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-blue-700"
           >
-            進行課表規劃
+            前往選課工作台
           </button>
           <button
             disabled

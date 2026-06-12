@@ -323,6 +323,18 @@ export function semesterNameForId(semesterId: string): string | null {
   return gradeName && termName ? `${gradeName}${termName}` : null;
 }
 
+export function resolveSemesterById(
+  semesters: AppData['semesters'],
+  semesterId: string
+): AppData['semesters'][number] | undefined {
+  const exact = semesters.find((semester) => semester.id === semesterId);
+  if (exact) return exact;
+  const fallbackName = semesterNameForId(semesterId);
+  return fallbackName
+    ? semesters.find((semester) => semester.name === fallbackName)
+    : undefined;
+}
+
 export function semesterIdForStudentTerm(academicTerm: string, studentNo: string): string | null {
   return semesterIdForAcademicTerm(academicTerm, inferAdmissionYearFromStudentNo(studentNo));
 }
@@ -638,6 +650,7 @@ export function findConflicts(offering: CourseSearchResult, data: AppData, semes
   if (!semester) return [];
   const slotSet = new Set(slots);
   return semester.courses.filter((course) =>
+    !isHistoryImportedCourse(course) &&
     !isSameScheduledOffering(course, offering) &&
     (course.scheduledOffering?.slots || []).some((slot) => slotSet.has(slot))
   );
@@ -662,7 +675,7 @@ export function normalizeOfferingNode(value: string): string {
 
 export function findScheduledCourseByOffering(offering: CourseSearchResult, data: AppData, semesterId: string): Course | undefined {
   const semester = data.semesters.find((item) => item.id === semesterId);
-  return semester?.courses.find((course) => isSameScheduledOffering(course, offering));
+  return semester?.courses.find((course) => !isHistoryImportedCourse(course) && isSameScheduledOffering(course, offering));
 }
 
 export function ensureManualSet(data: AppData): RequirementSet[] {

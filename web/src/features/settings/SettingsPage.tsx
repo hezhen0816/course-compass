@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Settings } from 'lucide-react';
+import { KeyRound, RefreshCw, Settings } from 'lucide-react';
 import type { AppData } from '../../types';
 
 type SettingsPageProps = {
   initialSettings: AppData['targets'];
+  schoolUsername: string;
+  selectionTargetLabel: string;
   syncStatus: 'idle' | 'loading' | 'error' | 'success';
   syncMessage: string;
   onSaveTargets: (targets: AppData['targets']) => void;
@@ -12,6 +14,8 @@ type SettingsPageProps = {
 
 export function SettingsPage({
   initialSettings,
+  schoolUsername,
+  selectionTargetLabel,
   syncStatus,
   syncMessage,
   onSaveTargets,
@@ -30,7 +34,7 @@ export function SettingsPage({
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">設定</p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-950">資料同步與畢業門檻</h1>
-            <p className="mt-1 text-sm text-slate-500">校務資料同步與學分門檻集中放在這裡，課程查詢頁只保留查詢與加入待選流程。</p>
+            <p className="mt-1 text-sm text-slate-500">校務資料同步、畢業門檻數字與帳號層級設定集中放在這裡，不混進選課流程。</p>
           </div>
           <button
             onClick={onOpenSchoolSync}
@@ -47,6 +51,34 @@ export function SettingsPage({
             {syncMessage}
           </p>
         )}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-blue-600" />
+              <h2 className="text-base font-semibold text-slate-900">校務帳號與選課目標</h2>
+            </div>
+            <p className="mt-2 text-sm text-slate-500">
+              校務帳號用來同步官方選課清單與歷年成績，並可由學號推定目前選課對應的大幾學期。
+            </p>
+          </div>
+          <button
+            onClick={onOpenSchoolSync}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+          >
+            <RefreshCw className="h-4 w-4" />
+            設定 / 同步校務帳號
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2">
+          <InfoRow label="目前學號" value={schoolUsername.trim() || '尚未設定'} />
+          <InfoRow label="推定選課目標" value={selectionTargetLabel} />
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 md:col-span-2">
+            密碼保存需由後端加密與金鑰管理處理；目前開發版只在同步流程中使用，不在前端或本地草稿中保存明文密碼。
+          </div>
+        </div>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -132,6 +164,15 @@ export function SettingsPage({
           </div>
         </form>
       </section>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
     </div>
   );
 }

@@ -63,6 +63,13 @@ export interface Semester {
   courses: Course[];
 }
 
+export interface SelectionPlan {
+  targetAcademicTerm: string;
+  targetLabel?: string;
+  courses: Course[];
+  updatedAt?: string;
+}
+
 export interface AppTargets {
   total: number;
   chinese: number;
@@ -124,6 +131,7 @@ export interface AppData {
   semesters: Semester[];
   targets: AppTargets;
   settings?: Record<string, unknown>;
+  selectionPlan?: SelectionPlan;
   requirementSets: RequirementSet[];
   pendingRequirements: PendingRequirement[];
   historyRecords: AcademicHistoryRecord[];
