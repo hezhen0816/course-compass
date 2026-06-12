@@ -141,6 +141,22 @@ npm run ios:build
 
 `npm run check` 會串起 Web lint/build、backend check 與 iOS build，適合提交前使用。
 
+## 維護腳本
+
+### 遷移 legacy 校務密碼
+
+若 production `public.user_data.content.settings` 仍有舊的 `school_password` 或 `schoolCredentials.passwordCiphertext`，可用後端 Fernet 金鑰加密搬到 `public.school_credentials`，再清掉 JSON 內的舊欄位。
+
+```bash
+# 只統計，不寫 DB
+bash scripts/python.sh scripts/migrate_legacy_school_credentials.py
+
+# 確認 .env 有真實 SUPABASE_SERVICE_ROLE_KEY 與 SCHOOL_CREDENTIALS_ENCRYPTION_SECRET 後才執行
+bash scripts/python.sh scripts/migrate_legacy_school_credentials.py --apply
+```
+
+腳本不會輸出密碼內容；如果 `.env` 的 service role key 還是 placeholder，會停止而不寫入。
+
 ## 維護原則
 
 1. Web 與 iOS 不共用畫面與互動流程，只共用資料規則。
