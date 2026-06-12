@@ -6,7 +6,6 @@ import {
   joinOfficialInitialSelectionCourse,
   removeOfficialInitialSelectionCourse,
   reorderOfficialInitialSelectionCourses,
-  searchCourses,
   syncOfficialInitialSelection,
 } from './api';
 import { useAuth } from './hooks/useAuth';
@@ -27,52 +26,28 @@ import {
   MANUAL_SET_ID,
   type ApiImportPreview,
   type PlanningMode,
-  type RequirementStatus,
   courseFromOffering,
   displaySlots,
   fallbackAdmissionYear,
   findConflicts,
   findScheduledCourseByOffering,
-  getRequirementStatus,
   inferAdmissionYearFromStudentNo,
   isHistoryImportedCourse,
   mergeHistoryRecordsIntoSemesters,
   normalizeImportPreview,
-  normalizeName,
-  nextPlannerId,
   parseNodeSlots,
-  requirementCourseCode,
   resolveSemesterById,
   semesterIdForAcademicTerm,
   semesterNameForId,
-  ensureManualSet,
 } from './domain/planner';
 
 const SELECTION_PLAN_SEMESTER_ID = '__selection_plan__';
 
-function requirementFromSelectionCourse(course: Course): PendingRequirement {
-  const courseNo = course.scheduledOffering?.courseNo || null;
-  return {
-    id: `manual-${courseNo || normalizeName(course.name) || 'course'}-${nextPlannerId()}`,
-    setId: MANUAL_SET_ID,
-    kind: 'course',
-    title: course.name,
-    credits: course.credits,
-    requiredCredits: course.credits,
-    courseNames: [course.name],
-    options: [{ name: course.name, credits: course.credits, courseNames: [course.name] }],
-    note: courseNo ? `從本地草稿課表退回：${courseNo}` : '從本地草稿課表退回',
-    courseCodePrefix: courseNo,
-  };
-}
-
-function hasRequirementForCourse(requirements: PendingRequirement[], course: Course): boolean {
-  const courseNo = course.scheduledOffering?.courseNo.trim().toUpperCase() || '';
-  const courseName = normalizeName(course.name);
-  return requirements.some((requirement) => (
-    Boolean(courseNo && requirementCourseCode(requirement) === courseNo)
-    || normalizeName(requirement.title) === courseName
-    || requirement.courseNames.some((name) => normalizeName(name) === courseName)
+function officialSelectionContainsCourse(payload: OfficialSelectionSyncResponse, courseNo: string): boolean {
+  const normalizedCourseNo = courseNo.trim().toUpperCase();
+  if (!normalizedCourseNo) return false;
+  return [...payload.available_courses, ...payload.registered_courses].some((course) => (
+    course.course_no.trim().toUpperCase() === normalizedCourseNo
   ));
 }
 
@@ -119,9 +94,9 @@ export default function CoursePlannerWebApp() {
   } = useCourseSearch();
   const [planningMode, setPlanningMode] = useState<PlanningMode>('lottery');
   const [activeRequirement, setActiveRequirement] = useState<PendingRequirement | null>(null);
-  const [offeringResults, setOfferingResults] = useState<CourseSearchResult[]>([]);
-  const [offeringStatus, setOfferingStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [offeringError, setOfferingError] = useState('');
+  const [offeringResults] = useState<CourseSearchResult[]>([]);
+  const [offeringStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [offeringError] = useState('');
   const [importPreview, setImportPreview] = useState<ApiImportPreview | null>(null);
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [importError, setImportError] = useState('');
@@ -191,20 +166,6 @@ export default function CoursePlannerWebApp() {
     ...data,
     semesters: [...data.semesters, selectionSemester],
   }), [data, selectionSemester]);
-  const requirementStatuses = useMemo(() => {
-    const map = new Map<string, RequirementStatus>();
-    data.pendingRequirements.forEach((requirement) => {
-      map.set(requirement.id, getRequirementStatus(requirement, selectionData));
-    });
-    return map;
-  }, [data.pendingRequirements, selectionData]);
-  const completedRequirements = Array.from(requirementStatuses.values()).filter((status) => status.completed).length;
-  const pendingSelectionCredits = data.pendingRequirements.reduce((sum, requirement) => (
-    sum + (requirement.requiredCredits ?? requirement.credits ?? 0)
-  ), 0);
-  const pendingSelectionNames = useMemo(() => (
-    new Set(data.pendingRequirements.flatMap((requirement) => requirement.courseNames.map(normalizeName)))
-  ), [data.pendingRequirements]);
   const activeSemesterCredits = selectionCourses.reduce((sum, course) => (
     sum + (course.category === 'pe' ? 0 : course.credits)
   ), 0);
@@ -214,56 +175,14 @@ export default function CoursePlannerWebApp() {
     localStorage.setItem('hasSeenOnboarding', 'true');
   };
 
-  const searchForRequirement = async (requirement: PendingRequirement) => {
-    setActiveRequirement(requirement);
-    setOfferingStatus('loading');
-    setOfferingError('');
-    setOfferingResults([]);
-    const code = requirementCourseCode(requirement);
-    const isCodeLookup = Boolean(code) || (requirement.kind === 'credit_pool' && requirement.courseCodePrefix);
-    const query = isCodeLookup ? code || requirement.courseCodePrefix || '' : requirement.courseNames[0] || requirement.title;
-    try {
-      const results = await searchCourses(querySemester, query, isCodeLookup ? 'code' : 'name');
-      const exactCodeResults = code
-        ? results.filter((offering) => offering.course_no.trim().toUpperCase() === code)
-        : [];
-      setOfferingResults(exactCodeResults.length > 0 ? exactCodeResults : results);
-      setOfferingStatus('idle');
-    } catch (error) {
-      setOfferingStatus('error');
-      setOfferingError(error instanceof Error ? error.message : '開課查詢失敗');
-    }
-  };
-
-  const scheduleRequirementOrChooseOffering = async (requirement: PendingRequirement) => {
-    const code = requirementCourseCode(requirement);
-    if (!code) {
-      await searchForRequirement(requirement);
-      return;
-    }
-
-    setOfferingError('');
-    try {
-      const results = await searchCourses(querySemester, code, 'code');
-      const exactCodeResults = results.filter((offering) => offering.course_no.trim().toUpperCase() === code);
-      if (exactCodeResults.length === 1) {
-        addCourseToSemester(exactCodeResults[0], requirement);
-        return;
-      }
-
-      setActiveRequirement(requirement);
-      setOfferingStatus('idle');
-      setOfferingResults(exactCodeResults.length > 0 ? exactCodeResults : results);
-    } catch (error) {
-      setActiveRequirement(requirement);
-      setOfferingStatus('error');
-      setOfferingResults([]);
-      setOfferingError(error instanceof Error ? error.message : '開課查詢失敗');
-    }
-  };
-
-  const addCourseToSemester = (offering: CourseSearchResult, requirement?: PendingRequirement, force = false) => {
+  const addCourseToSemester = (
+    offering: CourseSearchResult,
+    requirement?: PendingRequirement,
+    force = false,
+    virtualReason?: string,
+  ) => {
     if (findScheduledCourseByOffering(offering, selectionData, SELECTION_PLAN_SEMESTER_ID)) {
+      setPlannerMessage(`已在虛擬課程中：${offering.course_name}`);
       return false;
     }
     const conflicts = findConflicts(offering, selectionData, SELECTION_PLAN_SEMESTER_ID);
@@ -271,7 +190,14 @@ export default function CoursePlannerWebApp() {
       const names = conflicts.map((course) => course.name).join('、');
       if (!window.confirm(`這門課與 ${names} 衝堂，仍要排入嗎？`)) return false;
     }
-    const course = courseFromOffering(offering, requirement);
+    const course: Course = {
+      ...courseFromOffering(offering, requirement),
+      virtualSelection: {
+        status: virtualReason ? 'rejected' : 'manual',
+        reason: virtualReason || '手動加入虛擬課表，尚未送入官方選課系統。',
+        createdAt: new Date().toISOString(),
+      },
+    };
     setData((prev) => ({
       ...prev,
       selectionPlan: {
@@ -284,34 +210,8 @@ export default function CoursePlannerWebApp() {
         ? prev.pendingRequirements.filter((item) => item.id !== requirement.id)
         : prev.pendingRequirements,
     }));
-    setPlannerMessage(`已加入本地草稿：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
+    setPlannerMessage(`已加入虛擬課表：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
     return true;
-  };
-
-  const addOfferingAsRequirement = (offering: CourseSearchResult) => {
-    const id = `manual-${offering.course_no || normalizeName(offering.course_name)}-${nextPlannerId()}`;
-    const requirement: PendingRequirement = {
-      id,
-      setId: MANUAL_SET_ID,
-      kind: 'course',
-      title: offering.course_name,
-      credits: offering.credits,
-      requiredCredits: offering.credits,
-      courseNames: [offering.course_name],
-      options: [{ name: offering.course_name, credits: offering.credits, courseNames: [offering.course_name] }],
-      note: offering.course_no ? `由課程查詢加入：${offering.course_no}` : '由課程查詢加入',
-      courseCodePrefix: offering.course_no || null,
-    };
-    setData((prev) => ({
-      ...prev,
-      requirementSets: ensureManualSet(prev),
-      pendingRequirements: prev.pendingRequirements.some((item) => (
-        Boolean(offering.course_no && requirementCourseCode(item) === offering.course_no)
-        || item.courseNames.some((name) => normalizeName(name) === normalizeName(offering.course_name))
-      ))
-        ? prev.pendingRequirements
-        : [...prev.pendingRequirements, requirement],
-    }));
   };
 
   const handlePdfUpload = async (file: File | undefined) => {
@@ -344,13 +244,8 @@ export default function CoursePlannerWebApp() {
   const deleteSelectionCourse = (courseId: string) => {
     const deletedCourse = selectionCourses.find((course) => course.id === courseId);
     setData((prev) => {
-      const shouldRestoreRequirement = deletedCourse && !hasRequirementForCourse(prev.pendingRequirements, deletedCourse);
       return {
         ...prev,
-        requirementSets: shouldRestoreRequirement ? ensureManualSet(prev) : prev.requirementSets,
-        pendingRequirements: shouldRestoreRequirement
-          ? [...prev.pendingRequirements, requirementFromSelectionCourse(deletedCourse)]
-          : prev.pendingRequirements,
         selectionPlan: prev.selectionPlan
           ? {
               ...prev.selectionPlan,
@@ -367,7 +262,7 @@ export default function CoursePlannerWebApp() {
             )),
       };
     });
-    if (deletedCourse) setPlannerMessage(`已退回待排需求：${deletedCourse.name}`);
+    if (deletedCourse) setPlannerMessage(`已移除虛擬課程：${deletedCourse.name}`);
   };
 
   const moveSelectionCourse = (courseId: string, direction: -1 | 1) => {
@@ -422,28 +317,6 @@ export default function CoursePlannerWebApp() {
       )),
     }));
     setDetailCourse(null);
-  };
-
-  const deleteRequirement = (requirementId: string) => {
-    setData((prev) => ({
-      ...prev,
-      pendingRequirements: prev.pendingRequirements.filter((requirement) => requirement.id !== requirementId),
-    }));
-  };
-
-  const moveRequirement = (requirementId: string, direction: -1 | 1) => {
-    setData((prev) => {
-      const currentIndex = prev.pendingRequirements.findIndex((requirement) => requirement.id === requirementId);
-      const nextIndex = currentIndex + direction;
-      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= prev.pendingRequirements.length) return prev;
-      const nextRequirements = [...prev.pendingRequirements];
-      const [item] = nextRequirements.splice(currentIndex, 1);
-      nextRequirements.splice(nextIndex, 0, item);
-      return {
-        ...prev,
-        pendingRequirements: nextRequirements,
-      };
-    });
   };
 
   const openSchoolDataSync = () => {
@@ -504,6 +377,59 @@ export default function CoursePlannerWebApp() {
       setOfficialSelectionStatus('error');
       setOfficialSelectionMessage(message);
       window.alert(message);
+    } finally {
+      setOfficialActionCourseNo(null);
+    }
+  };
+
+  const submitSelectionCourse = async (offering: CourseSearchResult) => {
+    const normalizedCourseNo = offering.course_no.trim().toUpperCase();
+    if (!normalizedCourseNo) {
+      window.alert('缺少課碼，無法加入選課清單。');
+      return;
+    }
+
+    const username = officialSelection?.school_account || schoolUsername.trim();
+    if (!officialSelection?.session_valid || !username) {
+      openOfficialSelectionSync('請先同步官方初選資料，再加入選課清單。');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `即將送到官方待選清單：${normalizedCourseNo} ${offering.course_name}\n\n若官方拒絕或未接受，會改以「虛擬加入」標示在課表上。此操作只會送出一次，不會自動重試。確定繼續？`,
+    );
+    if (!confirmed) return;
+
+    setOfficialActionCourseNo(normalizedCourseNo);
+    setOfficialSelectionStatus('loading');
+    setOfficialSelectionMessage('正在送到官方待選清單...');
+    try {
+      const payload = await addOfficialInitialSelectionWaitlistCourse(username, normalizedCourseNo);
+      setOfficialSelection(payload);
+      if (officialSelectionContainsCourse(payload, normalizedCourseNo)) {
+        setOfficialSelectionStatus('success');
+        setOfficialSelectionMessage(`官方已回傳最新狀態：已登記 ${payload.registered_count} 門，待加入 ${payload.available_count} 門。`);
+        setPlannerMessage(`官方已加入選課清單：${normalizedCourseNo}`);
+        return;
+      }
+
+      const reason = payload.notices[0] || '官方回應未將此課加入待選或登記清單。';
+      addCourseToSemester(offering, undefined, true, reason);
+      setOfficialSelectionStatus('error');
+      setOfficialSelectionMessage(`官方未接受 ${normalizedCourseNo}，已加入虛擬課表：${reason}`);
+      setPlannerMessage(`已虛擬加入：${offering.course_name}。原因：${reason}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '官方選課請求失敗。';
+      const shouldRequireResync = /Session|重新同步|登入|帳號|密碼/.test(message);
+      setOfficialSelectionStatus('error');
+      setOfficialSelectionMessage(message);
+      if (shouldRequireResync) {
+        window.alert(message);
+        return;
+      }
+      addCourseToSemester(offering, undefined, true, message);
+      setPlannerMessage(`已虛擬加入：${offering.course_name}。原因：${message}`);
+      window.alert(`官方未接受，已加入虛擬課表。\n原因：${message}`);
     } finally {
       setOfficialActionCourseNo(null);
     }
@@ -586,7 +512,7 @@ export default function CoursePlannerWebApp() {
         syncStatus={session ? syncStatus : 'idle'}
         isDemoMode={isDemoMode}
         activePage={activePage}
-        pendingCount={data.pendingRequirements.length + selectionCourses.length}
+        pendingCount={(officialSelection?.registered_count || 0) + (officialSelection?.available_count || 0) + selectionCourses.length}
         onPageChange={setActivePage}
         onOpenHelp={() => setIsOnboardingOpen(true)}
         onExitDemo={() => setIsDemoMode(false)}
@@ -616,11 +542,7 @@ export default function CoursePlannerWebApp() {
             importStatus={importStatus}
             importError={importError}
             canRunManualSearch={canRunManualSearch}
-            pendingSelectionCredits={pendingSelectionCredits}
-            completedRequirements={completedRequirements}
-            requirementStatuses={requirementStatuses}
-            pendingSelectionNames={pendingSelectionNames}
-            activeSemesterCredits={activeSemesterCredits}
+            virtualCourseCredits={activeSemesterCredits}
             activeSemesterId={SELECTION_PLAN_SEMESTER_ID}
             onQuerySemesterChange={handleQuerySemesterChange}
             onManualModeChange={handleManualModeChange}
@@ -634,12 +556,9 @@ export default function CoursePlannerWebApp() {
             onResetFilters={resetCourseSearchFilters}
             onPdfUpload={(file) => void handlePdfUpload(file)}
             onExportResults={exportCourseResults}
-            onAddRequirement={addOfferingAsRequirement}
-            onScheduleOffering={addCourseToSemester}
             officialActionCourseNo={officialActionCourseNo}
-            onOfficialRegister={(offering) => void submitOfficialSelectionCourse('waitlist', offering.course_no, offering.course_name)}
-            onOpenRequirement={(requirement) => void scheduleRequirementOrChooseOffering(requirement)}
-            onDeleteRequirement={deleteRequirement}
+            onAddSelectionCourse={(offering) => void submitSelectionCourse(offering)}
+            onDeleteVirtualCourse={deleteSelectionCourse}
             onOpenPlanning={() => setActivePage('planning')}
           />
         )}
@@ -651,7 +570,6 @@ export default function CoursePlannerWebApp() {
             activeSemester={selectionSemester}
             planningMode={planningMode}
             plannerMessage={plannerMessage}
-            requirementStatuses={requirementStatuses}
             officialSelection={officialSelection}
             officialSelectionStatus={officialSelectionStatus}
             officialActionCourseNo={officialActionCourseNo}
@@ -661,9 +579,6 @@ export default function CoursePlannerWebApp() {
             onJoinOfficialCourse={(courseNo, courseName) => void submitOfficialSelectionCourse('join', courseNo, courseName)}
             onRemoveOfficialCourse={(courseNo, courseName) => void submitOfficialSelectionCourse('remove', courseNo, courseName)}
             onSaveOfficialOrder={(orderedCourseNos) => void saveOfficialSelectionOrder(orderedCourseNos)}
-            onOpenRequirement={(requirement) => void scheduleRequirementOrChooseOffering(requirement)}
-            onDeleteRequirement={deleteRequirement}
-            onMoveRequirement={moveRequirement}
             onMoveCourse={moveSelectionCourse}
             onDeleteCourse={deleteSelectionCourse}
           />

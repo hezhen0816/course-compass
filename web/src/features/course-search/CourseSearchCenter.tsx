@@ -1,9 +1,8 @@
 import { FileText, Loader2, Upload } from 'lucide-react';
-import type { AppData, Course, CourseSearchResult, CourseSemesterInfo, PendingRequirement } from '../../types';
+import type { AppData, Course, CourseSearchResult, CourseSemesterInfo } from '../../types';
 import {
   type CapacityFilter,
   type ManualSearchSummary,
-  type RequirementStatus,
   type SearchMode,
   capacityLabel,
   capacityStatus,
@@ -12,11 +11,9 @@ import {
   findConflicts,
   findScheduledCourseByOffering,
   formatCredits,
-  normalizeName,
   parseNodeSlots,
   requirementLabel,
 } from '../../domain/planner';
-import { RequirementRow } from '../planning/PlanningWorkspace';
 
 type CourseSearchCenterProps = {
   data: AppData;
@@ -38,11 +35,7 @@ type CourseSearchCenterProps = {
   importStatus: 'idle' | 'loading' | 'error';
   importError: string;
   canRunManualSearch: boolean;
-  pendingSelectionCredits: number;
-  completedRequirements: number;
-  requirementStatuses: Map<string, RequirementStatus>;
-  pendingSelectionNames: Set<string>;
-  activeSemesterCredits: number;
+  virtualCourseCredits: number;
   activeSemesterId: string;
   onQuerySemesterChange: (semester: string) => void;
   onManualModeChange: (mode: SearchMode) => void;
@@ -56,12 +49,9 @@ type CourseSearchCenterProps = {
   onResetFilters: () => void;
   onPdfUpload: (file: File | undefined) => void | Promise<void>;
   onExportResults: () => void;
-  onAddRequirement: (offering: CourseSearchResult) => void;
-  onScheduleOffering: (offering: CourseSearchResult) => void;
   officialActionCourseNo: string | null;
-  onOfficialRegister: (offering: CourseSearchResult) => void;
-  onOpenRequirement: (requirement: PendingRequirement) => void;
-  onDeleteRequirement: (requirementId: string) => void;
+  onAddSelectionCourse: (offering: CourseSearchResult) => void;
+  onDeleteVirtualCourse: (courseId: string) => void;
   onOpenPlanning: () => void;
 };
 
@@ -85,11 +75,7 @@ export function CourseSearchCenter({
   importStatus,
   importError,
   canRunManualSearch,
-  pendingSelectionCredits,
-  completedRequirements,
-  requirementStatuses,
-  pendingSelectionNames,
-  activeSemesterCredits,
+  virtualCourseCredits,
   activeSemesterId,
   onQuerySemesterChange,
   onManualModeChange,
@@ -103,14 +89,12 @@ export function CourseSearchCenter({
   onResetFilters,
   onPdfUpload,
   onExportResults,
-  onAddRequirement,
-  onScheduleOffering,
   officialActionCourseNo,
-  onOfficialRegister,
-  onOpenRequirement,
-  onDeleteRequirement,
+  onAddSelectionCourse,
+  onDeleteVirtualCourse,
   onOpenPlanning,
 }: CourseSearchCenterProps) {
+  const virtualCourses = data.selectionPlan?.courses || [];
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_300px]">
       <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -268,7 +252,7 @@ export function CourseSearchCenter({
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-slate-950">課程查詢中心</h2>
-            <p className="mt-1 text-sm text-slate-500">查詢官方開課資料，加入待選清單，再交給選課工作台排序與檢查。</p>
+            <p className="mt-1 text-sm text-slate-500">查詢官方開課資料，加入官方選課清單；若官方拒絕，會以虛擬加入標示在課表上。</p>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <span>
@@ -327,12 +311,9 @@ export function CourseSearchCenter({
                   key={`${offering.course_no}-${offering.node}-${offering.teacher}`}
                   offering={offering}
                   conflicts={findConflicts(offering, data, activeSemesterId)}
-                  alreadyAdded={Boolean(findScheduledCourseByOffering(offering, data, activeSemesterId))}
-                  alreadyPending={pendingSelectionNames.has(normalizeName(offering.course_name))}
+                  alreadyVirtual={Boolean(findScheduledCourseByOffering(offering, data, activeSemesterId))}
                   officialActionCourseNo={officialActionCourseNo}
-                  onAddRequirement={() => onAddRequirement(offering)}
-                  onSchedule={() => onScheduleOffering(offering)}
-                  onOfficialRegister={() => onOfficialRegister(offering)}
+                  onAddSelectionCourse={() => onAddSelectionCourse(offering)}
                 />
               ))}
             </tbody>
@@ -343,35 +324,33 @@ export function CourseSearchCenter({
       <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-start justify-between border-b border-slate-100 p-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">待選清單 ({data.pendingRequirements.length})</h2>
-            <p className="mt-1 text-xs text-slate-500">可用學分：{formatCredits(pendingSelectionCredits)} 學分</p>
+            <h2 className="text-base font-semibold text-slate-900">虛擬加入 ({virtualCourses.length})</h2>
+            <p className="mt-1 text-xs text-slate-500">未被官方正式接受的課程。</p>
           </div>
           <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-            {completedRequirements} 已完成
+            明確標注
           </span>
         </div>
         <div className="max-h-[640px] overflow-y-auto p-4">
-          {data.pendingRequirements.length === 0 ? (
+          {virtualCourses.length === 0 ? (
             <div className="rounded-md border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-              從查詢結果加入課程，或上傳 PDF 產生待修需求。
+              官方拒絕或需要加簽追蹤的課程會出現在這裡。
             </div>
           ) : (
             <div className="space-y-3">
-              {data.pendingRequirements.map((requirement, index) => (
-                <RequirementRow
-                  key={requirement.id}
-                  requirement={requirement}
-                  status={requirementStatuses.get(requirement.id)}
-                  onOpen={() => onOpenRequirement(requirement)}
-                  onDelete={() => onDeleteRequirement(requirement.id)}
+              {virtualCourses.map((course, index) => (
+                <VirtualCourseCard
+                  key={course.id}
+                  course={course}
                   rank={index + 1}
+                  onDelete={() => onDeleteVirtualCourse(course.id)}
                 />
               ))}
             </div>
           )}
         </div>
         <div className="space-y-2 border-t border-slate-100 p-4">
-          <p className="text-xs text-slate-500">本地草稿學分：{formatCredits(activeSemesterCredits)} 學分</p>
+          <p className="text-xs text-slate-500">虛擬課程學分：{formatCredits(virtualCourseCredits)} 學分</p>
           <button
             onClick={onOpenPlanning}
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-blue-700"
@@ -382,7 +361,7 @@ export function CourseSearchCenter({
             disabled
             className="w-full cursor-not-allowed rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400"
           >
-            待選清單已自動儲存
+            虛擬清單已自動儲存
           </button>
         </div>
       </aside>
@@ -393,21 +372,15 @@ export function CourseSearchCenter({
 function CourseResultRow({
   offering,
   conflicts,
-  alreadyAdded,
-  alreadyPending,
+  alreadyVirtual,
   officialActionCourseNo,
-  onAddRequirement,
-  onSchedule,
-  onOfficialRegister,
+  onAddSelectionCourse,
 }: {
   offering: CourseSearchResult;
   conflicts: Course[];
-  alreadyAdded: boolean;
-  alreadyPending: boolean;
+  alreadyVirtual: boolean;
   officialActionCourseNo: string | null;
-  onAddRequirement: () => void;
-  onSchedule: () => void;
-  onOfficialRegister: () => void;
+  onAddSelectionCourse: () => void;
 }) {
   const slots = parseNodeSlots(offering.node);
   const status = capacityStatus(offering);
@@ -417,10 +390,9 @@ function CourseResultRow({
       <td className="border-b border-slate-100 px-3 py-3 font-medium text-blue-600">{offering.course_no || '未列'}</td>
       <td className="border-b border-slate-100 px-3 py-3">
         <div className="font-semibold text-slate-900">{offering.course_name}</div>
-        <div className="mt-1 flex flex-wrap gap-1">
+          <div className="mt-1 flex flex-wrap gap-1">
           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">{requirementLabel(offering.require_option)}</span>
-          {alreadyAdded && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">已排入</span>}
-          {alreadyPending && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">已待選</span>}
+          {alreadyVirtual && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">已虛擬加入</span>}
           {conflicts.length > 0 && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">衝堂</span>}
         </div>
       </td>
@@ -441,29 +413,61 @@ function CourseResultRow({
       <td className="border-b border-slate-100 px-3 py-3">
         <div className="flex justify-end gap-2">
           <button
-            onClick={onAddRequirement}
-            disabled={alreadyPending}
-            className="rounded-md border border-blue-300 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-          >
-            {alreadyPending ? '已待選' : '本地待選'}
-          </button>
-          <button
-            onClick={onSchedule}
-            disabled={alreadyAdded}
-            className="rounded-md border border-emerald-300 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-          >
-            {alreadyAdded ? '已加入' : '本地草稿'}
-          </button>
-          <button
-            onClick={onOfficialRegister}
-            disabled={!offering.course_no || isOfficialActionLoading}
-            className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+            onClick={onAddSelectionCourse}
+            disabled={!offering.course_no || isOfficialActionLoading || alreadyVirtual}
+            className="inline-flex items-center gap-1 rounded-md border border-blue-300 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
           >
             {isOfficialActionLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-            {isOfficialActionLoading ? '送出中' : '送官方待選'}
+            {isOfficialActionLoading ? '處理中' : alreadyVirtual ? '已虛擬加入' : '加入選課清單'}
           </button>
         </div>
       </td>
     </tr>
+  );
+}
+
+function VirtualCourseCard({
+  course,
+  rank,
+  onDelete,
+}: {
+  course: Course;
+  rank: number;
+  onDelete: () => void;
+}) {
+  const slots = course.scheduledOffering?.slots || [];
+  return (
+    <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-700">
+          {rank}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-slate-900">{course.name}</p>
+            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-amber-700">
+              虛擬
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-600">
+            {formatCredits(course.credits)} 學分
+            {course.scheduledOffering?.teacher ? `・${course.scheduledOffering.teacher}` : ''}
+          </p>
+          <p className="mt-1 truncate text-xs text-slate-600">
+            {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}
+          </p>
+          <p className="mt-2 line-clamp-2 text-xs text-amber-800">
+            {course.virtualSelection?.reason || '尚未被官方正式接受。'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="rounded-md border border-amber-200 bg-white px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+        >
+          移除
+        </button>
+      </div>
+    </div>
   );
 }

@@ -55,6 +55,11 @@ export interface Course {
   sourceRequirementId?: string;
   sourceSetId?: string;
   scheduledOffering?: ScheduledOffering;
+  virtualSelection?: {
+    status: 'rejected' | 'manual';
+    reason: string;
+    createdAt: string;
+  };
 }
 
 export interface Semester {
