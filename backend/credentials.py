@@ -67,14 +67,25 @@ def _fernet() -> Fernet:
     return Fernet(base64.urlsafe_b64encode(digest))
 
 
+def encrypt_sensitive_value(value: str) -> str:
+    return _fernet().encrypt(value.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_sensitive_value(token: str) -> str:
+    try:
+        return _fernet().decrypt(token.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise CredentialStoreError("已保存的敏感資料無法解密，請重新保存。") from exc
+
+
 def encrypt_school_password(password: str) -> str:
-    return _fernet().encrypt(password.encode("utf-8")).decode("utf-8")
+    return encrypt_sensitive_value(password)
 
 
 def decrypt_school_password(token: str) -> str:
     try:
-        return _fernet().decrypt(token.encode("utf-8")).decode("utf-8")
-    except InvalidToken as exc:
+        return decrypt_sensitive_value(token)
+    except CredentialStoreError as exc:
         raise CredentialStoreError("已保存的校務密碼無法解密，請重新保存帳密。") from exc
 
 

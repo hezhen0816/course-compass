@@ -38,5 +38,5 @@ npm run ios:build
 ## 注意事項
 
 - iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`
-- 校務密碼會在同步成功後交給後端 credential API 加密保存於 `public.school_credentials`；後續同步可只輸入校務帳號，由後端使用已保存帳密
+- 校務密碼會在同步成功後交給後端 credential API 加密保存於 `public.school_credentials`；官方選課 session 由後端加密保存於 `app_private.school_sessions`，後續同步可只輸入校務帳號，由後端重用 session 或使用已保存帳密重新登入
 - iOS 端透過 `BackendServiceBaseURL` 使用 Railway 上的同步服務，不需要手動輸入 IP

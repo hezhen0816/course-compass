@@ -44,6 +44,7 @@
 - 學分規劃存於 `public.user_data`
 - iOS 額外的同步快照由後端寫入
 - Web/backend 的校務帳密保存改由 `public.school_credentials` 保存加密密文，並只開放 `service_role` 存取
+- 官方選課 session cookie/state 由後端加密保存到 `app_private.school_sessions`，透過 service-role-only RPC 存取
 - `user_data.content.settings` 目前使用的欄位鍵：
   - `school_account`
   - `reminder_minutes`
@@ -112,7 +113,7 @@ NTUST_VERIFY_SSL=false
 - `SUPABASE_SERVICE_ROLE_KEY` 只給 Python 後端使用
 - iOS 不應直接持有 `service_role`
 - `SCHOOL_CREDENTIALS_ENCRYPTION_SECRET` 只給 Python 後端使用，用於加解密 `public.school_credentials.password_ciphertext`；不可使用 `.env.example` placeholder，長度需至少 32 字元
-- Web 不會讀取或保存校務密碼明文；官方選課 session 過期時由後端使用已保存密文重新登入
+- Web 不會讀取或保存校務密碼明文；官方選課 session 會由後端加密保存，過期或失效時由後端使用已保存密文重新登入
 - iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`；production legacy plaintext 已由 `20260613031804_remove_legacy_school_password_from_user_data.sql` 清除，使用者下次輸入密碼並勾選保存後會寫入 `public.school_credentials`
 
 資料表與快照 schema 在 [backend/supabase_schema.sql](backend/supabase_schema.sql)，migration 在 [supabase/migrations](supabase/migrations)。
@@ -127,7 +128,7 @@ NTUST_VERIFY_SSL=false
 - `POST /api/history/import`：匯入歷史修課紀錄並保存快照；可用 request password，或帶 Authorization 使用已保存帳密
 - `GET /api/tr-rooms/status`：查詢目前或下一節 TR 教室使用狀態
 - `POST /api/moodle/assignments/sync`：同步 Moodle 待繳事項快照；可用 request password，或帶 Authorization 使用已保存帳密
-- `POST /api/official-selection/a02/*`：使用者明確確認後送出官方初選操作；mutating request 需帶 `confirmed: true`，不做自動搶課、輪詢或排程送出
+- `POST /api/official-selection/a02/*`：使用者明確確認後送出官方初選操作；mutating request 需帶 `confirmed: true`，後端會重用已保存官方 session 或用已保存帳密重新登入，但不做自動搶課、輪詢或排程送出
 
 ## 驗證
 
@@ -145,7 +146,7 @@ npm run ios:build
 
 ### 驗證 production backend
 
-Vercel Web 只負責前端，官方選課送出能力依賴 Railway backend。部署後用以下指令確認 production backend 已包含校務帳密與官方初選 API：
+Vercel Web 只負責前端，官方選課送出能力依賴 Railway backend。部署後用以下指令確認 production backend 已包含校務帳密、官方 session 持久化與官方初選 API：
 
 ```bash
 bash scripts/python.sh scripts/verify_production_backend.py

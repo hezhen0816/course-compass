@@ -51,6 +51,8 @@ def verify_backend(base_url: str) -> list[str]:
     else:
         if capabilities.get("school_credentials") is not True:
             issues.append("/health missing school_credentials capability")
+        if capabilities.get("school_sessions") is not True:
+            issues.append("/health missing school_sessions capability")
         if capabilities.get("official_selection") is not True:
             issues.append("/health missing official_selection capability")
 

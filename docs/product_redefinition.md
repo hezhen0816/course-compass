@@ -110,6 +110,7 @@
 - 不可用前端可取得的金鑰做假加密後存 Supabase。
 - 校務密碼由後端使用伺服器端金鑰加密後保存到 `public.school_credentials`。
 - `public.school_credentials` 只開放 `service_role` 存取；Web/iOS 只能透過 backend credential API 查詢保存狀態、保存或刪除。
+- 官方選課 session cookie/state 由後端使用同一組伺服器端金鑰加密後保存到 `app_private.school_sessions`，Web/iOS 不會直接讀取。
 - 既有 `user_data.content.settings.school_password` 已由 migration 清除；若使用者尚未重新保存密碼，後續同步或官方送出會要求再輸入一次，成功保存後才寫入 `public.school_credentials`。
 
 ## 官方選課整合邊界
@@ -132,7 +133,7 @@
 
 已完成：
 - 使用者確認式官方 POST adapter。
-- 校務帳密後端加密保存與 session 過期後重新登入。
+- 校務帳密與官方選課 session 後端加密保存；session 過期或失效後只在使用者前台同步/操作時重新登入。
 - Web/iOS 不再新寫入 `user_data.content.settings.school_password`，production legacy plaintext 也已清除。
 
 後續順序：

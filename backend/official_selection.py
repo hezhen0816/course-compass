@@ -8,6 +8,7 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup, Tag
+from requests.cookies import create_cookie
 
 try:
     from .config import (
@@ -104,6 +105,62 @@ class OfficialSelectionClient:
             if page_response.url.rstrip("/") != INITIAL_SELECTION_URL.rstrip("/"):
                 page_response = self._get_workspace_page(verify_ssl)
             return self._workspace_payload(page_response, verify_ssl)
+
+    def fetch_current_a02_workspace(self, verify_ssl: bool) -> dict[str, Any]:
+        with self.lock:
+            self.last_used_at = time.time()
+            return self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
+
+    def export_session_state(self) -> dict[str, Any]:
+        cookies: list[dict[str, Any]] = []
+        for cookie in self.session.cookies:
+            cookies.append(
+                {
+                    "name": cookie.name,
+                    "value": cookie.value,
+                    "domain": cookie.domain,
+                    "path": cookie.path,
+                    "expires": cookie.expires,
+                    "secure": cookie.secure,
+                    "rest": dict(getattr(cookie, "_rest", {}) or {}),
+                }
+            )
+        return {
+            "cookies": cookies,
+            "is_logged_in": self.is_logged_in,
+            "saved_at": now().isoformat(),
+        }
+
+    def restore_session_state(self, session_state: dict[str, Any]) -> bool:
+        cookies = session_state.get("cookies")
+        if not isinstance(cookies, list) or not cookies:
+            return False
+
+        self.session.cookies.clear()
+        restored = 0
+        for raw_cookie in cookies:
+            if not isinstance(raw_cookie, dict):
+                continue
+            name = str(raw_cookie.get("name") or "")
+            value = str(raw_cookie.get("value") or "")
+            if not name:
+                continue
+            expires = raw_cookie.get("expires")
+            cookie = create_cookie(
+                name=name,
+                value=value,
+                domain=str(raw_cookie.get("domain") or ""),
+                path=str(raw_cookie.get("path") or "/"),
+                secure=bool(raw_cookie.get("secure")),
+                expires=int(expires) if isinstance(expires, (int, float)) else None,
+                rest=raw_cookie.get("rest") if isinstance(raw_cookie.get("rest"), dict) else None,
+            )
+            self.session.cookies.set_cookie(cookie)
+            restored += 1
+
+        self.is_logged_in = bool(restored)
+        self.last_used_at = time.time()
+        return bool(restored)
 
     def join_course(self, course_no: str, verify_ssl: bool) -> dict[str, Any]:
         return self._submit_course_action(

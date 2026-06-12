@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -41,6 +42,12 @@ try:
     from .official_selection import get_official_selection_client
     from .planner_pdf import parse_requirement_pdf
     from .schedule import fetch_schedule
+    from .school_sessions import (
+        delete_school_session,
+        load_school_session_state,
+        official_session_expires_at,
+        save_school_session_state,
+    )
     from .snapshots import (
         ensure_schedule_entry_slot_times,
         load_history_snapshot,
@@ -97,6 +104,12 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from official_selection import get_official_selection_client
     from planner_pdf import parse_requirement_pdf
     from schedule import fetch_schedule
+    from school_sessions import (
+        delete_school_session,
+        load_school_session_state,
+        official_session_expires_at,
+        save_school_session_state,
+    )
     from snapshots import (
         ensure_schedule_entry_slot_times,
         load_history_snapshot,
@@ -121,9 +134,10 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     )
 
 
-API_VERSION = "0.2.0"
+API_VERSION = "0.3.0"
 OFFICIAL_SELECTION_CAPABILITIES = {
     "school_credentials": True,
+    "school_sessions": True,
     "official_selection": True,
     "official_selection_actions": [
         "sync",
@@ -181,6 +195,13 @@ def _authorization_context(authorization: str | None) -> tuple[str, str] | None:
     return _current_user_context(authorization)
 
 
+def _optional_authorization_context(authorization: str | None) -> tuple[str, str] | None:
+    try:
+        return _authorization_context(authorization)
+    except HTTPException:
+        return None
+
+
 def _saved_school_credentials(
     username: str,
     authorization: str | None,
@@ -234,12 +255,82 @@ def _ensure_official_session(
     password: str | None,
     authorization: str | None,
     verify_ssl: bool,
-) -> None:
-    resolved_password = _official_password(username, password, authorization)
-    if not resolved_password:
-        return
+) -> Any:
     client = get_official_selection_client(profile_key)
-    client.ensure_session(username, resolved_password, verify_ssl)
+    context = _optional_authorization_context(authorization)
+    if _reuse_official_session(client, username, context, verify_ssl):
+        return client
+
+    resolved_password = _official_password(username, password, authorization)
+    if resolved_password:
+        client.ensure_session(username, resolved_password, verify_ssl)
+        _persist_official_session(context, username, client)
+    return client
+
+
+def _persist_official_session(
+    context: tuple[str, str] | None,
+    username: str,
+    client: Any,
+) -> None:
+    if context is None:
+        return
+    try:
+        save_school_session_state(
+            context[0],
+            username,
+            client.export_session_state(),
+            expires_at=official_session_expires_at(),
+            last_keep_alive_at=datetime.now(timezone.utc),
+        )
+    except (CredentialStoreError, requests.RequestException, AttributeError, TypeError, ValueError):
+        return
+
+
+def _delete_official_session(context: tuple[str, str] | None, username: str | None = None) -> None:
+    if context is None:
+        return
+    try:
+        delete_school_session(context[0], username)
+    except (CredentialStoreError, requests.RequestException):
+        return
+
+
+def _reuse_official_session(
+    client: Any,
+    username: str,
+    context: tuple[str, str] | None,
+    verify_ssl: bool,
+) -> bool:
+    try:
+        if client.keep_alive(verify_ssl):
+            _persist_official_session(context, username, client)
+            return True
+    except (RuntimeError, requests.RequestException, AttributeError):
+        pass
+
+    if context is None:
+        return False
+
+    try:
+        saved_session = load_school_session_state(context[0], username)
+    except (CredentialStoreError, requests.RequestException):
+        return False
+    if not saved_session:
+        return False
+
+    try:
+        if not client.restore_session_state(saved_session["session_state"]):
+            _delete_official_session(context, username)
+            return False
+        if client.keep_alive(verify_ssl):
+            _persist_official_session(context, username, client)
+            return True
+    except (RuntimeError, requests.RequestException, AttributeError, KeyError, TypeError):
+        pass
+
+    _delete_official_session(context, username)
+    return False
 
 
 def _require_official_action_confirmation(confirmed: bool) -> None:
@@ -265,6 +356,7 @@ def save_school_credentials(
 ) -> SchoolCredentialsResponse:
     user_id, access_token = _current_user_context(authorization)
     try:
+        _delete_official_session((user_id, access_token), request.username.strip())
         return SchoolCredentialsResponse.model_validate(
             put_school_credentials(user_id, request.username.strip(), request.password, access_token)
         )
@@ -278,6 +370,7 @@ def save_school_credentials(
 def remove_saved_school_credentials(authorization: str | None = Header(default=None)) -> SchoolCredentialsResponse:
     user_id, access_token = _current_user_context(authorization)
     try:
+        _delete_official_session((user_id, access_token))
         return SchoolCredentialsResponse.model_validate(delete_school_credentials(user_id, access_token))
     except CredentialStoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -648,11 +741,16 @@ def sync_initial_selection_workspace(
 ) -> OfficialSelectionSyncResponse:
     try:
         profile_key = request.profile_key or request.username
-        password = _official_password(request.username, request.password, authorization)
-        if not password:
-            raise HTTPException(status_code=400, detail="請輸入校務密碼，或先保存校務帳密後再同步官方初選。")
+        context = _optional_authorization_context(authorization)
         client = get_official_selection_client(profile_key)
-        payload = client.fetch_a02_workspace(request.username, password, request.verify_ssl)
+        if _reuse_official_session(client, request.username, context, request.verify_ssl):
+            payload = client.fetch_current_a02_workspace(request.verify_ssl)
+        else:
+            password = _official_password(request.username, request.password, authorization)
+            if not password:
+                raise HTTPException(status_code=400, detail="請輸入校務密碼，或先保存校務帳密後再同步官方初選。")
+            payload = client.fetch_a02_workspace(request.username, password, request.verify_ssl)
+            _persist_official_session(context, request.username, client)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,
@@ -673,13 +771,17 @@ def keep_initial_selection_session_alive(
 ) -> dict[str, Any]:
     try:
         profile_key = request.profile_key or request.username
+        context = _optional_authorization_context(authorization)
         client = get_official_selection_client(profile_key)
-        session_valid = client.keep_alive(request.verify_ssl)
+        session_valid = _reuse_official_session(client, request.username, context, request.verify_ssl)
         if not session_valid:
             saved_credentials = _saved_school_credentials(request.username, authorization)
             if saved_credentials:
                 client.ensure_session(request.username, saved_credentials[1], request.verify_ssl)
                 session_valid = True
+                _persist_official_session(context, request.username, client)
+            else:
+                _delete_official_session(context, request.username)
         return {
             "profile_key": profile_key,
             "school_account": request.username,
@@ -700,9 +802,10 @@ def join_initial_selection_course(
     try:
         _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
-        client = get_official_selection_client(profile_key)
-        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
+        context = _optional_authorization_context(authorization)
+        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.join_course(request.course_no, request.verify_ssl)
+        _persist_official_session(context, request.username, client)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,
@@ -724,9 +827,10 @@ def add_initial_selection_waitlist_course(
     try:
         _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
-        client = get_official_selection_client(profile_key)
-        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
+        context = _optional_authorization_context(authorization)
+        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.add_course_to_waitlist(request.course_no, request.verify_ssl)
+        _persist_official_session(context, request.username, client)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,
@@ -748,9 +852,10 @@ def remove_initial_selection_course(
     try:
         _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
-        client = get_official_selection_client(profile_key)
-        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
+        context = _optional_authorization_context(authorization)
+        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.remove_course(request.course_no, request.verify_ssl)
+        _persist_official_session(context, request.username, client)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,
@@ -772,9 +877,10 @@ def reorder_initial_selection_courses(
     try:
         _require_official_action_confirmation(request.confirmed)
         profile_key = request.profile_key or request.username
-        client = get_official_selection_client(profile_key)
-        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
+        context = _optional_authorization_context(authorization)
+        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.reorder_registered_courses(request.ordered_course_nos, request.verify_ssl)
+        _persist_official_session(context, request.username, client)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,

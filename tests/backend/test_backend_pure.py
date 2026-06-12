@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import app as backend_app
-from backend import credentials
+from backend import credentials, school_sessions
 from backend import history, moodle, official_selection, planner_pdf, snapshots, tr_rooms
 from backend.schedule import find_latest_course_list_url, group_schedule_entries
 from scripts import migrate_legacy_school_credentials as legacy_credential_migration
@@ -87,6 +87,7 @@ def test_healthcheck_reports_official_selection_capabilities() -> None:
     assert payload["ok"] is True
     assert payload["version"] == backend_app.API_VERSION
     assert payload["capabilities"]["school_credentials"] is True
+    assert payload["capabilities"]["school_sessions"] is True
     assert payload["capabilities"]["official_selection"] is True
     assert set(payload["capabilities"]["official_selection_actions"]) == {
         "sync",
@@ -105,6 +106,7 @@ def test_production_backend_verifier_accepts_required_capabilities(monkeypatch) 
                 "ok": True,
                 "capabilities": {
                     "school_credentials": True,
+                    "school_sessions": True,
                     "official_selection": True,
                 },
             }
@@ -294,6 +296,30 @@ def test_official_selection_arraydata_form_rows_matches_saveidx_shape() -> None:
     ]
 
 
+def test_official_selection_client_exports_and_restores_session_cookies() -> None:
+    client = official_selection.OfficialSelectionClient()
+    client.session.cookies.set(
+        "OfficialSelection.Auth",
+        "cookie-secret",
+        domain="courseselection.ntust.edu.tw",
+        path="/",
+    )
+    client.is_logged_in = True
+
+    restored = official_selection.OfficialSelectionClient()
+
+    assert restored.restore_session_state(client.export_session_state()) is True
+    assert (
+        restored.session.cookies.get(
+            "OfficialSelection.Auth",
+            domain="courseselection.ntust.edu.tw",
+            path="/",
+        )
+        == "cookie-secret"
+    )
+    assert restored.is_logged_in is True
+
+
 def test_official_selection_join_refreshes_workspace_before_and_after_post(monkeypatch) -> None:
     events: list[object] = []
     workspace_html = """
@@ -350,8 +376,14 @@ def test_official_selection_action_uses_saved_credentials_for_session(monkeypatc
     calls: list[tuple[str, str, str, bool] | tuple[str, str]] = []
 
     class FakeOfficialSelectionClient:
+        def keep_alive(self, verify_ssl: bool) -> bool:
+            return False
+
         def ensure_session(self, username: str, password: str, verify_ssl: bool) -> None:
             calls.append(("ensure_session", username, password, verify_ssl))
+
+        def export_session_state(self) -> dict[str, object]:
+            return {"cookies": [{"name": "session", "value": "saved"}]}
 
         def add_course_to_waitlist(self, course_no: str, verify_ssl: bool) -> dict[str, object]:
             calls.append(("add_course_to_waitlist", course_no))
@@ -388,6 +420,8 @@ def test_official_selection_action_uses_saved_credentials_for_session(monkeypatc
         },
     )
     monkeypatch.setattr(backend_app, "get_official_selection_client", lambda profile_key: FakeOfficialSelectionClient())
+    monkeypatch.setattr(backend_app, "load_school_session_state", lambda user_id, username: None)
+    monkeypatch.setattr(backend_app, "save_school_session_state", lambda *args, **kwargs: None)
     client = TestClient(backend_app.app)
 
     response = client.post(
@@ -407,6 +441,75 @@ def test_official_selection_action_uses_saved_credentials_for_session(monkeypatc
     assert calls == [
         ("ensure_session", "B11430207", "saved-password", False),
         ("add_course_to_waitlist", "CS2002302"),
+    ]
+
+
+def test_official_selection_sync_restores_saved_session_without_password(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class FakeOfficialSelectionClient:
+        restored = False
+
+        def keep_alive(self, verify_ssl: bool) -> bool:
+            calls.append(f"keep_alive:{self.restored}")
+            return self.restored
+
+        def restore_session_state(self, session_state: dict[str, object]) -> bool:
+            calls.append("restore_session_state")
+            self.restored = True
+            return True
+
+        def fetch_current_a02_workspace(self, verify_ssl: bool) -> dict[str, object]:
+            calls.append("fetch_current_a02_workspace")
+            return {
+                "source_url": "https://example.test/a02",
+                "page_title": "初選登記選課",
+                "synced_at": "2026-06-13T10:00:00+08:00",
+                "session_valid": True,
+                "available_count": 0,
+                "registered_count": 0,
+                "available_courses": [],
+                "registered_courses": [],
+                "schedule_rows": [],
+                "selection_list_rows": [],
+                "required_preset_rows": [],
+                "notices": [],
+            }
+
+        def export_session_state(self) -> dict[str, object]:
+            return {"cookies": [{"name": "session", "value": "restored"}]}
+
+    def fail_if_credentials_used(user_id: str, access_token: str) -> dict[str, object]:
+        raise AssertionError("saved password should not be needed when DB session is valid")
+
+    monkeypatch.setattr(backend_app, "_authorization_context", lambda authorization: ("user-1", "token-1"))
+    monkeypatch.setattr(backend_app, "get_school_credentials_secret", fail_if_credentials_used)
+    monkeypatch.setattr(backend_app, "get_official_selection_client", lambda profile_key: FakeOfficialSelectionClient())
+    monkeypatch.setattr(
+        backend_app,
+        "load_school_session_state",
+        lambda user_id, username: {"session_state": {"cookies": [{"name": "session", "value": "restored"}]}},
+    )
+    monkeypatch.setattr(backend_app, "save_school_session_state", lambda *args, **kwargs: None)
+    client = TestClient(backend_app.app)
+
+    response = client.post(
+        "/api/official-selection/a02/sync",
+        headers={"Authorization": "Bearer token-1"},
+        json={
+            "username": "B11430207",
+            "profile_key": "B11430207",
+            "verify_ssl": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["session_valid"] is True
+    assert calls == [
+        "keep_alive:False",
+        "restore_session_state",
+        "keep_alive:True",
+        "fetch_current_a02_workspace",
     ]
 
 
@@ -670,6 +773,67 @@ def test_school_credentials_encryption_round_trip(monkeypatch) -> None:
 
     assert token != "saved-password"
     assert credentials.decrypt_school_password(token) == "saved-password"
+
+
+def test_school_session_store_round_trip_uses_service_role_rpc(monkeypatch) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class FakeRPCResponse:
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> object:
+            return self._payload
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: int) -> FakeRPCResponse:
+        calls.append((url, json))
+        if url.endswith("/get_school_session"):
+            return FakeRPCResponse(
+                [
+                    {
+                        "school_account": "B11430207",
+                        "session_ciphertext": "encrypted-session",
+                        "key_version": 1,
+                        "expires_at": "2026-06-13T04:00:00Z",
+                        "last_keep_alive_at": "2026-06-13T03:30:00Z",
+                    }
+                ]
+            )
+        return FakeRPCResponse(None)
+
+    monkeypatch.setattr(school_sessions, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(school_sessions, "_service_role_headers", lambda json_body=False: {"Authorization": "Bearer service"})
+    monkeypatch.setattr(school_sessions, "encrypt_school_session_state", lambda state: "encrypted-session")
+    monkeypatch.setattr(
+        school_sessions,
+        "decrypt_school_session_state",
+        lambda ciphertext: {"cookies": [{"name": "session", "value": "restored"}]},
+    )
+    monkeypatch.setattr(school_sessions.requests, "post", fake_post)
+
+    school_sessions.save_school_session_state(
+        "00000000-0000-0000-0000-000000000001",
+        "B11430207",
+        {"cookies": [{"name": "session", "value": "secret"}]},
+    )
+    loaded = school_sessions.load_school_session_state(
+        "00000000-0000-0000-0000-000000000001",
+        "B11430207",
+    )
+
+    assert calls[0][0] == "https://example.supabase.co/rest/v1/rpc/upsert_school_session"
+    assert calls[0][1]["p_school_account"] == "B11430207"
+    assert calls[0][1]["p_session_ciphertext"] == "encrypted-session"
+    assert calls[1][0] == "https://example.supabase.co/rest/v1/rpc/get_school_session"
+    assert loaded == {
+        "school_account": "B11430207",
+        "session_state": {"cookies": [{"name": "session", "value": "restored"}]},
+        "expires_at": "2026-06-13T04:00:00Z",
+        "last_keep_alive_at": "2026-06-13T03:30:00Z",
+    }
 
 
 def test_school_credentials_status_reads_legacy_plaintext_password(monkeypatch) -> None:
