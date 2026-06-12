@@ -2,6 +2,7 @@ import type {
   CourseSearchResult,
   CourseSemesterInfo,
   HistoryImportResponse,
+  OfficialSelectionSyncResponse,
   RequirementPdfImportResponse,
   ScheduleSyncResponse,
 } from './types';
@@ -66,6 +67,19 @@ export function importAcademicHistory(username: string, password: string): Promi
       password,
       profile_key: username,
       persist_to_supabase: false,
+      verify_ssl: false,
+    }),
+  });
+}
+
+export function syncOfficialInitialSelection(username: string, password: string): Promise<OfficialSelectionSyncResponse> {
+  return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username,
+      password,
+      profile_key: username,
       verify_ssl: false,
     }),
   });

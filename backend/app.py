@@ -15,6 +15,8 @@ try:
         HistoryImportResponse,
         MoodleAssignmentsRequest,
         MoodleAssignmentsResponse,
+        OfficialSelectionSyncRequest,
+        OfficialSelectionSyncResponse,
         CourseSearchResult,
         CourseSemesterInfo,
         RequirementPdfImportResponse,
@@ -23,6 +25,7 @@ try:
         TRRoomStatusResponse,
     )
     from .moodle import fetch_moodle_assignments
+    from .official_selection import get_official_selection_client
     from .planner_pdf import parse_requirement_pdf
     from .schedule import fetch_schedule
     from .snapshots import (
@@ -55,6 +58,8 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         HistoryImportResponse,
         MoodleAssignmentsRequest,
         MoodleAssignmentsResponse,
+        OfficialSelectionSyncRequest,
+        OfficialSelectionSyncResponse,
         CourseSearchResult,
         CourseSemesterInfo,
         RequirementPdfImportResponse,
@@ -63,6 +68,7 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         TRRoomStatusResponse,
     )
     from moodle import fetch_moodle_assignments
+    from official_selection import get_official_selection_client
     from planner_pdf import parse_requirement_pdf
     from schedule import fetch_schedule
     from snapshots import (
@@ -455,3 +461,22 @@ def get_latest_moodle_assignments(profile_key: str) -> MoodleAssignmentsResponse
         raise
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/official-selection/a02/sync", response_model=OfficialSelectionSyncResponse)
+def sync_initial_selection_workspace(request: OfficialSelectionSyncRequest) -> OfficialSelectionSyncResponse:
+    try:
+        profile_key = request.profile_key or request.username
+        client = get_official_selection_client(profile_key)
+        payload = client.fetch_a02_workspace(request.username, request.password, request.verify_ssl)
+        return OfficialSelectionSyncResponse.model_validate(
+            {
+                **payload,
+                "profile_key": profile_key,
+                "school_account": request.username,
+            }
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

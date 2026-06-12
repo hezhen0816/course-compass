@@ -10,6 +10,7 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 BASE_URL = "https://courseselection.ntust.edu.tw"
 ENTRY_URL = f"{BASE_URL}/"
 VERIFY_URL = f"{BASE_URL}/First/A06/A06"
+INITIAL_SELECTION_URL = f"{BASE_URL}/First/A02/A02"
 COURSE_LIST_URL = f"{BASE_URL}/ChooseList/D01/D01"
 EDU_NEED_URL = "https://stu.ntust.edu.tw/stueduneed/Edu_Need.aspx"
 SCORE_DISPLAY_ALL_URL = "https://stuinfosys.ntust.edu.tw/StuScoreQueryServ/StuScoreQuery/DisplayAll"

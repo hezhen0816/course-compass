@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import app as backend_app
-from backend import history, moodle, planner_pdf, snapshots, tr_rooms
+from backend import history, moodle, official_selection, planner_pdf, snapshots, tr_rooms
 from backend.schedule import find_latest_course_list_url, group_schedule_entries
 
 
@@ -76,6 +76,53 @@ def test_find_latest_course_list_url_falls_back_without_semester_link() -> None:
         fallback_url,
         fallback_url,
     ) == fallback_url
+
+
+def test_official_selection_parser_reads_a02_workspace_div_tables() -> None:
+    html = """
+    <html>
+      <head><title>初選登記選課</title></head>
+      <body>
+        <div class="panel">請直接拖拉「登記志願清單」中的課程來變更志願序。</div>
+        <div id="draggable">
+          <div class="table-row">
+            <div class="table-cell">課碼</div>
+            <div class="table-cell">課程名稱</div>
+            <div class="table-cell">上課教師</div>
+            <div class="table-cell">加入登記</div>
+          </div>
+          <div class="table-row">
+            <div class="table-cell">PE127A022</div>
+            <div class="table-cell">體育(撞球)(上)</div>
+            <div class="table-cell">蔡尚明</div>
+            <div class="table-cell"><span class="addbtn btn">加入登記</span></div>
+          </div>
+        </div>
+        <table id="cartTable">
+          <tr><td>志願序</td><td>課碼</td><td>課程名稱</td><td>取消加入</td></tr>
+          <tr><td>1</td><td>FE1581701</td><td>休閒英文</td><td>取消加入</td></tr>
+        </table>
+        <div id="loginModal">
+          <table>
+            <tr><th>節次</th><th>星期一</th><th>星期二</th></tr>
+            <tr><td>1</td><td></td><td>休閒英文<br>TR-312</td></tr>
+          </table>
+        </div>
+      </body>
+    </html>
+    """
+
+    parsed = official_selection.parse_a02_workspace(html)
+
+    assert parsed["page_title"] == "初選登記選課"
+    assert parsed["available_courses"] == [
+        {"course_no": "PE127A022", "course_name": "體育(撞球)(上)", "teacher": "蔡尚明"}
+    ]
+    assert parsed["registered_courses"] == [
+        {"priority": 1, "course_no": "FE1581701", "course_name": "休閒英文", "raw_priority": "1"}
+    ]
+    assert parsed["schedule_rows"] == [{"節次": "1", "星期一": "", "星期二": "休閒英文 TR-312"}]
+    assert parsed["notices"] == ["請直接拖拉「登記志願清單」中的課程來變更志願序。"]
 
 
 def test_tr_room_parsing_and_node_selection() -> None:

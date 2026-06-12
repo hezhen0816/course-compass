@@ -248,3 +248,33 @@ export interface HistoryImportResponse {
   summary_texts: string[];
   records: HistoryCourseRecord[];
 }
+
+export interface OfficialSelectionAvailableCourse {
+  course_no: string;
+  course_name: string;
+  teacher: string;
+}
+
+export interface OfficialSelectionRegisteredCourse {
+  priority?: number | null;
+  raw_priority: string;
+  course_no: string;
+  course_name: string;
+}
+
+export interface OfficialSelectionSyncResponse {
+  profile_key: string;
+  school_account: string;
+  source_url: string;
+  page_title: string;
+  synced_at: string;
+  session_valid: boolean;
+  available_count: number;
+  registered_count: number;
+  available_courses: OfficialSelectionAvailableCourse[];
+  registered_courses: OfficialSelectionRegisteredCourse[];
+  schedule_rows: Record<string, string>[];
+  selection_list_rows: Record<string, string>[];
+  required_preset_rows: Record<string, string>[];
+  notices: string[];
+}
