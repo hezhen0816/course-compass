@@ -1,14 +1,16 @@
 import React from 'react';
-import { GraduationCap, Settings, LogOut, CircleHelp, BookOpen, RefreshCw } from 'lucide-react';
+import { GraduationCap, LogOut, CircleHelp, BookOpen } from 'lucide-react';
 import { supabase } from '../supabase';
+
+export type AppPage = 'course-search' | 'planning' | 'graduation' | 'history' | 'settings';
 
 interface NavbarProps {
   userEmail: string;
   syncStatus: 'idle' | 'saving' | 'saved' | 'error';
   isDemoMode: boolean;
+  activePage: AppPage;
   pendingCount: number;
-  onOpenSchoolSync: () => void;
-  onOpenSettings: () => void;
+  onPageChange: (page: AppPage) => void;
   onOpenHelp: () => void;
   onExitDemo: () => void;
 }
@@ -17,9 +19,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   userEmail,
   syncStatus,
   isDemoMode,
+  activePage,
   pendingCount,
-  onOpenSchoolSync,
-  onOpenSettings,
+  onPageChange,
   onOpenHelp,
   onExitDemo,
 }) => {
@@ -33,12 +35,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     window.location.reload();
   };
 
-  const navItems = [
-    { label: '課程查詢', active: true },
-    { label: `課表規劃 ${pendingCount}`, active: false },
-    { label: '畢業門檻', active: false },
-    { label: '歷史修課', active: false },
-    { label: '設定', active: false },
+  const navItems: Array<{ page: AppPage; label: string }> = [
+    { page: 'course-search', label: '課程查詢' },
+    { page: 'planning', label: `課表規劃 ${pendingCount}` },
+    { page: 'graduation', label: '畢業門檻' },
+    { page: 'history', label: '歷史修課' },
+    { page: 'settings', label: '設定' },
   ];
 
   const syncText = syncStatus === 'saving'
@@ -70,14 +72,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="overflow-x-auto xl:flex-1">
             <div className="flex min-w-max items-center gap-5 text-sm font-medium">
               {navItems.map((item) => (
-                <span
-                  key={item.label}
+                <button
+                  key={item.page}
+                  onClick={() => onPageChange(item.page)}
                   className={`border-b-2 px-1 py-5 ${
-                    item.active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'
+                    activePage === item.page ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   {item.label}
-                </span>
+                </button>
               ))}
             </div>
           </div>
@@ -86,23 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className={`hidden text-xs xl:block ${syncStatus === 'error' ? 'text-red-600' : syncStatus === 'saved' ? 'text-emerald-600' : 'text-slate-500'}`}>
               {syncText}
             </div>
-            <button
-              onClick={onOpenSchoolSync}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-            >
-              <RefreshCw className="h-4 w-4" />
-              同步校務資料
-            </button>
-            <div className="grid grid-cols-4 items-center gap-1 sm:flex sm:w-auto">
-              <button
-                onClick={onOpenSettings}
-                className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-gray-600 transition-colors hover:bg-gray-100"
-                title="設定門檻"
-              >
-                <Settings className="h-4 w-4" />
-                <span className="hidden md:inline">設定門檻</span>
-              </button>
-
+            <div className="grid grid-cols-3 items-center gap-1 sm:flex sm:w-auto">
               <button
                 onClick={() => alert('新版規劃以左側待修池為主：可上傳雙主修 PDF、用課名或課碼搜尋開課，再加入待修或排入目前學期。')}
                 className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
