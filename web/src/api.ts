@@ -86,13 +86,17 @@ export function deleteSavedSchoolCredentials(accessToken: string): Promise<Schoo
   });
 }
 
-export function syncSchoolSchedule(username: string, password: string): Promise<ScheduleSyncResponse> {
+export function syncSchoolSchedule(
+  username: string,
+  password: string,
+  accessToken?: string,
+): Promise<ScheduleSyncResponse> {
   return apiRequest<ScheduleSyncResponse>('/api/schedule/sync', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(accessToken),
     body: JSON.stringify({
       username,
-      password,
+      ...(password ? { password } : {}),
       profile_key: username,
       persist_to_supabase: false,
       verify_ssl: false,
@@ -100,13 +104,17 @@ export function syncSchoolSchedule(username: string, password: string): Promise<
   });
 }
 
-export function importAcademicHistory(username: string, password: string): Promise<HistoryImportResponse> {
+export function importAcademicHistory(
+  username: string,
+  password: string,
+  accessToken?: string,
+): Promise<HistoryImportResponse> {
   return apiRequest<HistoryImportResponse>('/api/history/import', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(accessToken),
     body: JSON.stringify({
       username,
-      password,
+      ...(password ? { password } : {}),
       profile_key: username,
       persist_to_supabase: false,
       verify_ssl: false,

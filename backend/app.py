@@ -205,6 +205,13 @@ def _official_password(username: str, password: str | None, authorization: str |
     return saved_credentials[1] if saved_credentials else None
 
 
+def _required_school_password(username: str, password: str | None, authorization: str | None) -> str:
+    resolved_password = _official_password(username, password, authorization)
+    if not resolved_password:
+        raise HTTPException(status_code=400, detail="請輸入校務密碼，或先保存校務帳密後再同步。")
+    return resolved_password
+
+
 def _ensure_official_session(
     profile_key: str,
     username: str,
@@ -488,9 +495,13 @@ def get_tr_room_status(
 
 
 @app.post("/api/schedule/sync", response_model=SyncResponse)
-def sync_schedule(request: SyncRequest) -> SyncResponse:
+def sync_schedule(
+    request: SyncRequest,
+    authorization: str | None = Header(default=None),
+) -> SyncResponse:
     try:
-        payload = fetch_schedule(request.username, request.password, request.verify_ssl)
+        password = _required_school_password(request.username, request.password, authorization)
+        payload = fetch_schedule(request.username, password, request.verify_ssl)
         synced_at = now().isoformat()
         response_payload = {
             **payload,
@@ -531,9 +542,13 @@ def get_latest_schedule(profile_key: str) -> SyncResponse:
 
 
 @app.post("/api/history/import", response_model=HistoryImportResponse)
-def import_history(request: HistoryImportRequest) -> HistoryImportResponse:
+def import_history(
+    request: HistoryImportRequest,
+    authorization: str | None = Header(default=None),
+) -> HistoryImportResponse:
     try:
-        payload = fetch_history_records(request.username, request.password, request.verify_ssl)
+        password = _required_school_password(request.username, request.password, authorization)
+        payload = fetch_history_records(request.username, password, request.verify_ssl)
         response_payload = {
             **payload,
             "profile_key": request.profile_key or request.username,
@@ -569,9 +584,13 @@ def get_latest_history(profile_key: str) -> HistoryImportResponse:
 
 
 @app.post("/api/moodle/assignments/sync", response_model=MoodleAssignmentsResponse)
-def sync_moodle_assignments(request: MoodleAssignmentsRequest) -> MoodleAssignmentsResponse:
+def sync_moodle_assignments(
+    request: MoodleAssignmentsRequest,
+    authorization: str | None = Header(default=None),
+) -> MoodleAssignmentsResponse:
     try:
-        payload = fetch_moodle_assignments(request.username, request.password, request.verify_ssl)
+        password = _required_school_password(request.username, request.password, authorization)
+        payload = fetch_moodle_assignments(request.username, password, request.verify_ssl)
         response_payload = {
             **payload,
             "profile_key": request.profile_key or request.username,

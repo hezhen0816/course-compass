@@ -7,8 +7,8 @@ extension AppSessionStore {
         moodleAssignmentsErrorMessage = nil
         moodleAssignmentsNoticeMessage = nil
 
-        guard !username.isEmpty, !password.isEmpty else {
-            moodleAssignmentsErrorMessage = "請先輸入學校帳號與密碼"
+        guard !username.isEmpty else {
+            moodleAssignmentsErrorMessage = "請先輸入學校帳號"
             return
         }
 
@@ -17,10 +17,11 @@ extension AppSessionStore {
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            try await applyBackendAuthorization(to: &request)
             request.httpBody = try JSONEncoder().encode(
                 MoodleAssignmentsRequest(
                     username: username,
-                    password: password,
+                    password: password.nilIfEmpty,
                     profileKey: username,
                     persistToSupabase: true,
                     verifySSL: false
@@ -34,6 +35,8 @@ extension AppSessionStore {
             decoder.dateDecodingStrategy = .iso8601
             let payload = try decoder.decode(MoodleAssignmentsResponse.self, from: data)
             apply(payload: payload)
+            try await saveSchoolCredentialsIfNeeded(username: username, password: password)
+            schoolPassword = ""
         } catch {
             if Self.isCancellation(error) {
                 return

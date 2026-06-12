@@ -44,7 +44,7 @@
 - `user_data.content.settings` 目前使用的欄位鍵：
   - `school_account`
   - `reminder_minutes`
-  - `school_password` 僅視為舊 iOS 相容欄位，後續 iOS 重構應移除
+  - `school_password` 僅視為舊資料遷移欄位；Web/iOS 新寫入不應再使用
 
 ### Test Artifacts
 
@@ -105,7 +105,7 @@ NTUST_VERIFY_SSL=false
 - iOS 不應直接持有 `service_role`
 - `SCHOOL_CREDENTIALS_ENCRYPTION_SECRET` 只給 Python 後端使用，用於加解密 `public.school_credentials.password_ciphertext`；不可使用 `.env.example` placeholder，長度需至少 32 字元
 - Web 不會讀取或保存校務密碼明文；官方選課 session 過期時由後端使用已保存密文重新登入
-- iOS 仍有舊版 `school_password` 相容欄位；SQL migration 不會直接刪除 plaintext，後端會在下一次 authenticated credential use 時加密遷移到 `public.school_credentials` 並清除舊欄位
+- iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`；SQL migration 不會直接刪除既有 plaintext，後端會在下一次 authenticated credential use 時加密遷移到 `public.school_credentials` 並清除舊欄位
 
 資料表與快照 schema 在 [backend/supabase_schema.sql](/Users/hezhen/Project/course_planner/backend/supabase_schema.sql)，migration 在 [supabase/migrations](/Users/hezhen/Project/course_planner/supabase/migrations)。
 
@@ -114,11 +114,11 @@ NTUST_VERIFY_SSL=false
 - `GET /api/school-credentials`：讀取校務帳密保存狀態，不回傳密碼
 - `PUT /api/school-credentials`：由後端加密保存校務帳密
 - `DELETE /api/school-credentials`：清除已保存校務帳密
-- `POST /api/schedule/sync`：同步校務課表並保存快照
+- `POST /api/schedule/sync`：同步校務課表並保存快照；可用 request password，或帶 Authorization 使用已保存帳密
 - `GET /api/schedule/{profile_key}`：讀取最新課表快照
-- `POST /api/history/import`：匯入歷史修課紀錄並保存快照
+- `POST /api/history/import`：匯入歷史修課紀錄並保存快照；可用 request password，或帶 Authorization 使用已保存帳密
 - `GET /api/tr-rooms/status`：查詢目前或下一節 TR 教室使用狀態
-- `POST /api/moodle/assignments/sync`：同步 Moodle 待繳事項快照
+- `POST /api/moodle/assignments/sync`：同步 Moodle 待繳事項快照；可用 request password，或帶 Authorization 使用已保存帳密
 - `POST /api/official-selection/a02/*`：使用者明確確認後送出官方初選操作；mutating request 需帶 `confirmed: true`，不做自動搶課、輪詢或排程送出
 
 ## 驗證

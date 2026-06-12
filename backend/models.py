@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover
 
 class SyncRequest(BaseModel):
     username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    password: str | None = None
     profile_key: str | None = None
     persist_to_supabase: bool = True
     verify_ssl: bool = DEFAULT_VERIFY_SSL
@@ -20,7 +20,7 @@ class SyncRequest(BaseModel):
 
 class HistoryImportRequest(BaseModel):
     username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    password: str | None = None
     profile_key: str | None = None
     persist_to_supabase: bool = True
     verify_ssl: bool = DEFAULT_VERIFY_SSL
@@ -28,7 +28,7 @@ class HistoryImportRequest(BaseModel):
 
 class MoodleAssignmentsRequest(BaseModel):
     username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    password: str | None = None
     profile_key: str | None = None
     persist_to_supabase: bool = True
     verify_ssl: bool = DEFAULT_VERIFY_SSL

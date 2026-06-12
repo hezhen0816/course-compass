@@ -2,7 +2,7 @@ import Foundation
 
 struct ScheduleSyncRequest: Encodable {
     let username: String
-    let password: String
+    let password: String?
     let profileKey: String
     let persistToSupabase: Bool
     let verifySSL: Bool
@@ -18,7 +18,7 @@ struct ScheduleSyncRequest: Encodable {
 
 struct HistoryImportRequest: Encodable {
     let username: String
-    let password: String
+    let password: String?
     let profileKey: String
     let persistToSupabase: Bool
     let verifySSL: Bool
@@ -34,7 +34,7 @@ struct HistoryImportRequest: Encodable {
 
 struct MoodleAssignmentsRequest: Encodable {
     let username: String
-    let password: String
+    let password: String?
     let profileKey: String
     let persistToSupabase: Bool
     let verifySSL: Bool
@@ -46,6 +46,16 @@ struct MoodleAssignmentsRequest: Encodable {
         case persistToSupabase = "persist_to_supabase"
         case verifySSL = "verify_ssl"
     }
+}
+
+struct SchoolCredentialsSaveRequest: Encodable {
+    let username: String
+    let password: String
+}
+
+struct SchoolCredentialsStatusResponse: Decodable {
+    let username: String
+    let hasPassword: Bool
 }
 
 struct ScheduleSyncResponse: Decodable {
@@ -299,4 +309,3 @@ struct RemoteScheduleEntry: Decodable {
         accent = try container.decode(String.self, forKey: .accent)
     }
 }
-

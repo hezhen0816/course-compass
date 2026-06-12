@@ -578,6 +578,7 @@ export default function CoursePlannerWebApp() {
         try {
           await saveCredentialsIfNeeded(username, password);
           credentialMessage = '校務帳密已加密保存。';
+          setSchoolPassword('');
         } catch (error) {
           credentialMessage = `但帳密保存失敗：${error instanceof Error ? error.message : '未知錯誤'}`;
         }

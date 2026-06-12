@@ -108,12 +108,10 @@ struct CloudTargets: Codable {
 
 struct CloudUserSettings: Codable {
     let schoolAccount: String?
-    let schoolPassword: String?
     let reminderMinutes: Int?
 
     enum CodingKeys: String, CodingKey {
         case schoolAccount = "school_account"
-        case schoolPassword = "school_password"
         case reminderMinutes = "reminder_minutes"
     }
 }

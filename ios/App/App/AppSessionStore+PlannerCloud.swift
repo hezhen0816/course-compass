@@ -136,7 +136,6 @@ extension AppSessionStore {
             ),
             settings: CloudUserSettings(
                 schoolAccount: schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                schoolPassword: schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                 reminderMinutes: reminderMinutes
             )
         )
@@ -186,7 +185,7 @@ extension AppSessionStore {
     func applyCloudSettings(_ settings: CloudUserSettings?) {
         isRestoringPersistedState = true
         self.schoolAccount = settings?.schoolAccount?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        self.schoolPassword = settings?.schoolPassword?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.schoolPassword = ""
         self.reminderMinutes = settings?.reminderMinutes ?? 10
         isRestoringPersistedState = false
     }

@@ -88,7 +88,7 @@ struct SettingsView: View {
                         .autocorrectionDisabled(true)
                     SecureField("密碼", text: $store.schoolPassword)
 
-                    Text("更新課表或修課紀錄時，會透過修課羅盤的同步服務登入校務系統，再把資料整理回這個 App。")
+                    Text("密碼只會送到後端加密保存，不會寫進 iOS 規劃資料；保存後同步可只輸入學號。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

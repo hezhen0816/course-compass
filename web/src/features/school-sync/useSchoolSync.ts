@@ -149,9 +149,14 @@ export function useSchoolSync({
   const syncSchoolData = async () => {
     const username = schoolUsername.trim();
     const password = schoolPassword.trim();
-    if (!username || !password) {
+    if (!username) {
       setSchoolSyncStatus('error');
-      setSchoolSyncMessage('請輸入校務系統帳號與密碼。');
+      setSchoolSyncMessage('請輸入校務系統帳號。');
+      return;
+    }
+    if (!password && !hasSavedSchoolCredentials) {
+      setSchoolSyncStatus('error');
+      setSchoolSyncMessage('請輸入校務系統密碼，或先勾選保存並成功同步一次。');
       return;
     }
 
@@ -170,12 +175,13 @@ export function useSchoolSync({
     setSchoolSyncStatus('loading');
     setSchoolSyncMessage('');
     try {
+      const token = await getLatestAccessToken();
       setSchoolSyncMessage('正在同步最新選課清單...');
-      const schedulePayload = await syncSchoolSchedule(username, password);
+      const schedulePayload = await syncSchoolSchedule(username, password, token || undefined);
       const courses = coursesFromScheduleSync(schedulePayload);
 
       setSchoolSyncMessage('已取得最新課表，正在同步歷年成績與補查歷史節次...');
-      const historyPayload = await importAcademicHistory(username, password);
+      const historyPayload = await importAcademicHistory(username, password, token || undefined);
       const historyRecords = historyRecordsFromImport(historyPayload);
       const historicalLookups = await lookupHistoricalSchedules(historyRecords);
       const retakeRequirements = retakeRequirementsFromHistory(historyRecords);
@@ -211,13 +217,16 @@ export function useSchoolSync({
       setActiveSemesterId(importSemesterId);
       markHistoryMigrated();
       let credentialMessage = '';
-      if (rememberSchoolCredentials) {
+      if (rememberSchoolCredentials && password) {
         try {
           await saveCredentialsIfNeeded(username, password);
           credentialMessage = '校務帳密已加密保存。';
+          setSchoolPasswordState('');
         } catch (error) {
           credentialMessage = `但帳密保存失敗：${error instanceof Error ? error.message : '未知錯誤'}`;
         }
+      } else if (hasSavedSchoolCredentials && !password) {
+        credentialMessage = '已使用保存帳密完成同步。';
       } else {
         setSchoolPasswordState('');
       }

@@ -73,7 +73,7 @@ export function SchoolScheduleSyncModal({
               autoComplete="current-password"
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
             />
-            <p className="mt-1 text-xs text-slate-500">勾選保存後，密碼會由後端加密後寫入資料庫。</p>
+            <p className="mt-1 text-xs text-slate-500">已保存校務帳密時可留空；勾選保存後，密碼會由後端加密後寫入資料庫。</p>
             <label className="mt-3 flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -85,7 +85,7 @@ export function SchoolScheduleSyncModal({
               <span>
                 <span className="font-medium">加密保存校務帳密</span>
                 <span className="mt-0.5 block text-xs text-slate-500">
-                  之後同步官方資料時會自動帶入；前端不持有加密金鑰。
+                  之後同步校務資料或官方資料時會自動帶入；前端不持有加密金鑰。
                 </span>
               </span>
             </label>

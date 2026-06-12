@@ -7,8 +7,8 @@ extension AppSessionStore {
         historyImportErrorMessage = nil
         historyImportNoticeMessage = nil
 
-        guard !username.isEmpty, !password.isEmpty else {
-            historyImportErrorMessage = "請先輸入學校帳號與密碼"
+        guard !username.isEmpty else {
+            historyImportErrorMessage = "請先輸入學校帳號"
             return
         }
 
@@ -17,10 +17,11 @@ extension AppSessionStore {
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            try await applyBackendAuthorization(to: &request)
             request.httpBody = try JSONEncoder().encode(
                 HistoryImportRequest(
                     username: username,
-                    password: password,
+                    password: password.nilIfEmpty,
                     profileKey: username,
                     persistToSupabase: true,
                     verifySSL: false
@@ -42,6 +43,8 @@ extension AppSessionStore {
                 payload.records,
                 studentNumber: payload.studentNo ?? username
             )
+            try await saveSchoolCredentialsIfNeeded(username: username, password: password)
+            schoolPassword = ""
             try await persistPlannerData()
 
             historyImportNoticeMessage = [

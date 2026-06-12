@@ -22,6 +22,34 @@ extension AppSessionStore {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
     }
 
+    func applyBackendAuthorization(to request: inout URLRequest) async throws {
+        let session = try await validSession()
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+    }
+
+    func saveSchoolCredentialsIfNeeded(username: String, password: String) async throws {
+        let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPassword.isEmpty else {
+            return
+        }
+
+        let endpoint = try Self.backendURL(path: "/api/school-credentials")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await applyBackendAuthorization(to: &request)
+        request.httpBody = try JSONEncoder().encode(
+            SchoolCredentialsSaveRequest(
+                username: username,
+                password: trimmedPassword
+            )
+        )
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateHTTPResponse(response, data: data)
+        _ = try? JSONDecoder().decode(SchoolCredentialsStatusResponse.self, from: data)
+    }
+
     func performJSONRequest<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await URLSession.shared.data(for: request)
         try validateHTTPResponse(response, data: data)

@@ -31,8 +31,7 @@ extension AppSessionStore {
         await refreshAppContent(suppressErrors: false)
 
         let username = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
-        let password = schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !username.isEmpty, !password.isEmpty else {
+        guard !username.isEmpty else {
             return
         }
 
@@ -42,8 +41,8 @@ extension AppSessionStore {
     func syncSchedule() async {
         let username = schoolAccount.trimmingCharacters(in: .whitespacesAndNewlines)
         let password = schoolPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !username.isEmpty, !password.isEmpty else {
-            syncState = .failed("請先輸入學校帳號與密碼")
+        guard !username.isEmpty else {
+            syncState = .failed("請先輸入學校帳號")
             return
         }
 
@@ -54,10 +53,11 @@ extension AppSessionStore {
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            try await applyBackendAuthorization(to: &request)
             request.httpBody = try JSONEncoder().encode(
                 ScheduleSyncRequest(
                     username: username,
-                    password: password,
+                    password: password.nilIfEmpty,
                     profileKey: username,
                     persistToSupabase: true,
                     verifySSL: false
@@ -71,6 +71,8 @@ extension AppSessionStore {
             decoder.dateDecodingStrategy = .iso8601
             let payload = try decoder.decode(ScheduleSyncResponse.self, from: data)
             apply(payload: payload)
+            try await saveSchoolCredentialsIfNeeded(username: username, password: password)
+            schoolPassword = ""
             syncState = .synced
         } catch {
             if Self.isCancellation(error) {

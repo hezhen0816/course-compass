@@ -35,12 +35,7 @@ final class AppSessionStore: ObservableObject {
             queuePlannerSave()
         }
     }
-    @Published var schoolPassword: String = "" {
-        didSet {
-            guard !isRestoringPersistedState else { return }
-            queuePlannerSave()
-        }
-    }
+    @Published var schoolPassword: String = ""
     @Published var reminderMinutes: Int = 10 {
         didSet {
             guard !isRestoringPersistedState else { return }
