@@ -105,7 +105,7 @@ NTUST_VERIFY_SSL=false
 - iOS 不應直接持有 `service_role`
 - `SCHOOL_CREDENTIALS_ENCRYPTION_SECRET` 只給 Python 後端使用，用於加解密 `public.school_credentials.password_ciphertext`
 - Web 不會讀取或保存校務密碼明文；官方選課 session 過期時由後端使用已保存密文重新登入
-- iOS 仍有舊版 `school_password` 相容欄位，需在後續 iOS 重構移到後端 credential API
+- iOS 仍有舊版 `school_password` 相容欄位；SQL migration 不會直接刪除 plaintext，後端會在下一次 authenticated credential use 時加密遷移到 `public.school_credentials` 並清除舊欄位
 
 資料表與快照 schema 在 [backend/supabase_schema.sql](/Users/hezhen/Project/course_planner/backend/supabase_schema.sql)，migration 在 [supabase/migrations](/Users/hezhen/Project/course_planner/supabase/migrations)。
 

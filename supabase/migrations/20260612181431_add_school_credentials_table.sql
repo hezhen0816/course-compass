@@ -72,16 +72,16 @@ set
     (
       coalesce(content->'settings', '{}'::jsonb)
       - 'schoolCredentials'
-      - 'school_password'
     ),
     true
   ),
   last_writer = 'migration'
 where content ? 'settings'
-  and (
-    content->'settings' ? 'schoolCredentials'
-    or content->'settings' ? 'school_password'
-  );
+  and content->'settings' ? 'schoolCredentials';
+
+-- Legacy settings.school_password is plaintext and cannot be safely converted
+-- inside SQL because the backend encryption key is intentionally not in the DB.
+-- The backend promotes and removes it on the next authenticated credential use.
 
 comment on table public.school_credentials is 'Encrypted school portal credentials for backend-only sync and official selection session recovery.';
 comment on column public.school_credentials.password_ciphertext is 'Fernet ciphertext encrypted by the backend credentials secret; never returned to public clients.';

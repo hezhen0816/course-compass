@@ -337,6 +337,70 @@ def test_school_credentials_secret_decrypts_service_role_table(monkeypatch) -> N
     }
 
 
+def test_school_credentials_status_reads_legacy_plaintext_password(monkeypatch) -> None:
+    monkeypatch.setattr(credentials, "_load_school_credentials_row", lambda user_id: None)
+    monkeypatch.setattr(
+        credentials,
+        "load_user_content",
+        lambda user_id, access_token: {
+            "settings": {
+                "school_account": "B11430207",
+                "school_password": "legacy-password",
+            }
+        },
+    )
+
+    assert credentials.get_school_credentials_status("user-1", "access-token") == {
+        "username": "B11430207",
+        "hasPassword": True,
+    }
+
+
+def test_school_credentials_secret_promotes_legacy_plaintext_password(monkeypatch) -> None:
+    upserts: list[tuple[str, str, str]] = []
+    saved: list[dict[str, object]] = []
+
+    monkeypatch.setattr(credentials, "_load_school_credentials_row", lambda user_id: None)
+    monkeypatch.setattr(
+        credentials,
+        "load_user_content",
+        lambda user_id, access_token: {
+            "settings": {
+                "school_account": "B11430207",
+                "school_password": "legacy-password",
+            }
+        },
+    )
+    monkeypatch.setattr(credentials, "encrypt_school_password", lambda password: f"encrypted:{password}")
+    monkeypatch.setattr(
+        credentials,
+        "_upsert_school_credentials_row",
+        lambda user_id, username, password_ciphertext: upserts.append(
+            (user_id, username, password_ciphertext)
+        ),
+    )
+    monkeypatch.setattr(
+        credentials,
+        "save_user_content",
+        lambda user_id, content, access_token: saved.append(content),
+    )
+
+    assert credentials.get_school_credentials_secret("user-1", "access-token") == {
+        "username": "B11430207",
+        "password": "legacy-password",
+        "hasPassword": True,
+    }
+    assert upserts == [("user-1", "B11430207", "encrypted:legacy-password")]
+    assert saved == [{"settings": {"school_account": "B11430207"}}]
+
+
+def test_school_credentials_migration_keeps_plaintext_for_backend_promotion() -> None:
+    migration_sql = Path("supabase/migrations/20260612181431_add_school_credentials_table.sql").read_text()
+
+    assert "- 'school_password'" not in migration_sql
+    assert "backend promotes and removes it" in migration_sql
+
+
 def test_school_credentials_status_does_not_return_password(monkeypatch) -> None:
     monkeypatch.setattr(backend_app, "_current_user_context", lambda authorization: ("user-1", "token-1"))
     monkeypatch.setattr(

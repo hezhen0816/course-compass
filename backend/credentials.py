@@ -194,11 +194,12 @@ def _legacy_school_credentials_status(user_id: str, access_token: str | None = N
     settings = _settings(content)
     credentials = settings.get("schoolCredentials")
     fallback_username = str(settings.get("school_account") or "")
+    plaintext_password = str(settings.get("school_password") or "")
     if not isinstance(credentials, dict):
-        return {"username": fallback_username, "hasPassword": False}
+        return {"username": fallback_username, "hasPassword": bool(plaintext_password)}
     username = str(credentials.get("username") or fallback_username)
     encrypted_password = str(credentials.get("passwordCiphertext") or "")
-    if not encrypted_password:
+    if not encrypted_password and not plaintext_password:
         return {"username": username, "hasPassword": False}
     return {
         "username": username,
@@ -211,17 +212,46 @@ def _legacy_school_credentials_secret(user_id: str, access_token: str | None = N
     settings = _settings(content)
     credentials = settings.get("schoolCredentials")
     fallback_username = str(settings.get("school_account") or "")
+    plaintext_password = str(settings.get("school_password") or "")
     if not isinstance(credentials, dict):
-        return {"username": fallback_username, "password": "", "hasPassword": False}
+        return {
+            "username": fallback_username,
+            "password": plaintext_password,
+            "hasPassword": bool(plaintext_password),
+        }
     username = str(credentials.get("username") or fallback_username)
     encrypted_password = str(credentials.get("passwordCiphertext") or "")
-    if not encrypted_password:
+    if not encrypted_password and not plaintext_password:
         return {"username": username, "password": "", "hasPassword": False}
+    if plaintext_password:
+        return {
+            "username": username,
+            "password": plaintext_password,
+            "hasPassword": True,
+        }
     return {
         "username": username,
         "password": decrypt_school_password(encrypted_password),
         "hasPassword": True,
     }
+
+
+def _promote_legacy_school_credentials(
+    user_id: str,
+    username: str,
+    password: str,
+    access_token: str | None = None,
+) -> None:
+    if not password:
+        return
+    encrypted_password = encrypt_school_password(password)
+    _upsert_school_credentials_row(user_id, username, encrypted_password)
+    content = load_user_content(user_id, access_token)
+    settings = _settings(content)
+    settings["school_account"] = username
+    settings.pop("schoolCredentials", None)
+    settings.pop("school_password", None)
+    save_user_content(user_id, content, access_token)
 
 
 def get_school_credentials_status(user_id: str, access_token: str | None = None) -> dict[str, Any]:
@@ -243,7 +273,18 @@ def get_school_credentials_secret(user_id: str, access_token: str | None = None)
     except (CredentialStoreError, requests.RequestException):
         row = None
     if not row:
-        return _legacy_school_credentials_secret(user_id, access_token)
+        legacy = _legacy_school_credentials_secret(user_id, access_token)
+        if legacy.get("hasPassword"):
+            try:
+                _promote_legacy_school_credentials(
+                    user_id,
+                    str(legacy.get("username") or ""),
+                    str(legacy.get("password") or ""),
+                    access_token,
+                )
+            except (CredentialStoreError, requests.RequestException):
+                pass
+        return legacy
     username = str(row.get("school_account") or "")
     encrypted_password = str(row.get("password_ciphertext") or "")
     if not encrypted_password:

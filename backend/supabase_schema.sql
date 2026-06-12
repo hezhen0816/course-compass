@@ -1,6 +1,7 @@
 -- Shared planner data lives in public.user_data.
 -- Legacy iOS may still write school_password into user_data.content.settings.
 -- Web/backend credentials now live in public.school_credentials as encrypted ciphertext.
+-- normalize_user_data_content_v2() execute grants are restricted in migration 20260612181548.
 
 create or replace function public.set_updated_at()
 returns trigger
