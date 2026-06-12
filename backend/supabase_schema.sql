@@ -1,5 +1,5 @@
 -- Shared planner data lives in public.user_data.
--- Legacy user_data may still contain school_password in content.settings until backend promotion clears it.
+-- Legacy school_password fields were removed from user_data content and legacy_content in migration 20260613031804.
 -- Web/backend credentials now live in public.school_credentials as encrypted ciphertext.
 -- normalize_user_data_content_v2() execute grants are restricted in migration 20260612181548.
 

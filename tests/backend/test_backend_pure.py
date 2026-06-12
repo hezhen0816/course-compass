@@ -825,6 +825,17 @@ def test_school_credentials_migration_keeps_plaintext_for_backend_promotion() ->
     assert "backend promotes and removes it" in migration_sql
 
 
+def test_remove_legacy_school_password_migration_clears_content_and_legacy_content() -> None:
+    migration_sql = Path(
+        "supabase/migrations/20260613031804_remove_legacy_school_password_from_user_data.sql"
+    ).read_text()
+
+    assert "content #>> '{settings,school_password}'" in migration_sql
+    assert "legacy_content #>> '{settings,school_password}'" in migration_sql
+    assert "- 'school_password'" in migration_sql
+    assert "- 'schoolCredentials'" in migration_sql
+
+
 def test_school_credentials_status_does_not_return_password(monkeypatch) -> None:
     monkeypatch.setattr(backend_app, "_current_user_context", lambda authorization: ("user-1", "token-1"))
     monkeypatch.setattr(

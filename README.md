@@ -47,7 +47,7 @@
 - `user_data.content.settings` 目前使用的欄位鍵：
   - `school_account`
   - `reminder_minutes`
-  - `school_password` 僅視為舊資料遷移欄位；Web/iOS 新寫入不應再使用
+  - `school_password` 已由 migration 清除；Web/iOS 新寫入不應再使用
 
 ### Test Artifacts
 
@@ -113,7 +113,7 @@ NTUST_VERIFY_SSL=false
 - iOS 不應直接持有 `service_role`
 - `SCHOOL_CREDENTIALS_ENCRYPTION_SECRET` 只給 Python 後端使用，用於加解密 `public.school_credentials.password_ciphertext`；不可使用 `.env.example` placeholder，長度需至少 32 字元
 - Web 不會讀取或保存校務密碼明文；官方選課 session 過期時由後端使用已保存密文重新登入
-- iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`；SQL migration 不會直接刪除既有 plaintext，後端會在下一次 authenticated credential use 時加密遷移到 `public.school_credentials` 並清除舊欄位
+- iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`；production legacy plaintext 已由 `20260613031804_remove_legacy_school_password_from_user_data.sql` 清除，使用者下次輸入密碼並勾選保存後會寫入 `public.school_credentials`
 
 資料表與快照 schema 在 [backend/supabase_schema.sql](backend/supabase_schema.sql)，migration 在 [supabase/migrations](supabase/migrations)。
 
@@ -145,7 +145,7 @@ npm run ios:build
 
 ### 遷移 legacy 校務密碼
 
-若 production `public.user_data.content.settings` 仍有舊的 `school_password` 或 `schoolCredentials.passwordCiphertext`，可用後端 Fernet 金鑰加密搬到 `public.school_credentials`，再清掉 JSON 內的舊欄位。
+若其他環境或舊備份的 `public.user_data.content.settings` 仍有舊的 `school_password` 或 `schoolCredentials.passwordCiphertext`，可用後端 Fernet 金鑰加密搬到 `public.school_credentials`，再清掉 JSON 內的舊欄位。
 
 ```bash
 # 只統計，不寫 DB
