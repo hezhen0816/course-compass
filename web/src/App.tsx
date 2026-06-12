@@ -6,8 +6,6 @@ import {
   FileText,
   KeyRound,
   Loader2,
-  RefreshCw,
-  Search,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -70,6 +68,16 @@ type RequirementStatus = {
   scheduledCount: number;
 };
 
+type ManualSearchSummary = {
+  query: string;
+  mode: SearchMode;
+  semester: string;
+  resultCount: number;
+};
+
+type CapacityStatus = 'available' | 'full' | 'unknown';
+type CapacityFilter = 'all' | CapacityStatus;
+
 type HistoricalScheduleLookup = {
   status: 'matched' | 'ambiguous' | 'missing' | 'skipped';
   candidateCount: number;
@@ -94,6 +102,26 @@ function displayClassroom(classroom: string | null | undefined): string {
 function formatCredits(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '0';
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function capacityStatus(offering: CourseSearchResult): CapacityStatus {
+  if (offering.capacity === null || offering.capacity === undefined || offering.selected_count === null || offering.selected_count === undefined) {
+    return 'unknown';
+  }
+  return offering.selected_count >= offering.capacity ? 'full' : 'available';
+}
+
+function capacityLabel(offering: CourseSearchResult): string {
+  if (offering.capacity === null || offering.capacity === undefined || offering.selected_count === null || offering.selected_count === undefined) {
+    return '未公告';
+  }
+  return `${offering.selected_count} / ${offering.capacity}`;
+}
+
+function requirementLabel(value: string): string {
+  if (value === 'R') return '必修';
+  if (value === 'E') return '選修';
+  return value || '未列';
 }
 
 function nextPlannerId(): string {
@@ -733,6 +761,12 @@ export default function CoursePlannerWebApp() {
   const [manualResults, setManualResults] = useState<CourseSearchResult[]>([]);
   const [manualStatus, setManualStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [manualError, setManualError] = useState('');
+  const [manualSearchSummary, setManualSearchSummary] = useState<ManualSearchSummary | null>(null);
+  const [teacherFilter, setTeacherFilter] = useState('');
+  const [creditFilter, setCreditFilter] = useState('all');
+  const [requireOptionFilter, setRequireOptionFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('');
+  const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
   const [activeRequirement, setActiveRequirement] = useState<PendingRequirement | null>(null);
   const [offeringResults, setOfferingResults] = useState<CourseSearchResult[]>([]);
   const [offeringStatus, setOfferingStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -855,6 +889,7 @@ export default function CoursePlannerWebApp() {
   }, [data]);
 
   const activeSemester = data.semesters.find((semester) => semester.id === activeSemesterId) || data.semesters[0];
+  const canRunManualSearch = manualQuery.trim().length > 0 && manualStatus !== 'loading';
   const requirementStatuses = useMemo(() => {
     const map = new Map<string, RequirementStatus>();
     data.pendingRequirements.forEach((requirement) => {
@@ -863,6 +898,31 @@ export default function CoursePlannerWebApp() {
     return map;
   }, [data]);
   const completedRequirements = Array.from(requirementStatuses.values()).filter((status) => status.completed).length;
+  const currentCourseSemester = courseSemesters.find((semester) => semester.semester === querySemester);
+  const currentCourseSemesterLabel = currentCourseSemester?.english_label
+    ? `${querySemester}・${currentCourseSemester.english_label}`
+    : querySemester;
+  const filteredManualResults = useMemo(() => {
+    const teacher = teacherFilter.trim().toLowerCase();
+    const time = timeFilter.trim().toUpperCase();
+    return manualResults.filter((offering) => {
+      if (teacher && !offering.teacher.toLowerCase().includes(teacher)) return false;
+      if (creditFilter !== 'all' && String(offering.credits ?? '') !== creditFilter) return false;
+      if (requireOptionFilter !== 'all' && offering.require_option !== requireOptionFilter) return false;
+      if (time && !offering.node.toUpperCase().includes(time)) return false;
+      if (capacityFilter !== 'all' && capacityStatus(offering) !== capacityFilter) return false;
+      return true;
+    });
+  }, [capacityFilter, creditFilter, manualResults, requireOptionFilter, teacherFilter, timeFilter]);
+  const pendingSelectionCredits = data.pendingRequirements.reduce((sum, requirement) => (
+    sum + (requirement.requiredCredits ?? requirement.credits ?? 0)
+  ), 0);
+  const pendingSelectionNames = useMemo(() => (
+    new Set(data.pendingRequirements.flatMap((requirement) => requirement.courseNames.map(normalizeName)))
+  ), [data.pendingRequirements]);
+  const activeSemesterCredits = activeSemester?.courses.reduce((sum, course) => (
+    sum + (course.category === 'pe' ? 0 : course.credits)
+  ), 0) || 0;
 
   const handleCloseOnboarding = () => {
     setIsOnboardingOpen(false);
@@ -877,11 +937,54 @@ export default function CoursePlannerWebApp() {
     try {
       const results = await searchCourses(querySemester, query, manualMode);
       setManualResults(results);
+      setManualSearchSummary({
+        query,
+        mode: manualMode,
+        semester: querySemester,
+        resultCount: results.length,
+      });
       setManualStatus('idle');
     } catch (error) {
       setManualStatus('error');
       setManualError(error instanceof Error ? error.message : '課程查詢失敗');
     }
+  };
+
+  const resetCourseSearchFilters = () => {
+    setManualQuery('');
+    setTeacherFilter('');
+    setCreditFilter('all');
+    setRequireOptionFilter('all');
+    setTimeFilter('');
+    setCapacityFilter('all');
+    setManualResults([]);
+    setManualSearchSummary(null);
+    setManualError('');
+    setManualStatus('idle');
+  };
+
+  const exportCourseResults = () => {
+    if (filteredManualResults.length === 0) return;
+    const headers = ['課碼', '課名', '教師', '學分', '節次', '教室', '名額', '備註'];
+    const escapeCell = (value: string | number | null | undefined) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = filteredManualResults.map((offering) => [
+      offering.course_no,
+      offering.course_name,
+      offering.teacher,
+      formatCredits(offering.credits),
+      displaySlots(parseNodeSlots(offering.node)),
+      displayClassroom(offering.classroom),
+      capacityLabel(offering),
+      offering.contents,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map(escapeCell).join(',')).join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `course-results-${querySemester}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const searchForRequirement = async (requirement: PendingRequirement) => {
@@ -938,7 +1041,9 @@ export default function CoursePlannerWebApp() {
     setData((prev) => ({
       ...prev,
       requirementSets: ensureManualSet(prev),
-      pendingRequirements: [...prev.pendingRequirements, requirement],
+      pendingRequirements: prev.pendingRequirements.some((item) => item.courseNames.some((name) => normalizeName(name) === normalizeName(offering.course_name)))
+        ? prev.pendingRequirements
+        : [...prev.pendingRequirements, requirement],
     }));
   };
 
@@ -1108,164 +1213,313 @@ export default function CoursePlannerWebApp() {
         userEmail={session?.user?.email || '略過登入'}
         syncStatus={session ? syncStatus : 'idle'}
         isDemoMode={isDemoMode}
+        pendingCount={data.pendingRequirements.length}
+        onOpenSchoolSync={() => setIsSchoolSyncOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenHelp={() => setIsOnboardingOpen(true)}
         onExitDemo={() => setIsDemoMode(false)}
       />
 
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-950">修課規劃工作區</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              已完成 {completedRequirements} / {data.pendingRequirements.length} 個待修需求，已安排 {formatCredits(stats.total)} 學分。
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setIsSchoolSyncOpen(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              <RefreshCw className="h-4 w-4" />
-              同步校務資料
-            </button>
-            <label className="text-sm font-medium text-slate-600">查詢學期</label>
-            <select
-              value={querySemester}
-              onChange={(event) => setQuerySemester(event.target.value)}
-              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              {courseSemesters.length === 0 && <option value={querySemester}>{querySemester}</option>}
-              {courseSemesters.map((semester) => (
-                <option key={semester.semester} value={semester.semester}>
-                  {semester.semester}{semester.english_label ? `・${semester.english_label}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+      <main className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+          <span>選課輔助工具，不自動搶課、不輪詢名額；送出官方系統前仍需使用者確認。</span>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <aside className="space-y-4">
-            <Sidebar data={data} stats={stats} />
-
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                  <Upload className="h-4 w-4 text-blue-600" />
-                  PDF 匯入
-                </h2>
-                {importStatus === 'loading' && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-              </div>
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-3 text-sm font-medium text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700">
-                <FileText className="h-4 w-4" />
-                上傳雙主修 PDF
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="hidden"
-                  onChange={(event) => {
-                    void handlePdfUpload(event.target.files?.[0]);
-                    event.currentTarget.value = '';
-                  }}
-                />
-              </label>
-              {importError && <p className="mt-2 text-sm text-red-600">{importError}</p>}
-            </section>
-
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900">
-                <Search className="h-4 w-4 text-emerald-600" />
-                手動查課
-              </h2>
-              <div className="flex gap-2">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_300px]">
+          <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 p-4">
+              <h2 className="text-base font-semibold text-slate-900">篩選條件</h2>
+              <button onClick={resetCourseSearchFilters} className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                清除全部
+              </button>
+            </div>
+            <div className="space-y-4 p-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-500">學期</label>
                 <select
-                  value={manualMode}
-                  onChange={(event) => setManualMode(event.target.value as SearchMode)}
-                  className="w-24 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
-                >
-                  <option value="name">課名</option>
-                  <option value="code">課碼</option>
-                </select>
-                <input
-                  value={manualQuery}
-                  onChange={(event) => setManualQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') void runManualSearch();
+                  value={querySemester}
+                  onChange={(event) => {
+                    setQuerySemester(event.target.value);
+                    setManualResults([]);
+                    setManualSearchSummary(null);
                   }}
-                  placeholder="例如：資料結構 或 CS3005301"
-                  className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-                <button
-                  onClick={() => void runManualSearch()}
-                  className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
-                  查詢
+                  {courseSemesters.length === 0 && <option value={querySemester}>{querySemester}</option>}
+                  {courseSemesters.map((semester) => (
+                    <option key={semester.semester} value={semester.semester}>
+                      {semester.semester}{semester.english_label ? `・${semester.english_label}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">目前查詢：{currentCourseSemesterLabel}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500">課名 / 課碼</label>
+                <div className="mt-1 grid grid-cols-[82px_minmax(0,1fr)] gap-2">
+                  <select
+                    value={manualMode}
+                    onChange={(event) => {
+                      setManualMode(event.target.value as SearchMode);
+                      setManualResults([]);
+                      setManualSearchSummary(null);
+                    }}
+                    className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
+                  >
+                    <option value="name">課名</option>
+                    <option value="code">課碼</option>
+                  </select>
+                  <input
+                    value={manualQuery}
+                    onChange={(event) => setManualQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && canRunManualSearch) void runManualSearch();
+                    }}
+                    placeholder="資料結構"
+                    className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500">教師</label>
+                <input
+                  value={teacherFilter}
+                  onChange={(event) => setTeacherFilter(event.target.value)}
+                  placeholder="輸入教師姓名"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500">必選修</label>
+                <select
+                  value={requireOptionFilter}
+                  onChange={(event) => setRequireOptionFilter(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">全部</option>
+                  <option value="R">必修</option>
+                  <option value="E">選修</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500">學分</label>
+                <select
+                  value={creditFilter}
+                  onChange={(event) => setCreditFilter(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">不限</option>
+                  <option value="0">0 學分</option>
+                  <option value="1">1 學分</option>
+                  <option value="2">2 學分</option>
+                  <option value="3">3 學分</option>
+                  <option value="4">4 學分</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500">節次</label>
+                <input
+                  value={timeFilter}
+                  onChange={(event) => setTimeFilter(event.target.value)}
+                  placeholder="例如 M3 或 W4"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500">名額狀態</label>
+                <select
+                  value={capacityFilter}
+                  onChange={(event) => setCapacityFilter(event.target.value as CapacityFilter)}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">全部</option>
+                  <option value="available">尚有名額</option>
+                  <option value="full">額滿</option>
+                  <option value="unknown">未公告</option>
+                </select>
+              </div>
+
+              <button
+                onClick={() => void runManualSearch()}
+                disabled={!canRunManualSearch}
+                className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                搜尋課程
+              </button>
+              <button
+                onClick={resetCourseSearchFilters}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                重設條件
+              </button>
+
+              <div className="border-t border-slate-100 pt-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <Upload className="h-4 w-4 text-blue-600" />
+                    需求匯入
+                  </h3>
+                  {importStatus === 'loading' && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                </div>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700">
+                  <FileText className="h-4 w-4" />
+                  上傳雙主修 PDF
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    onChange={(event) => {
+                      void handlePdfUpload(event.target.files?.[0]);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+                {importError && <p className="mt-2 text-sm text-red-600">{importError}</p>}
+              </div>
+            </div>
+          </aside>
+
+          <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-950">課程查詢中心</h2>
+                <p className="mt-1 text-sm text-slate-500">查詢開課資料，加入待選清單，並進行課表規劃。</p>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-slate-500">
+                <span>
+                  {manualSearchSummary
+                    ? `共找到 ${manualSearchSummary.resultCount} 筆，顯示 ${filteredManualResults.length} 筆`
+                    : '輸入條件後開始查詢'}
+                </span>
+                <button
+                  onClick={exportCourseResults}
+                  disabled={filteredManualResults.length === 0}
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                >
+                  匯出結果
                 </button>
               </div>
-              {manualStatus === 'loading' && <p className="mt-3 text-sm text-slate-500">查詢中...</p>}
-              {manualError && <p className="mt-3 text-sm text-red-600">{manualError}</p>}
-              <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
-                {manualResults.map((offering) => (
-                  <CourseResultRow
-                    key={`${offering.course_no}-${offering.node}-${offering.teacher}`}
-                    offering={offering}
-                    conflicts={findConflicts(offering, data, activeSemesterId)}
-                    alreadyAdded={Boolean(findScheduledCourseByOffering(offering, data, activeSemesterId))}
-                    onAddRequirement={() => addOfferingAsRequirement(offering)}
-                    onSchedule={() => addCourseToSemester(offering)}
-                  />
-                ))}
-              </div>
-            </section>
+            </div>
 
-            <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 p-4">
-                <h2 className="text-base font-semibold text-slate-900">待修需求池</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {data.requirementSets.length} 份規則，{data.pendingRequirements.length} 個需求
-                  {data.historyRecords.length > 0 ? `，已匯入 ${data.historyRecords.length} 筆修課紀錄。` : '。'}
-                </p>
+            {manualStatus === 'loading' && <p className="p-5 text-sm text-slate-500">查詢中...</p>}
+            {manualError && <p className="m-5 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{manualError}</p>}
+            {manualStatus === 'idle' && manualSearchSummary && manualResults.length === 0 && (
+              <div className="m-5 rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                查無符合「{manualSearchSummary.query}」的開課資料，請改用課碼或切換查詢學期。
               </div>
-              <div className="max-h-[720px] overflow-y-auto p-3">
-                {data.requirementSets.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {data.requirementSets.map((set) => (
-                      <span key={set.id} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                        {set.name}{set.totalCredits ? `・${formatCredits(set.totalCredits)} 學分` : ''}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {data.pendingRequirements.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-                    尚未匯入待修需求
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {data.pendingRequirements.map((requirement) => (
-                      <RequirementRow
-                        key={requirement.id}
-                        requirement={requirement}
-                        status={requirementStatuses.get(requirement.id)}
-                        onOpen={() => void searchForRequirement(requirement)}
-                        onDelete={() => deleteRequirement(requirement.id)}
-                      />
-                    ))}
-                  </div>
-                )}
+            )}
+            {manualStatus === 'idle' && manualResults.length > 0 && filteredManualResults.length === 0 && (
+              <div className="m-5 rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                目前篩選條件沒有符合結果，請放寬教師、節次或名額條件。
               </div>
-            </section>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="min-w-[880px] w-full border-separate border-spacing-0 text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                    <th className="border-b border-slate-200 px-3 py-3">課碼</th>
+                    <th className="border-b border-slate-200 px-3 py-3">課名</th>
+                    <th className="border-b border-slate-200 px-3 py-3">教師</th>
+                    <th className="border-b border-slate-200 px-3 py-3">學分</th>
+                    <th className="border-b border-slate-200 px-3 py-3">節次</th>
+                    <th className="border-b border-slate-200 px-3 py-3">教室</th>
+                    <th className="border-b border-slate-200 px-3 py-3">名額</th>
+                    <th className="border-b border-slate-200 px-3 py-3">備註</th>
+                    <th className="border-b border-slate-200 px-3 py-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredManualResults.length === 0 && !manualSearchSummary && (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">
+                        先在左側輸入課名或課碼搜尋官方開課資料。
+                      </td>
+                    </tr>
+                  )}
+                  {filteredManualResults.map((offering) => (
+                    <CourseResultRow
+                      key={`${offering.course_no}-${offering.node}-${offering.teacher}`}
+                      offering={offering}
+                      conflicts={findConflicts(offering, data, activeSemesterId)}
+                      alreadyAdded={Boolean(findScheduledCourseByOffering(offering, data, activeSemesterId))}
+                      alreadyPending={pendingSelectionNames.has(normalizeName(offering.course_name))}
+                      onAddRequirement={() => addOfferingAsRequirement(offering)}
+                      onSchedule={() => addCourseToSemester(offering)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-start justify-between border-b border-slate-100 p-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">待選清單 ({data.pendingRequirements.length})</h2>
+                <p className="mt-1 text-xs text-slate-500">可用學分：{formatCredits(pendingSelectionCredits)} 學分</p>
+              </div>
+              <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                {completedRequirements} 已完成
+              </span>
+            </div>
+            <div className="max-h-[640px] overflow-y-auto p-4">
+              {data.pendingRequirements.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
+                  從查詢結果加入課程，或上傳 PDF 產生待修需求。
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {data.pendingRequirements.map((requirement, index) => (
+                    <RequirementRow
+                      key={requirement.id}
+                      requirement={requirement}
+                      status={requirementStatuses.get(requirement.id)}
+                      onOpen={() => void searchForRequirement(requirement)}
+                      onDelete={() => deleteRequirement(requirement.id)}
+                      rank={index + 1}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2 border-t border-slate-100 p-4">
+              <p className="text-xs text-slate-500">已選學分：{formatCredits(activeSemesterCredits)} 學分</p>
+              <a
+                href="#schedule-preview"
+                className="block rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                進行課表規劃
+              </a>
+              <button
+                disabled
+                className="w-full cursor-not-allowed rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400"
+              >
+                待選清單已自動儲存
+              </button>
+            </div>
           </aside>
+        </div>
+
+        <div id="schedule-preview" className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <Sidebar data={data} stats={stats} />
 
           <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 p-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-950">學期週課表</h2>
+                  <h2 className="text-lg font-semibold text-slate-950">課表規劃預覽</h2>
                   <p className="mt-1 text-sm text-slate-500">
                     目前安排 {activeSemester?.courses.length || 0} 門課，{formatCredits(activeSemester?.courses.reduce((sum, course) => sum + (course.category === 'pe' ? 0 : course.credits), 0) || 0)} 學分。
                   </p>
+                  <p className="mt-1 text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {data.semesters.map((semester) => (
@@ -1283,6 +1537,7 @@ export default function CoursePlannerWebApp() {
                   ))}
                 </div>
               </div>
+              <ScheduleLegend />
             </div>
             {activeSemester && (
               <WeeklySchedule
@@ -1363,58 +1618,89 @@ export default function CoursePlannerWebApp() {
   );
 }
 
+function ScheduleLegend() {
+  const items = [
+    { label: '本系必修', className: 'border-rose-200 bg-rose-50' },
+    { label: '本系選修', className: 'border-sky-200 bg-sky-50' },
+    { label: '通識', className: 'border-purple-200 bg-purple-50' },
+    { label: '雙主修', className: 'border-emerald-200 bg-emerald-50' },
+    { label: '衝堂', className: 'border-red-300 bg-red-100' },
+  ];
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+      {items.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1">
+          <span className={`h-2.5 w-2.5 rounded-sm border ${item.className}`} />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function CourseResultRow({
   offering,
   conflicts,
   alreadyAdded,
+  alreadyPending,
   onAddRequirement,
   onSchedule,
 }: {
   offering: CourseSearchResult;
   conflicts: Course[];
   alreadyAdded: boolean;
+  alreadyPending: boolean;
   onAddRequirement: () => void;
   onSchedule: () => void;
 }) {
+  const slots = parseNodeSlots(offering.node);
+  const status = capacityStatus(offering);
   return (
-    <div className="rounded-md border border-slate-200 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900">{offering.course_name}</p>
-          <p className="mt-1 text-xs text-slate-500">
-            {offering.course_no}・{offering.teacher || '未列教師'}・{formatCredits(offering.credits)} 學分
-          </p>
-          <p className="mt-1 text-xs text-slate-500">{displaySlots(parseNodeSlots(offering.node))}・{displayClassroom(offering.classroom)}</p>
-          {alreadyAdded && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
-              <CheckCircle2 className="h-3 w-3" />
-              已排入目前學期
-            </p>
-          )}
-          {!alreadyAdded && conflicts.length > 0 && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-              <AlertTriangle className="h-3 w-3" />
-              與 {conflicts.map((course) => course.name).join('、')} 衝堂
-            </p>
-          )}
+    <tr className="border-b border-slate-100 hover:bg-slate-50">
+      <td className="border-b border-slate-100 px-3 py-3 font-medium text-blue-600">{offering.course_no || '未列'}</td>
+      <td className="border-b border-slate-100 px-3 py-3">
+        <div className="font-semibold text-slate-900">{offering.course_name}</div>
+        <div className="mt-1 flex flex-wrap gap-1">
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">{requirementLabel(offering.require_option)}</span>
+          {alreadyAdded && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">已排入</span>}
+          {alreadyPending && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">已待選</span>}
+          {conflicts.length > 0 && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">衝堂</span>}
         </div>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          onClick={onAddRequirement}
-          className="rounded-md border border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-        >
-          加入待修
-        </button>
-        <button
-          onClick={onSchedule}
-          disabled={alreadyAdded}
-          className="rounded-md bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          {alreadyAdded ? '已加入' : '排入課表'}
-        </button>
-      </div>
-    </div>
+      </td>
+      <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{offering.teacher || '未列教師'}</td>
+      <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{formatCredits(offering.credits)}</td>
+      <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{displaySlots(slots)}</td>
+      <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{displayClassroom(offering.classroom)}</td>
+      <td className="border-b border-slate-100 px-3 py-3">
+        <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+          status === 'available' ? 'bg-emerald-50 text-emerald-700' : status === 'full' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'
+        }`}>
+          {capacityLabel(offering)}
+        </span>
+      </td>
+      <td className="max-w-[150px] truncate border-b border-slate-100 px-3 py-3 text-slate-500" title={offering.contents || undefined}>
+        {offering.contents || (conflicts.length > 0 ? `與 ${conflicts.map((course) => course.name).join('、')} 衝堂` : '無備註')}
+      </td>
+      <td className="border-b border-slate-100 px-3 py-3">
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onAddRequirement}
+            disabled={alreadyPending}
+            className="rounded-md border border-blue-300 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+          >
+            {alreadyPending ? '已待選' : '加入待選'}
+          </button>
+          <button
+            onClick={onSchedule}
+            disabled={alreadyAdded}
+            className="rounded-md border border-emerald-300 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+          >
+            {alreadyAdded ? '已加入' : '排入課表'}
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -1423,18 +1709,20 @@ function RequirementRow({
   status,
   onOpen,
   onDelete,
+  rank,
 }: {
   requirement: PendingRequirement;
   status?: RequirementStatus;
   onOpen: () => void;
   onDelete: () => void;
+  rank?: number;
 }) {
   const completed = Boolean(status?.completed);
   return (
     <div className={`rounded-md border p-3 ${completed ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-start gap-3">
-        <div className="mt-0.5">
-          {completed ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Clock className="h-4 w-4 text-slate-400" />}
+        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+          {rank || (completed ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Clock className="h-4 w-4 text-slate-400" />)}
         </div>
         <button onClick={onOpen} className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">
@@ -1833,6 +2121,16 @@ function SchoolScheduleSyncModal({
               autoComplete="current-password"
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
             />
+            <p className="mt-1 text-xs text-slate-500">密碼僅用於本次同步，不會寫入雲端資料。</p>
+          </div>
+          <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            <p className="font-medium">本次同步會更新：</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              <li>目前查詢學期的選課清單</li>
+              <li>歷年成績與已修紀錄</li>
+              <li>可辨識課程的歷史節次</li>
+            </ul>
+            <p className="mt-2 text-xs text-blue-700">不會自動送出選課、不會排程重試。</p>
           </div>
           {message && (
             <p className={`rounded-md px-3 py-2 text-sm ${status === 'error' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>

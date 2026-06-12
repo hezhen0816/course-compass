@@ -1,11 +1,13 @@
 import React from 'react';
-import { GraduationCap, Settings, LogOut, CircleHelp, BookOpen } from 'lucide-react';
+import { GraduationCap, Settings, LogOut, CircleHelp, BookOpen, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabase';
 
 interface NavbarProps {
   userEmail: string;
   syncStatus: 'idle' | 'saving' | 'saved' | 'error';
   isDemoMode: boolean;
+  pendingCount: number;
+  onOpenSchoolSync: () => void;
   onOpenSettings: () => void;
   onOpenHelp: () => void;
   onExitDemo: () => void;
@@ -15,6 +17,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   userEmail,
   syncStatus,
   isDemoMode,
+  pendingCount,
+  onOpenSchoolSync,
   onOpenSettings,
   onOpenHelp,
   onExitDemo,
@@ -29,61 +33,105 @@ export const Navbar: React.FC<NavbarProps> = ({
     window.location.reload();
   };
 
+  const navItems = [
+    { label: '課程查詢', active: true },
+    { label: `待選清單 ${pendingCount}`, active: false },
+    { label: '課表規劃', active: false },
+    { label: '規劃總覽', active: false },
+    { label: '畢業門檻', active: false },
+    { label: '歷史修課', active: false },
+    { label: '設定', active: false },
+  ];
+
+  const syncText = syncStatus === 'saving'
+    ? '同步中...'
+    : syncStatus === 'saved'
+      ? '資料已同步'
+      : syncStatus === 'error'
+        ? '同步失敗'
+        : '資料同步';
+
   return (
     <nav
-      className="bg-white shadow-sm sticky top-0 z-10"
+      className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-4 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <GraduationCap className="w-8 h-8 text-blue-600 flex-shrink-0" />
+      <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 py-3 xl:h-16 xl:flex-row xl:items-center xl:justify-between xl:py-0">
+          <div className="flex min-w-0 items-center gap-3 xl:w-[260px]">
+            <GraduationCap className="h-8 w-8 flex-shrink-0 text-blue-600" />
             <div className="min-w-0">
-              <span className="text-xl font-bold text-gray-900 truncate block">修課羅盤</span>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-gray-500 truncate">{userEmail}</span>
+              <span className="block truncate text-xl font-bold text-gray-900">修課羅盤</span>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>Course Compass</span>
                 {isDemoMode && <span className="text-amber-600">略過登入模式</span>}
-                {syncStatus === 'saving' && <span className="text-gray-400">同步中...</span>}
-                {syncStatus === 'saved' && <span className="text-green-500">已同步</span>}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
-            <div className="grid grid-cols-4 sm:flex items-center gap-2 w-full sm:w-auto">
+          <div className="overflow-x-auto xl:flex-1">
+            <div className="flex min-w-max items-center gap-5 text-sm font-medium">
+              {navItems.map((item) => (
+                <span
+                  key={item.label}
+                  className={`border-b-2 px-1 py-5 ${
+                    item.active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap xl:justify-end">
+            <div className={`hidden text-xs xl:block ${syncStatus === 'error' ? 'text-red-600' : syncStatus === 'saved' ? 'text-emerald-600' : 'text-slate-500'}`}>
+              {syncText}
+            </div>
+            <button
+              onClick={onOpenSchoolSync}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              <RefreshCw className="h-4 w-4" />
+              同步校務資料
+            </button>
+            <div className="grid grid-cols-4 items-center gap-1 sm:flex sm:w-auto">
               <button
                 onClick={onOpenSettings}
-                className="flex items-center justify-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-gray-600 transition-colors hover:bg-gray-100"
                 title="設定門檻"
               >
-                <Settings className="w-4 h-4" />
+                <Settings className="h-4 w-4" />
                 <span className="hidden md:inline">設定門檻</span>
               </button>
 
               <button
                 onClick={() => alert('新版規劃以左側待修池為主：可上傳雙主修 PDF、用課名或課碼搜尋開課，再加入待修或排入目前學期。')}
-                className="flex items-center justify-center p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 title="匯入說明"
               >
-                <CircleHelp className="w-5 h-5" />
+                <CircleHelp className="h-5 w-5" />
               </button>
 
               <button
                 onClick={onOpenHelp}
-                className="flex items-center justify-center p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 title="功能導覽"
               >
-                <BookOpen className="w-5 h-5" />
+                <BookOpen className="h-5 w-5" />
               </button>
 
               <button
                 onClick={handleLogout}
-                className="flex items-center justify-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-red-600 transition-colors hover:bg-red-50"
                 title={isDemoMode ? '離開略過登入模式' : '登出'}
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="h-4 w-4" />
                 <span className="hidden md:inline">{isDemoMode ? '離開略過登入' : '登出'}</span>
               </button>
+            </div>
+            <div className="min-w-0 text-right text-xs text-slate-500">
+              <span className="block max-w-[180px] truncate">{userEmail}</span>
             </div>
           </div>
         </div>
