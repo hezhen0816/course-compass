@@ -6,6 +6,8 @@ import {
   FileText,
   KeyRound,
   Loader2,
+  ArrowDown,
+  ArrowUp,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -32,7 +34,6 @@ import { useAuth } from './hooks/useAuth';
 import { useCourseData } from './hooks/useCourseData';
 import { AuthPage } from './components/AuthPage';
 import { Navbar } from './components/Navbar';
-import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { CourseDetailModal } from './components/CourseDetailModal';
@@ -77,6 +78,7 @@ type ManualSearchSummary = {
 
 type CapacityStatus = 'available' | 'full' | 'unknown';
 type CapacityFilter = 'all' | CapacityStatus;
+type PlanningMode = 'lottery' | 'addDrop' | 'addCode';
 
 type HistoricalScheduleLookup = {
   status: 'matched' | 'ambiguous' | 'missing' | 'skipped';
@@ -122,6 +124,13 @@ function requirementLabel(value: string): string {
   if (value === 'R') return '必修';
   if (value === 'E') return '選修';
   return value || '未列';
+}
+
+function requirementCourseCode(requirement: PendingRequirement): string {
+  const explicit = requirement.courseCodePrefix?.trim();
+  if (explicit) return explicit.toUpperCase();
+  const noteMatch = requirement.note?.match(/[A-Z]{2,}\d+[A-Z0-9]*/i);
+  return noteMatch?.[0]?.toUpperCase() || '';
 }
 
 function nextPlannerId(): string {
@@ -767,6 +776,7 @@ export default function CoursePlannerWebApp() {
   const [requireOptionFilter, setRequireOptionFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('');
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
+  const [planningMode, setPlanningMode] = useState<PlanningMode>('lottery');
   const [activeRequirement, setActiveRequirement] = useState<PendingRequirement | null>(null);
   const [offeringResults, setOfferingResults] = useState<CourseSearchResult[]>([]);
   const [offeringStatus, setOfferingStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -781,6 +791,7 @@ export default function CoursePlannerWebApp() {
   const [schoolSyncMessage, setSchoolSyncMessage] = useState('');
   const hasMigratedHistoryCoursesRef = useRef(false);
   const [detailCourse, setDetailCourse] = useState<{ semesterId: string; semesterName: string; course: Course } | null>(null);
+  const [plannerMessage, setPlannerMessage] = useState('');
 
   useEffect(() => {
     let isActive = true;
@@ -992,11 +1003,15 @@ export default function CoursePlannerWebApp() {
     setOfferingStatus('loading');
     setOfferingError('');
     setOfferingResults([]);
-    const isCreditPool = requirement.kind === 'credit_pool' && requirement.courseCodePrefix;
-    const query = isCreditPool ? requirement.courseCodePrefix || '' : requirement.courseNames[0] || requirement.title;
+    const code = requirementCourseCode(requirement);
+    const isCodeLookup = Boolean(code) || (requirement.kind === 'credit_pool' && requirement.courseCodePrefix);
+    const query = isCodeLookup ? code || requirement.courseCodePrefix || '' : requirement.courseNames[0] || requirement.title;
     try {
-      const results = await searchCourses(querySemester, query, isCreditPool ? 'code' : 'name');
-      setOfferingResults(results);
+      const results = await searchCourses(querySemester, query, isCodeLookup ? 'code' : 'name');
+      const exactCodeResults = code
+        ? results.filter((offering) => offering.course_no.trim().toUpperCase() === code)
+        : [];
+      setOfferingResults(exactCodeResults.length > 0 ? exactCodeResults : results);
       setOfferingStatus('idle');
     } catch (error) {
       setOfferingStatus('error');
@@ -1004,16 +1019,44 @@ export default function CoursePlannerWebApp() {
     }
   };
 
-  const addCourseToSemester = (offering: CourseSearchResult, requirement?: PendingRequirement, force = false) => {
-    if (findScheduledCourseByOffering(offering, data, activeSemesterId)) {
+  const scheduleRequirementOrChooseOffering = async (requirement: PendingRequirement) => {
+    const code = requirementCourseCode(requirement);
+    if (!code) {
+      await searchForRequirement(requirement);
       return;
     }
+
+    setOfferingError('');
+    try {
+      const results = await searchCourses(querySemester, code, 'code');
+      const exactCodeResults = results.filter((offering) => offering.course_no.trim().toUpperCase() === code);
+      if (exactCodeResults.length === 1) {
+        addCourseToSemester(exactCodeResults[0], requirement);
+        return;
+      }
+
+      setActiveRequirement(requirement);
+      setOfferingStatus('idle');
+      setOfferingResults(exactCodeResults.length > 0 ? exactCodeResults : results);
+    } catch (error) {
+      setActiveRequirement(requirement);
+      setOfferingStatus('error');
+      setOfferingResults([]);
+      setOfferingError(error instanceof Error ? error.message : '開課查詢失敗');
+    }
+  };
+
+  const addCourseToSemester = (offering: CourseSearchResult, requirement?: PendingRequirement, force = false) => {
+    if (findScheduledCourseByOffering(offering, data, activeSemesterId)) {
+      return false;
+    }
     const conflicts = findConflicts(offering, data, activeSemesterId);
-    if (conflicts.length > 0 && !force) {
+    if (conflicts.length > 0 && !force && planningMode !== 'lottery') {
       const names = conflicts.map((course) => course.name).join('、');
-      if (!window.confirm(`這門課與 ${names} 衝堂，仍要排入嗎？`)) return;
+      if (!window.confirm(`這門課與 ${names} 衝堂，仍要排入嗎？`)) return false;
     }
     const course = courseFromOffering(offering, requirement);
+    const targetSemesterName = data.semesters.find((semester) => semester.id === activeSemesterId)?.name || activeSemesterId;
     setData((prev) => ({
       ...prev,
       semesters: prev.semesters.map((semester) => (
@@ -1021,7 +1064,12 @@ export default function CoursePlannerWebApp() {
           ? { ...semester, courses: [...semester.courses, course] }
           : semester
       )),
+      pendingRequirements: requirement?.setId === MANUAL_SET_ID
+        ? prev.pendingRequirements.filter((item) => item.id !== requirement.id)
+        : prev.pendingRequirements,
     }));
+    setPlannerMessage(`已排入 ${targetSemesterName}：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
+    return true;
   };
 
   const addOfferingAsRequirement = (offering: CourseSearchResult) => {
@@ -1036,12 +1084,15 @@ export default function CoursePlannerWebApp() {
       courseNames: [offering.course_name],
       options: [{ name: offering.course_name, credits: offering.credits, courseNames: [offering.course_name] }],
       note: offering.course_no ? `由課程查詢加入：${offering.course_no}` : '由課程查詢加入',
-      courseCodePrefix: null,
+      courseCodePrefix: offering.course_no || null,
     };
     setData((prev) => ({
       ...prev,
       requirementSets: ensureManualSet(prev),
-      pendingRequirements: prev.pendingRequirements.some((item) => item.courseNames.some((name) => normalizeName(name) === normalizeName(offering.course_name)))
+      pendingRequirements: prev.pendingRequirements.some((item) => (
+        Boolean(offering.course_no && requirementCourseCode(item) === offering.course_no)
+        || item.courseNames.some((name) => normalizeName(name) === normalizeName(offering.course_name))
+      ))
         ? prev.pendingRequirements
         : [...prev.pendingRequirements, requirement],
     }));
@@ -1197,6 +1248,21 @@ export default function CoursePlannerWebApp() {
       ...prev,
       pendingRequirements: prev.pendingRequirements.filter((requirement) => requirement.id !== requirementId),
     }));
+  };
+
+  const moveRequirement = (requirementId: string, direction: -1 | 1) => {
+    setData((prev) => {
+      const currentIndex = prev.pendingRequirements.findIndex((requirement) => requirement.id === requirementId);
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= prev.pendingRequirements.length) return prev;
+      const nextRequirements = [...prev.pendingRequirements];
+      const [item] = nextRequirements.splice(currentIndex, 1);
+      nextRequirements.splice(nextIndex, 0, item);
+      return {
+        ...prev,
+        pendingRequirements: nextRequirements,
+      };
+    });
   };
 
   if (authLoading || (session && dataLoading)) {
@@ -1482,7 +1548,7 @@ export default function CoursePlannerWebApp() {
                       key={requirement.id}
                       requirement={requirement}
                       status={requirementStatuses.get(requirement.id)}
-                      onOpen={() => void searchForRequirement(requirement)}
+                      onOpen={() => void scheduleRequirementOrChooseOffering(requirement)}
                       onDelete={() => deleteRequirement(requirement.id)}
                       rank={index + 1}
                     />
@@ -1508,46 +1574,28 @@ export default function CoursePlannerWebApp() {
           </aside>
         </div>
 
-        <div id="schedule-preview" className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <Sidebar data={data} stats={stats} />
-
-          <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 p-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-950">課表規劃預覽</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    目前安排 {activeSemester?.courses.length || 0} 門課，{formatCredits(activeSemester?.courses.reduce((sum, course) => sum + (course.category === 'pe' ? 0 : course.credits), 0) || 0)} 學分。
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {data.semesters.map((semester) => (
-                    <button
-                      key={semester.id}
-                      onClick={() => setActiveSemesterId(semester.id)}
-                      className={`rounded-md px-3 py-2 text-sm font-medium ${
-                        semester.id === activeSemesterId
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {semester.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <ScheduleLegend />
-            </div>
-            {activeSemester && (
-              <WeeklySchedule
-                semester={activeSemester}
-                onDeleteCourse={(courseId) => deleteCourse(activeSemester.id, courseId)}
-                onOpenCourseDetail={(course) => setDetailCourse({ semesterId: activeSemester.id, semesterName: activeSemester.name, course })}
-              />
-            )}
-          </section>
-        </div>
+        <PlanningWorkspace
+          data={data}
+          stats={stats}
+          activeSemester={activeSemester}
+          activeSemesterId={activeSemesterId}
+          planningMode={planningMode}
+          plannerMessage={plannerMessage}
+          requirementStatuses={requirementStatuses}
+          onModeChange={setPlanningMode}
+          onSemesterChange={setActiveSemesterId}
+          onOpenRequirement={(requirement) => void scheduleRequirementOrChooseOffering(requirement)}
+          onDeleteRequirement={deleteRequirement}
+          onMoveRequirement={moveRequirement}
+          onDeleteCourse={(courseId) => {
+            if (activeSemester) deleteCourse(activeSemester.id, courseId);
+          }}
+          onOpenCourseDetail={(course) => {
+            if (activeSemester) {
+              setDetailCourse({ semesterId: activeSemester.id, semesterName: activeSemester.name, course });
+            }
+          }}
+        />
       </main>
 
       {activeRequirement && (
@@ -1559,6 +1607,7 @@ export default function CoursePlannerWebApp() {
           offerings={offeringResults}
           data={data}
           activeSemesterId={activeSemesterId}
+          planningMode={planningMode}
           onClose={() => setActiveRequirement(null)}
           onSchedule={(offering, force) => addCourseToSemester(offering, activeRequirement, force)}
         />
@@ -1639,6 +1688,591 @@ function ScheduleLegend() {
   );
 }
 
+function planningModeLabel(mode: PlanningMode): string {
+  if (mode === 'lottery') return '初選志願';
+  if (mode === 'addDrop') return '加退選';
+  return '加簽追蹤';
+}
+
+function planningModeDescription(mode: PlanningMode): string {
+  if (mode === 'lottery') return '同時段多門課會視為競爭志願，抽中一門後其他同時段或同課名志願會失效。';
+  if (mode === 'addDrop') return '加退選接近先搶先贏，同時段課程應視為真衝堂並在送出前處理。';
+  return '追蹤教授、Email、第一次上課與授權碼狀態，不納入自動送出。';
+}
+
+function scheduledCredits(courses: Course[]): number {
+  return courses.reduce((sum, course) => sum + (course.category === 'pe' ? 0 : course.credits), 0);
+}
+
+function getSlotGroups(courses: Course[]) {
+  return DAY_COLUMNS.flatMap((day) => PERIODS.map((period) => {
+    const slot = `${day.code}${period}`;
+    const slotCourses = courses.filter((course) => course.scheduledOffering?.slots.includes(slot));
+    return {
+      slot,
+      label: `星期${day.label} ${period}`,
+      courses: slotCourses,
+    };
+  })).filter((group) => group.courses.length > 1);
+}
+
+function getNameGroups(courses: Course[]) {
+  const groups = new Map<string, Course[]>();
+  courses.forEach((course) => {
+    const key = normalizeName(course.name);
+    if (!key) return;
+    groups.set(key, [...(groups.get(key) || []), course]);
+  });
+  return Array.from(groups.values()).filter((coursesInGroup) => coursesInGroup.length > 1);
+}
+
+function PlanningWorkspace({
+  data,
+  stats,
+  activeSemester,
+  activeSemesterId,
+  planningMode,
+  plannerMessage,
+  requirementStatuses,
+  onModeChange,
+  onSemesterChange,
+  onOpenRequirement,
+  onDeleteRequirement,
+  onMoveRequirement,
+  onDeleteCourse,
+  onOpenCourseDetail,
+}: {
+  data: AppData;
+  stats: PlannerStats;
+  activeSemester?: AppData['semesters'][number];
+  activeSemesterId: string;
+  planningMode: PlanningMode;
+  plannerMessage: string;
+  requirementStatuses: Map<string, RequirementStatus>;
+  onModeChange: (mode: PlanningMode) => void;
+  onSemesterChange: (semesterId: string) => void;
+  onOpenRequirement: (requirement: PendingRequirement) => void;
+  onDeleteRequirement: (requirementId: string) => void;
+  onMoveRequirement: (requirementId: string, direction: -1 | 1) => void;
+  onDeleteCourse: (courseId: string) => void;
+  onOpenCourseDetail: (course: Course) => void;
+}) {
+  const courses = activeSemester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
+  const pendingCredits = data.pendingRequirements.reduce((sum, requirement) => (
+    sum + (requirement.requiredCredits ?? requirement.credits ?? 0)
+  ), 0);
+  const activeCredits = scheduledCredits(courses);
+  const slotGroups = getSlotGroups(courses);
+  const nameGroups = getNameGroups(courses);
+  const trueConflictCount = planningMode === 'lottery' ? 0 : slotGroups.length;
+  const competitionCount = planningMode === 'lottery' ? slotGroups.length + nameGroups.length : 0;
+  const sortedRequirements = data.pendingRequirements;
+  const scheduledById = new Map(courses.map((course, index) => [course.id, index + 1]));
+  const modeOptions: Array<{ value: PlanningMode; label: string }> = [
+    { value: 'lottery', label: '初選志願' },
+    { value: 'addDrop', label: '加退選' },
+    { value: 'addCode', label: '加簽追蹤' },
+  ];
+
+  return (
+    <section id="schedule-preview" className="mt-6 rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 p-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">課表規劃</p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950">待選清單、志願排序與課表預覽</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              {planningModeDescription(planningMode)}
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+              {modeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => onModeChange(option.value)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                    planningMode === option.value
+                      ? 'bg-white text-blue-700 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <select
+              value={activeSemesterId}
+              onChange={(event) => onSemesterChange(event.target.value)}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+            >
+              {data.semesters.map((semester) => (
+                <option key={semester.id} value={semester.id}>{semester.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <ScheduleLegend />
+        {plannerMessage && (
+          <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+            {plannerMessage}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-0 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
+        <aside className="border-b border-slate-200 p-4 xl:border-b-0 xl:border-r">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">待選與志願序</h3>
+              <p className="mt-1 text-xs text-slate-500">{planningModeLabel(planningMode)}模式 · 最多可管理 30 個志願</p>
+            </div>
+            <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+              {courses.length + sortedRequirements.length} 項
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-slate-700">已排入課表</h4>
+                <span className="text-xs text-slate-500">{courses.length} 門・{formatCredits(activeCredits)} 學分</span>
+              </div>
+              {courses.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+                  從查詢結果按「排入課表」後，課程會出現在這裡。
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {courses.map((course) => (
+                    <PlanningListCourse
+                      key={course.id}
+                      course={course}
+                      rank={scheduledById.get(course.id) || 0}
+                      mode={planningMode}
+                      onOpen={() => onOpenCourseDetail(course)}
+                      onDelete={() => onDeleteCourse(course.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-slate-700">待排需求</h4>
+                <span className="text-xs text-slate-500">{formatCredits(pendingCredits)} 學分</span>
+              </div>
+              {sortedRequirements.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+                  查詢課程後加入待選，或匯入 PDF 產生待排需求。
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sortedRequirements.map((requirement, index) => (
+                    <RequirementRow
+                      key={requirement.id}
+                      requirement={requirement}
+                      status={requirementStatuses.get(requirement.id)}
+                      onOpen={() => onOpenRequirement(requirement)}
+                      onDelete={() => onDeleteRequirement(requirement.id)}
+                      onMoveUp={() => onMoveRequirement(requirement.id, -1)}
+                      onMoveDown={() => onMoveRequirement(requirement.id, 1)}
+                      canMoveUp={index > 0}
+                      canMoveDown={index < sortedRequirements.length - 1}
+                      rank={courses.length + index + 1}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        <div className="min-w-0 border-b border-slate-200 xl:border-b-0 xl:border-r">
+          <div className="border-b border-slate-100 p-4">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">週課表預覽</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {activeSemester?.name || '未選學期'} · {courses.length} 門課 · {formatCredits(activeCredits)} 學分
+                </p>
+              </div>
+              <p className="text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
+            </div>
+          </div>
+          <PlanningScheduleGrid
+            semester={activeSemester}
+            mode={planningMode}
+            courseRanks={scheduledById}
+            onDeleteCourse={onDeleteCourse}
+            onOpenCourseDetail={onOpenCourseDetail}
+          />
+        </div>
+
+        <aside className="p-4">
+          <h3 className="text-base font-semibold text-slate-900">規劃檢查</h3>
+          <p className="mt-1 text-xs text-slate-500">依目前選課階段解讀衝堂、互斥與學分限制。</p>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <MetricBox label="已排學分" value={formatCredits(activeCredits)} tone="emerald" />
+            <MetricBox label="待排學分" value={formatCredits(pendingCredits)} tone="blue" />
+            <MetricBox label={planningMode === 'lottery' ? '競爭組' : '真衝堂'} value={String(planningMode === 'lottery' ? competitionCount : trueConflictCount)} tone={planningMode === 'lottery' ? 'amber' : trueConflictCount > 0 ? 'red' : 'emerald'} />
+            <MetricBox label="志願數" value={`${courses.length + sortedRequirements.length}/30`} tone="slate" />
+          </div>
+
+          <div className="mt-4 rounded-lg border border-slate-200 p-3">
+            <h4 className="text-sm font-semibold text-slate-800">
+              {planningMode === 'lottery' ? '競爭組與互斥提醒' : '衝堂清單'}
+            </h4>
+            <div className="mt-3 space-y-2">
+              {slotGroups.length === 0 && nameGroups.length === 0 ? (
+                <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  目前沒有偵測到同時段或同課名重疊。
+                </p>
+              ) : (
+                <>
+                  {slotGroups.slice(0, 4).map((group) => (
+                    <ConflictGroupRow
+                      key={group.slot}
+                      label={group.label}
+                      courses={group.courses}
+                      mode={planningMode}
+                    />
+                  ))}
+                  {nameGroups.slice(0, 3).map((group) => (
+                    <ConflictGroupRow
+                      key={`name-${normalizeName(group[0].name)}`}
+                      label="同課名互斥"
+                      courses={group}
+                      mode={planningMode}
+                    />
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-slate-200 p-3">
+            <h4 className="text-sm font-semibold text-slate-800">送出前重點</h4>
+            <ul className="mt-2 space-y-2 text-sm text-slate-600">
+              {planningMode === 'lottery' ? (
+                <>
+                  <li>同一時段可放多個志願，抽中一門後其餘同時段會失效。</li>
+                  <li>志願序可超過 25 學分，但中籤後系統會受學分上限影響。</li>
+                  <li>體育、國文、熱門通識建議放多個備案。</li>
+                </>
+              ) : planningMode === 'addDrop' ? (
+                <>
+                  <li>同時段課程應先處理衝堂，再到官方系統送出。</li>
+                  <li>名額已滿的課程不建議放入主要送出清單。</li>
+                  <li>送出仍需使用者在官方系統確認，不做自動搶課。</li>
+                </>
+              ) : (
+                <>
+                  <li>記錄教授 Email、第一次上課時間與加簽備註。</li>
+                  <li>授權碼僅追蹤狀態，不應自動代填或轉讓。</li>
+                  <li>加簽課仍需回官方系統完成流程。</li>
+                </>
+              )}
+            </ul>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-slate-200 p-3">
+            <h4 className="text-sm font-semibold text-slate-800">畢業門檻影響</h4>
+            <div className="mt-3 space-y-3 text-sm">
+              <ProgressSummary label="總學分" value={stats.total} target={data.targets.total} />
+              <ProgressSummary label="本系必修" value={stats.homeCompulsory} target={data.targets.home_compulsory} />
+              <ProgressSummary label="通識" value={stats.gen_ed} target={data.targets.gen_ed} />
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function PlanningScheduleGrid({
+  semester,
+  mode,
+  courseRanks,
+  onDeleteCourse,
+  onOpenCourseDetail,
+}: {
+  semester?: AppData['semesters'][number];
+  mode: PlanningMode;
+  courseRanks: Map<string, number>;
+  onDeleteCourse: (courseId: string) => void;
+  onOpenCourseDetail: (course: Course) => void;
+}) {
+  const courses = semester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
+  const unscheduled = courses.filter((course) => !course.scheduledOffering?.slots.length);
+  return (
+    <div className="p-4">
+      <div className="overflow-x-auto">
+        <div className="min-w-[900px]">
+          <div className="grid grid-cols-[72px_repeat(7,minmax(112px,1fr))] border-l border-t border-slate-200 text-sm">
+            <div className="border-b border-r border-slate-200 bg-slate-50 p-2 font-medium text-slate-500">時間</div>
+            {DAY_COLUMNS.map((day) => (
+              <div key={day.code} className="border-b border-r border-slate-200 bg-slate-50 p-2 text-center font-semibold text-slate-700">
+                星期{day.label}
+              </div>
+            ))}
+            {PERIODS.map((period) => (
+              <PlanningScheduleRow
+                key={period}
+                period={period}
+                courses={courses}
+                mode={mode}
+                courseRanks={courseRanks}
+                onDeleteCourse={onDeleteCourse}
+                onOpenCourseDetail={onOpenCourseDetail}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {unscheduled.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <h4 className="mb-2 text-sm font-semibold text-slate-700">未提供節次的課程</h4>
+          <div className="flex flex-wrap gap-2">
+            {unscheduled.map((course) => (
+              <CoursePill
+                key={course.id}
+                course={course}
+                compact
+                onDelete={() => onDeleteCourse(course.id)}
+                onOpenDetail={() => onOpenCourseDetail(course)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanningScheduleRow({
+  period,
+  courses,
+  mode,
+  courseRanks,
+  onDeleteCourse,
+  onOpenCourseDetail,
+}: {
+  period: string;
+  courses: Course[];
+  mode: PlanningMode;
+  courseRanks: Map<string, number>;
+  onDeleteCourse: (courseId: string) => void;
+  onOpenCourseDetail: (course: Course) => void;
+}) {
+  return (
+    <>
+      <div className="border-b border-r border-slate-200 bg-slate-50 p-2 text-center font-semibold text-slate-600">{period}</div>
+      {DAY_COLUMNS.map((day) => {
+        const slot = `${day.code}${period}`;
+        const slotCourses = courses.filter((course) => course.scheduledOffering?.slots.includes(slot));
+        const hasOverlap = slotCourses.length > 1;
+        const cellTone = hasOverlap
+          ? mode === 'lottery' ? 'bg-amber-50/70' : 'bg-red-50'
+          : 'bg-white';
+        return (
+          <div key={slot} className={`min-h-24 border-b border-r border-slate-200 p-1.5 ${cellTone}`}>
+            <div className="space-y-1.5">
+              {slotCourses.map((course) => (
+                <PlanningScheduleCard
+                  key={course.id}
+                  course={course}
+                  rank={courseRanks.get(course.id) || 0}
+                  overlap={hasOverlap}
+                  mode={mode}
+                  onDelete={() => onDeleteCourse(course.id)}
+                  onOpen={() => onOpenCourseDetail(course)}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function PlanningScheduleCard({
+  course,
+  rank,
+  overlap,
+  mode,
+  onDelete,
+  onOpen,
+}: {
+  course: Course;
+  rank: number;
+  overlap: boolean;
+  mode: PlanningMode;
+  onDelete: () => void;
+  onOpen: () => void;
+}) {
+  const tone = overlap
+    ? mode === 'lottery' ? 'border-amber-300 bg-white' : 'border-red-300 bg-white'
+    : coursePillTone(course);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`w-full rounded-md border px-2 py-1.5 text-left shadow-sm transition-colors hover:shadow ${tone}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className={`flex h-5 min-w-5 items-center justify-center rounded-full text-[11px] font-bold ${
+          overlap && mode === 'lottery' ? 'bg-amber-100 text-amber-700' : overlap ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+        }`}>
+          {rank}
+        </span>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-red-600"
+          title="移除課程"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <p className="mt-1 truncate text-xs font-semibold text-slate-900">{course.name}</p>
+      <p className="truncate text-[11px] text-slate-500">
+        {course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}
+      </p>
+      {overlap && (
+        <p className={`mt-1 text-[11px] font-medium ${mode === 'lottery' ? 'text-amber-700' : 'text-red-700'}`}>
+          {mode === 'lottery' ? '競爭志願' : '衝堂'}
+        </p>
+      )}
+    </button>
+  );
+}
+
+function PlanningListCourse({
+  course,
+  rank,
+  mode,
+  onOpen,
+  onDelete,
+}: {
+  course: Course;
+  rank: number;
+  mode: PlanningMode;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const slots = course.scheduledOffering?.slots || [];
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex items-start gap-3">
+        <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+          mode === 'lottery' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'
+        }`}>
+          {rank}
+        </div>
+        <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+          <p className="truncate text-sm font-semibold text-slate-900">{course.name}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {formatCredits(course.credits)} 學分
+            {course.scheduledOffering?.teacher ? `・${course.scheduledOffering.teacher}` : ''}
+          </p>
+          <p className="mt-1 truncate text-xs text-slate-500">
+            {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+          title="移除課程"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MetricBox({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: 'emerald' | 'blue' | 'amber' | 'red' | 'slate';
+}) {
+  const toneClass = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    red: 'border-red-200 bg-red-50 text-red-700',
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+  }[tone];
+  return (
+    <div className={`rounded-lg border p-3 ${toneClass}`}>
+      <p className="text-xs font-medium opacity-80">{label}</p>
+      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function ConflictGroupRow({
+  label,
+  courses,
+  mode,
+}: {
+  label: string;
+  courses: Course[];
+  mode: PlanningMode;
+}) {
+  return (
+    <div className={`rounded-md border px-3 py-2 text-sm ${
+      mode === 'lottery' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-red-200 bg-red-50 text-red-900'
+    }`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-semibold">{label}</span>
+        <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium">
+          {mode === 'lottery' ? '競爭' : '衝堂'}
+        </span>
+      </div>
+      <p className="mt-1 text-xs opacity-80">
+        {courses.map((course) => course.name).join('、')}
+      </p>
+    </div>
+  );
+}
+
+function ProgressSummary({
+  label,
+  value,
+  target,
+}: {
+  label: string;
+  value: number;
+  target: number;
+}) {
+  const ratio = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs text-slate-500">
+        <span>{label}</span>
+        <span>{formatCredits(value)} / {formatCredits(target)}</span>
+      </div>
+      <div className="mt-1 h-2 rounded-full bg-slate-100">
+        <div className="h-2 rounded-full bg-blue-600" style={{ width: `${ratio}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function CourseResultRow({
   offering,
   conflicts,
@@ -1709,22 +2343,42 @@ function RequirementRow({
   status,
   onOpen,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
   rank,
 }: {
   requirement: PendingRequirement;
   status?: RequirementStatus;
   onOpen: () => void;
   onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   rank?: number;
 }) {
   const completed = Boolean(status?.completed);
+  const code = requirementCourseCode(requirement);
   return (
-    <div className={`rounded-md border p-3 ${completed ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`cursor-pointer rounded-md border p-3 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${completed ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+    >
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
           {rank || (completed ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Clock className="h-4 w-4 text-slate-400" />)}
         </div>
-        <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-semibold text-slate-900">{requirement.title}</p>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
@@ -1733,11 +2387,40 @@ function RequirementRow({
           </div>
           <p className="mt-1 text-xs text-slate-500">
             {formatCredits(status?.earnedCredits || 0)} / {formatCredits(status?.targetCredits || requirement.requiredCredits || requirement.credits || 0)} 學分
-            {requirement.note ? `・${requirement.note}` : ''}
+            {code ? `・課碼 ${code}` : requirement.note ? `・${requirement.note}` : ''}
           </p>
-        </button>
+        </div>
+        {(onMoveUp || onMoveDown) && (
+          <div className="flex shrink-0 flex-col gap-1">
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                onMoveUp?.();
+              }}
+              disabled={!canMoveUp}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+              title="志願序上移"
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                onMoveDown?.();
+              }}
+              disabled={!canMoveDown}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+              title="志願序下移"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         <button
-          onClick={onDelete}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
           className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
           title="移除需求"
         >
@@ -1745,135 +2428,6 @@ function RequirementRow({
         </button>
       </div>
     </div>
-  );
-}
-
-function WeeklySchedule({
-  semester,
-  onDeleteCourse,
-  onOpenCourseDetail,
-}: {
-  semester: AppData['semesters'][number];
-  onDeleteCourse: (courseId: string) => void;
-  onOpenCourseDetail: (course: Course) => void;
-}) {
-  const unscheduledPlanned = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && !isHistoryImportedCourse(course));
-  const unscheduledLegacy = unscheduledPlanned.filter((course) => !course.scheduledOffering);
-  const unscheduledManual = unscheduledPlanned.filter((course) => course.scheduledOffering);
-  const historyRecords = semester.courses.filter((course) => !course.scheduledOffering?.slots.length && isHistoryImportedCourse(course));
-  return (
-    <div className="p-4">
-      <div className="overflow-x-auto">
-        <div className="min-w-[980px]">
-          <div className="grid grid-cols-[72px_repeat(7,minmax(120px,1fr))] border-l border-t border-slate-200 text-sm">
-            <div className="border-b border-r border-slate-200 bg-slate-50 p-2 font-medium text-slate-500">節次</div>
-            {DAY_COLUMNS.map((day) => (
-              <div key={day.code} className="border-b border-r border-slate-200 bg-slate-50 p-2 text-center font-semibold text-slate-700">
-                星期{day.label}
-              </div>
-            ))}
-            {PERIODS.map((period) => (
-              <ScheduleRow
-                key={period}
-                period={period}
-                semester={semester}
-                onDeleteCourse={onDeleteCourse}
-                onOpenCourseDetail={onOpenCourseDetail}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {unscheduledManual.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">未排入時間的規劃課程</h3>
-          <div className="flex flex-wrap gap-2">
-            {unscheduledManual.map((course) => (
-              <CoursePill
-                key={course.id}
-                course={course}
-                onDelete={() => onDeleteCourse(course.id)}
-                onOpenDetail={() => onOpenCourseDetail(course)}
-                compact
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {unscheduledLegacy.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <h3 className="mb-1 text-sm font-semibold text-slate-700">舊資料課程（未提供節次）</h3>
-          <p className="mb-2 text-xs text-slate-500">這些課程來自舊版規劃資料，只保留課名與學分；可點開補上教師、教室或課程連結。</p>
-          <div className="flex flex-wrap gap-2">
-            {unscheduledLegacy.map((course) => (
-              <CoursePill
-                key={course.id}
-                course={course}
-                onDelete={() => onDeleteCourse(course.id)}
-                onOpenDetail={() => onOpenCourseDetail(course)}
-                compact
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {historyRecords.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">修課紀錄（未補到節次）</h3>
-          <div className="flex flex-wrap gap-2">
-            {historyRecords.map((course) => (
-              <CoursePill
-                key={course.id}
-                course={course}
-                onDelete={() => onDeleteCourse(course.id)}
-                onOpenDetail={() => onOpenCourseDetail(course)}
-                compact
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ScheduleRow({
-  period,
-  semester,
-  onDeleteCourse,
-  onOpenCourseDetail,
-}: {
-  period: string;
-  semester: AppData['semesters'][number];
-  onDeleteCourse: (courseId: string) => void;
-  onOpenCourseDetail: (course: Course) => void;
-}) {
-  return (
-    <>
-      <div className="border-b border-r border-slate-200 bg-slate-50 p-2 text-center font-semibold text-slate-600">{period}</div>
-      {DAY_COLUMNS.map((day) => {
-        const slot = `${day.code}${period}`;
-        const courses = semester.courses.filter((course) => course.scheduledOffering?.slots.includes(slot));
-        return (
-          <div key={slot} className={`min-h-24 border-b border-r border-slate-200 p-1.5 ${courses.length > 1 ? 'bg-red-50' : 'bg-white'}`}>
-            <div className="space-y-1.5">
-              {courses.map((course) => (
-                <CoursePill
-                  key={course.id}
-                  course={course}
-                  conflict={courses.length > 1}
-                  onDelete={() => onDeleteCourse(course.id)}
-                  onOpenDetail={() => onOpenCourseDetail(course)}
-                />
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </>
   );
 }
 
@@ -1969,6 +2523,7 @@ function OfferingModal({
   offerings,
   data,
   activeSemesterId,
+  planningMode,
   onClose,
   onSchedule,
 }: {
@@ -1979,9 +2534,11 @@ function OfferingModal({
   offerings: CourseSearchResult[];
   data: AppData;
   activeSemesterId: string;
+  planningMode: PlanningMode;
   onClose: () => void;
-  onSchedule: (offering: CourseSearchResult, force: boolean) => void;
+  onSchedule: (offering: CourseSearchResult, force: boolean) => boolean;
 }) {
+  const code = requirementCourseCode(requirement);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
       <div className="max-h-[86vh] w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-xl">
@@ -1989,7 +2546,9 @@ function OfferingModal({
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-slate-950">{requirement.title}</h2>
-              <p className="mt-1 text-sm text-slate-500">選擇要排入 {semesterName} 的實際開課班別。</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {code ? `依課碼 ${code} 選擇要排入 ${semesterName} 的班別。` : `選擇要排入 ${semesterName} 的實際開課班別。`}
+              </p>
             </div>
             <button onClick={onClose} className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100">✕</button>
           </div>
@@ -2002,6 +2561,7 @@ function OfferingModal({
             {offerings.map((offering) => {
               const conflicts = findConflicts(offering, data, activeSemesterId);
               const alreadyAdded = Boolean(findScheduledCourseByOffering(offering, data, activeSemesterId));
+              const conflictBlocksSchedule = conflicts.length > 0 && planningMode !== 'lottery';
               const hasSlots = parseNodeSlots(offering.node).length > 0;
               return (
                 <div key={`${offering.course_no}-${offering.node}-${offering.teacher}`} className="rounded-md border border-slate-200 p-4">
@@ -2025,23 +2585,29 @@ function OfferingModal({
                         </p>
                       )}
                       {!alreadyAdded && conflicts.length > 0 && (
-                        <p className="mt-2 flex items-center gap-1 text-sm text-red-600">
+                        <p className={`mt-2 flex items-center gap-1 text-sm ${planningMode === 'lottery' ? 'text-amber-600' : 'text-red-600'}`}>
                           <AlertTriangle className="h-4 w-4" />
-                          與 {conflicts.map((course) => course.name).join('、')} 衝堂
+                          {planningMode === 'lottery' ? '同時段競爭：' : '與 '}
+                          {conflicts.map((course) => course.name).join('、')}
+                          {planningMode === 'lottery' ? '，可作為同時段志願' : ' 衝堂'}
                         </p>
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <button
-                        onClick={() => onSchedule(offering, false)}
-                        disabled={alreadyAdded || conflicts.length > 0}
+                        onClick={() => {
+                          if (onSchedule(offering, false)) onClose();
+                        }}
+                        disabled={alreadyAdded || conflictBlocksSchedule}
                         className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                       >
                         {alreadyAdded ? '已加入' : '排入課表'}
                       </button>
-                      {!alreadyAdded && conflicts.length > 0 && (
+                      {!alreadyAdded && conflictBlocksSchedule && (
                         <button
-                          onClick={() => onSchedule(offering, true)}
+                          onClick={() => {
+                            if (onSchedule(offering, true)) onClose();
+                          }}
                           className="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
                         >
                           仍要加入

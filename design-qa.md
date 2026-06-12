@@ -2,41 +2,48 @@
 - No actionable P0/P1/P2 findings remain.
 
 **Source Visual Truth**
-- `/Users/hezhen/GitHub/course_planner/前端參考圖/課程查詢中心.png`
+- `/Users/hezhen/GitHub/course_planner/前端參考圖/待選清單與志願排序.png`
+- `/Users/hezhen/GitHub/course_planner/前端參考圖/課表規劃.png`
 
 **Implementation Evidence**
 - Local URL: `http://localhost:5173/`
-- Screenshot: `/tmp/course_planner_query_center_search_final.png`
-- Full-view comparison: `/tmp/course_planner_query_center_comparison.png`
-- Viewport: `1567 x 834`
-- State: logged-in web app, course query center, query `資料結構`, 7 results visible.
+- Screenshot: `/tmp/course_planner_planning_workspace_top_crop.png`
+- Full-view comparison: `/tmp/course_planner_planning_workspace_comparison.png`
+- Viewport: cropped in-app browser content, `1495 x 834`
+- State: logged-in web app, merged planning workspace, `初選志願` mode, active semester empty state.
+
+**Capture Notes**
+- Codex in-app browser automation was unavailable in this run because the Node REPL did not expose the `browser` object after reset.
+- Evidence was captured through the visible Codex desktop browser using `screencapture`, then cropped to the browser content area.
 
 **Fidelity Surfaces**
-- Fonts and typography: implementation keeps the existing 修課羅盤 font stack and hierarchy, with dense table text and compact controls matching the reference intent.
-- Spacing and layout rhythm: three-column structure, top tab row, warning banner, result table, and right-side pending list align with the reference. Existing product header and workspace title remain intentionally above the reference-like tool surface.
-- Colors and visual tokens: blue primary actions, green schedule actions, amber safety banner, slate borders, and neutral cards follow the reference and existing app tokens.
-- Image quality and asset fidelity: source design has no raster content beyond UI chrome; implementation uses existing icon library and no placeholder image assets.
-- Copy and content: course query, pending list, no-auto-sniping warning, export action, filters, and schedule planning copy are present. The implementation uses actual local course data rather than the static mock data from the reference.
+- Fonts and typography: implementation keeps the existing 修課羅盤 type scale and uses dense dashboard labels, metric cards, and compact planner text consistent with the two references.
+- Spacing and layout rhythm: the merged workspace uses the target three-zone layout: left待選/志願序, center週課表, right規劃檢查. The section sits below the course query center because this is an integrated app screen rather than a standalone route.
+- Colors and visual tokens: blue primary actions, amber競爭組 warnings, red衝堂 states, emerald completion states, slate borders, and white cards follow the reference direction and existing app tokens.
+- Image quality and asset fidelity: source references are UI screens with no required raster assets beyond product chrome. Implementation uses the existing Lucide icon set already used by the app and does not add placeholder imagery.
+- Copy and content: the workspace explicitly separates `初選志願`, `加退選`, and `加簽追蹤`; it explains that同時段多課 in initial selection is a競爭組, while add/drop treats overlaps as real conflicts.
 
 **Patches Made Since Previous QA Pass**
-- Reduced the course-center grid side columns from `260/320` to `240/300`.
-- Reduced the result table minimum width from `920px` to `880px`.
-- Tightened table cell padding and note width so the action column is visible in the first viewport.
+- Merged the main nav by removing `待選清單` as a primary tab and changing it to `課表規劃 {count}`.
+- Added planning mode state: `初選志願`, `加退選`, and `加簽追蹤`.
+- Changed scheduling behavior so `初選志願` mode allows same-slot courses without a conflict confirmation.
+- Replaced the old schedule preview with a three-column planning workspace.
+- Added right-side planning checks for credits, wishlist count, competition groups, true conflicts, and graduation-gate impact.
 
 **Open Questions**
-- The reference shows a fully populated pending list; the current screenshot has no pending items because the live account did not have courses added from this query state. The component renders pending requirements when present.
-- Mobile was not separately captured because the current Codex in-app browser session exposes a fixed viewport. The layout uses responsive one-column stacking and table horizontal overflow for narrow screens.
+- The current logged-in account has no scheduled courses in the active semester, so the screenshot validates the empty-state layout. Filled-card states are implemented but should be rechecked after adding several same-slot courses.
+- Drag-and-drop ranking is not implemented yet; this version uses existing data order as the displayed priority.
 
 **Implementation Checklist**
-- Implement course-query tabs and safety banner.
-- Add left-side filters for semester, query mode, teacher, requirement type, credits, time, and capacity.
-- Render result table with course code, name, teacher, credits, time, classroom, capacity, note, add-to-pending, and schedule actions.
-- Render right-side pending list summary and schedule-planning CTA.
-- Preserve existing planner, sync, graduation, history, and iOS-compatible data behavior.
+- Unify待選清單 and課表規劃 into one planning workspace.
+- Support選課階段 interpretation without changing the database schema.
+- Surface same-slot groups as競爭組 in initial selection and true conflicts in add/drop mode.
+- Preserve course detail editing, delete actions, search-to-schedule flow, and existing graduation stats.
+- Keep official submission conservative: no auto sniping, polling, scheduled submit, or automatic retry.
 
 **Follow-up Polish**
-- Add department filter once official query source exposes a reliable department field.
-- Add pagination when official results exceed a comfortable table length.
-- Add drag-and-drop ordering for pending selections in the next workflow.
+- Add drag-and-drop or up/down controls for priority order.
+- Persist planning mode and rank order once the schema decision is made.
+- Re-test filled visual states using a sample account or demo fixture with multiple same-slot wishlist courses.
 
 final result: passed

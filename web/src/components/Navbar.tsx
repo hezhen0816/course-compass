@@ -35,9 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems = [
     { label: '課程查詢', active: true },
-    { label: `待選清單 ${pendingCount}`, active: false },
-    { label: '課表規劃', active: false },
-    { label: '規劃總覽', active: false },
+    { label: `課表規劃 ${pendingCount}`, active: false },
     { label: '畢業門檻', active: false },
     { label: '歷史修課', active: false },
     { label: '設定', active: false },
