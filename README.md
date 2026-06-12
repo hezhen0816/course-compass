@@ -143,6 +143,16 @@ npm run ios:build
 
 ## 維護腳本
 
+### 驗證 production backend
+
+Vercel Web 只負責前端，官方選課送出能力依賴 Railway backend。部署後用以下指令確認 production backend 已包含校務帳密與官方初選 API：
+
+```bash
+bash scripts/python.sh scripts/verify_production_backend.py
+```
+
+若此檢查失敗，正式站台可能已更新前端但 backend 仍是舊版，官方選課送出會無法使用。
+
 ### 遷移 legacy 校務密碼
 
 若其他環境或舊備份的 `public.user_data.content.settings` 仍有舊的 `school_password` 或 `schoolCredentials.passwordCiphertext`，可用後端 Fernet 金鑰加密搬到 `public.school_credentials`，再清掉 JSON 內的舊欄位。

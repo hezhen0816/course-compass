@@ -121,7 +121,21 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     )
 
 
-app = FastAPI(title="Course Compass Sync API", version="0.1.0")
+API_VERSION = "0.2.0"
+OFFICIAL_SELECTION_CAPABILITIES = {
+    "school_credentials": True,
+    "official_selection": True,
+    "official_selection_actions": [
+        "sync",
+        "keep_alive",
+        "join",
+        "add_to_waitlist",
+        "remove",
+        "reorder",
+    ],
+}
+
+app = FastAPI(title="Course Compass Sync API", version=API_VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -140,7 +154,9 @@ app.add_middleware(
 def healthcheck() -> dict[str, Any]:
     return {
         "ok": True,
+        "version": API_VERSION,
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
+        "capabilities": OFFICIAL_SELECTION_CAPABILITIES,
         "timestamp": now().isoformat(),
     }
 
