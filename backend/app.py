@@ -4,11 +4,19 @@ import re
 from typing import Any
 
 import requests
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from .config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from .credentials import (
+        CredentialStoreError,
+        delete_school_credentials,
+        get_school_credentials_secret,
+        get_school_credentials_status,
+        put_school_credentials,
+        resolve_user_id,
+    )
     from .history import fetch_history_records
     from .models import (
         HistoryImportRequest,
@@ -16,9 +24,12 @@ try:
         MoodleAssignmentsRequest,
         MoodleAssignmentsResponse,
         OfficialSelectionCourseActionRequest,
+        OfficialSelectionKeepAliveRequest,
         OfficialSelectionPriorityUpdateRequest,
         OfficialSelectionSyncRequest,
         OfficialSelectionSyncResponse,
+        SchoolCredentialsSaveRequest,
+        SchoolCredentialsResponse,
         CourseSearchResult,
         CourseSemesterInfo,
         RequirementPdfImportResponse,
@@ -54,6 +65,14 @@ try:
     )
 except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from credentials import (
+        CredentialStoreError,
+        delete_school_credentials,
+        get_school_credentials_secret,
+        get_school_credentials_status,
+        put_school_credentials,
+        resolve_user_id,
+    )
     from history import fetch_history_records
     from models import (
         HistoryImportRequest,
@@ -61,9 +80,12 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         MoodleAssignmentsRequest,
         MoodleAssignmentsResponse,
         OfficialSelectionCourseActionRequest,
+        OfficialSelectionKeepAliveRequest,
         OfficialSelectionPriorityUpdateRequest,
         OfficialSelectionSyncRequest,
         OfficialSelectionSyncResponse,
+        SchoolCredentialsSaveRequest,
+        SchoolCredentialsResponse,
         CourseSearchResult,
         CourseSemesterInfo,
         RequirementPdfImportResponse,
@@ -121,6 +143,118 @@ def healthcheck() -> dict[str, Any]:
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
         "timestamp": now().isoformat(),
     }
+
+
+def _current_user_context(authorization: str | None) -> tuple[str, str]:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="請先登入後再保存校務帳密。")
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="請先登入後再保存校務帳密。")
+    try:
+        return resolve_user_id(token), token
+    except CredentialStoreError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Supabase 使用者驗證失敗：{exc}") from exc
+
+
+def _authorization_context(authorization: str | None) -> tuple[str, str] | None:
+    if not authorization:
+        return None
+    return _current_user_context(authorization)
+
+
+def _saved_school_credentials(
+    username: str,
+    authorization: str | None,
+    *,
+    required: bool = False,
+) -> tuple[str, str] | None:
+    context = _authorization_context(authorization)
+    if context is None:
+        if required:
+            raise HTTPException(status_code=401, detail="請先登入後再使用已保存的校務帳密。")
+        return None
+
+    user_id, access_token = context
+    try:
+        credentials = get_school_credentials_secret(user_id, access_token)
+    except CredentialStoreError as exc:
+        if required:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return None
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"讀取校務帳密失敗：{exc}") from exc
+
+    saved_username = str(credentials.get("username") or "").strip()
+    password = str(credentials.get("password") or "")
+    if saved_username and saved_username != username:
+        raise HTTPException(status_code=403, detail="已保存的校務帳號與本次操作帳號不同。")
+    if not password:
+        if required:
+            raise HTTPException(status_code=400, detail="尚未保存校務密碼，請先輸入帳密同步一次。")
+        return None
+    return saved_username or username, password
+
+
+def _official_password(username: str, password: str | None, authorization: str | None) -> str | None:
+    if password:
+        return password
+    saved_credentials = _saved_school_credentials(username, authorization)
+    return saved_credentials[1] if saved_credentials else None
+
+
+def _ensure_official_session(
+    profile_key: str,
+    username: str,
+    password: str | None,
+    authorization: str | None,
+    verify_ssl: bool,
+) -> None:
+    resolved_password = _official_password(username, password, authorization)
+    if not resolved_password:
+        return
+    client = get_official_selection_client(profile_key)
+    client.ensure_session(username, resolved_password, verify_ssl)
+
+
+@app.get("/api/school-credentials", response_model=SchoolCredentialsResponse)
+def get_saved_school_credentials(authorization: str | None = Header(default=None)) -> SchoolCredentialsResponse:
+    user_id, access_token = _current_user_context(authorization)
+    try:
+        return SchoolCredentialsResponse.model_validate(get_school_credentials_status(user_id, access_token))
+    except CredentialStoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"讀取校務帳密失敗：{exc}") from exc
+
+
+@app.put("/api/school-credentials", response_model=SchoolCredentialsResponse)
+def save_school_credentials(
+    request: SchoolCredentialsSaveRequest,
+    authorization: str | None = Header(default=None),
+) -> SchoolCredentialsResponse:
+    user_id, access_token = _current_user_context(authorization)
+    try:
+        return SchoolCredentialsResponse.model_validate(
+            put_school_credentials(user_id, request.username.strip(), request.password, access_token)
+        )
+    except CredentialStoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"保存校務帳密失敗：{exc}") from exc
+
+
+@app.delete("/api/school-credentials", response_model=SchoolCredentialsResponse)
+def remove_saved_school_credentials(authorization: str | None = Header(default=None)) -> SchoolCredentialsResponse:
+    user_id, access_token = _current_user_context(authorization)
+    try:
+        return SchoolCredentialsResponse.model_validate(delete_school_credentials(user_id, access_token))
+    except CredentialStoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"刪除校務帳密失敗：{exc}") from exc
 
 
 @app.get("/api/courses/semesters", response_model=list[CourseSemesterInfo])
@@ -468,11 +602,17 @@ def get_latest_moodle_assignments(profile_key: str) -> MoodleAssignmentsResponse
 
 
 @app.post("/api/official-selection/a02/sync", response_model=OfficialSelectionSyncResponse)
-def sync_initial_selection_workspace(request: OfficialSelectionSyncRequest) -> OfficialSelectionSyncResponse:
+def sync_initial_selection_workspace(
+    request: OfficialSelectionSyncRequest,
+    authorization: str | None = Header(default=None),
+) -> OfficialSelectionSyncResponse:
     try:
         profile_key = request.profile_key or request.username
+        password = _official_password(request.username, request.password, authorization)
+        if not password:
+            raise HTTPException(status_code=400, detail="請輸入校務密碼，或先保存校務帳密後再同步官方初選。")
         client = get_official_selection_client(profile_key)
-        payload = client.fetch_a02_workspace(request.username, request.password, request.verify_ssl)
+        payload = client.fetch_a02_workspace(request.username, password, request.verify_ssl)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,
@@ -486,11 +626,41 @@ def sync_initial_selection_workspace(request: OfficialSelectionSyncRequest) -> O
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/official-selection/a02/join", response_model=OfficialSelectionSyncResponse)
-def join_initial_selection_course(request: OfficialSelectionCourseActionRequest) -> OfficialSelectionSyncResponse:
+@app.post("/api/official-selection/a02/keep-alive")
+def keep_initial_selection_session_alive(
+    request: OfficialSelectionKeepAliveRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     try:
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
+        session_valid = client.keep_alive(request.verify_ssl)
+        if not session_valid:
+            saved_credentials = _saved_school_credentials(request.username, authorization)
+            if saved_credentials:
+                client.ensure_session(request.username, saved_credentials[1], request.verify_ssl)
+                session_valid = True
+        return {
+            "profile_key": profile_key,
+            "school_account": request.username,
+            "session_valid": session_valid,
+            "checked_at": now().isoformat(),
+        }
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"官方選課系統 keep-alive 失敗：{exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/official-selection/a02/join", response_model=OfficialSelectionSyncResponse)
+def join_initial_selection_course(
+    request: OfficialSelectionCourseActionRequest,
+    authorization: str | None = Header(default=None),
+) -> OfficialSelectionSyncResponse:
+    try:
+        profile_key = request.profile_key or request.username
+        client = get_official_selection_client(profile_key)
+        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.join_course(request.course_no, request.verify_ssl)
         return OfficialSelectionSyncResponse.model_validate(
             {
@@ -506,10 +676,14 @@ def join_initial_selection_course(request: OfficialSelectionCourseActionRequest)
 
 
 @app.post("/api/official-selection/a02/add-to-waitlist", response_model=OfficialSelectionSyncResponse)
-def add_initial_selection_waitlist_course(request: OfficialSelectionCourseActionRequest) -> OfficialSelectionSyncResponse:
+def add_initial_selection_waitlist_course(
+    request: OfficialSelectionCourseActionRequest,
+    authorization: str | None = Header(default=None),
+) -> OfficialSelectionSyncResponse:
     try:
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
+        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.add_course_to_waitlist(request.course_no, request.verify_ssl)
         return OfficialSelectionSyncResponse.model_validate(
             {
@@ -525,10 +699,14 @@ def add_initial_selection_waitlist_course(request: OfficialSelectionCourseAction
 
 
 @app.post("/api/official-selection/a02/remove", response_model=OfficialSelectionSyncResponse)
-def remove_initial_selection_course(request: OfficialSelectionCourseActionRequest) -> OfficialSelectionSyncResponse:
+def remove_initial_selection_course(
+    request: OfficialSelectionCourseActionRequest,
+    authorization: str | None = Header(default=None),
+) -> OfficialSelectionSyncResponse:
     try:
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
+        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.remove_course(request.course_no, request.verify_ssl)
         return OfficialSelectionSyncResponse.model_validate(
             {
@@ -544,10 +722,14 @@ def remove_initial_selection_course(request: OfficialSelectionCourseActionReques
 
 
 @app.post("/api/official-selection/a02/reorder", response_model=OfficialSelectionSyncResponse)
-def reorder_initial_selection_courses(request: OfficialSelectionPriorityUpdateRequest) -> OfficialSelectionSyncResponse:
+def reorder_initial_selection_courses(
+    request: OfficialSelectionPriorityUpdateRequest,
+    authorization: str | None = Header(default=None),
+) -> OfficialSelectionSyncResponse:
     try:
         profile_key = request.profile_key or request.username
         client = get_official_selection_client(profile_key)
+        _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = client.reorder_registered_courses(request.ordered_course_nos, request.verify_ssl)
         return OfficialSelectionSyncResponse.model_validate(
             {

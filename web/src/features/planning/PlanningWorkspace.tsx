@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2, Clock, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCircle2, Clock, Loader2, Trash2 } from 'lucide-react';
 import type { AppData, Course, OfficialSelectionSyncResponse, PendingRequirement, PlannerStats } from '../../types';
 import {
   DAY_COLUMNS,
@@ -97,11 +97,9 @@ export function PlanningWorkspace({
   planningMode,
   plannerMessage,
   officialSelection,
-  officialSelectionStatus,
   officialActionCourseNo,
   officialOrderStatus,
   onModeChange,
-  onOpenOfficialSelectionSync,
   onJoinOfficialCourse,
   onRemoveOfficialCourse,
   onSaveOfficialOrder,
@@ -114,11 +112,9 @@ export function PlanningWorkspace({
   planningMode: PlanningMode;
   plannerMessage: string;
   officialSelection: OfficialSelectionSyncResponse | null;
-  officialSelectionStatus: 'idle' | 'loading' | 'error' | 'success';
   officialActionCourseNo: string | null;
   officialOrderStatus: 'idle' | 'loading';
   onModeChange: (mode: PlanningMode) => void;
-  onOpenOfficialSelectionSync: () => void;
   onJoinOfficialCourse: (courseNo: string, courseName: string) => void;
   onRemoveOfficialCourse: (courseNo: string, courseName: string) => void;
   onSaveOfficialOrder: (orderedCourseNos: string[]) => void;
@@ -154,15 +150,6 @@ export function PlanningWorkspace({
             </p>
           </div>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <button
-              type="button"
-              onClick={onOpenOfficialSelectionSync}
-              disabled={officialSelectionStatus === 'loading'}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${officialSelectionStatus === 'loading' ? 'animate-spin' : ''}`} />
-              同步官方初選
-            </button>
             <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
               {modeOptions.map((option) => (
                 <button
@@ -482,7 +469,14 @@ function OfficialRegisteredList({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-slate-900">{course.course_name}</p>
-              <p className="mt-1 truncate text-xs text-slate-500">{course.course_no}</p>
+              <p className="mt-1 truncate text-xs text-slate-500">
+                {[
+                  course.course_no,
+                  course.credits != null ? `${formatCredits(course.credits)} 學分` : '',
+                  course.require_option || '',
+                  course.teacher || '',
+                ].filter(Boolean).join('・')}
+              </p>
             </div>
             <div className="flex shrink-0 flex-col gap-1">
               <button
@@ -645,8 +639,9 @@ function OfficialScheduleTable({
         <table className="min-w-[760px] w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="w-14 border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">節次</th>
-              <th className="w-20 border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">時間</th>
+              <th className="w-[72px] border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">
+                節次 / 時間
+              </th>
               {visibleWeekdays.map((weekday) => (
                 <th key={weekday.label} className="border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">
                   {weekday.label}
@@ -657,11 +652,13 @@ function OfficialScheduleTable({
           <tbody>
             {displayRows.map((row, index) => (
               <tr key={`${getOfficialScheduleCell(row, '節次') || index}-${getOfficialScheduleCell(row, '時間') || index}`}>
-                <td className="border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">
-                  {getOfficialScheduleCell(row, '節次') || index + 1}
-                </td>
-                <td className="whitespace-pre-line border border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs leading-tight text-slate-500">
-                  {formatOfficialTime(getOfficialScheduleCell(row, '時間'))}
+                <td className="border border-slate-200 bg-slate-50 px-2 py-2 text-center">
+                  <div className="text-sm font-semibold text-slate-800">
+                    {getOfficialScheduleCell(row, '節次') || index + 1}
+                  </div>
+                  <div className="mt-1 whitespace-pre-line text-[11px] leading-tight text-slate-500">
+                    {formatOfficialTime(getOfficialScheduleCell(row, '時間'))}
+                  </div>
                 </td>
                 {visibleWeekdays.map((weekday) => {
                   const value = getOfficialScheduleCell(row, weekday.label);

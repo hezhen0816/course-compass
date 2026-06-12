@@ -20,6 +20,7 @@ type AppModalsProps = {
   schoolSyncMode: 'school-data' | 'official-selection';
   schoolUsername: string;
   schoolPassword: string;
+  rememberSchoolCredentials: boolean;
   schoolSyncStatus: 'idle' | 'loading' | 'error' | 'success';
   schoolSyncMessage: string;
   detailCourse: { semesterId: string; semesterName: string; course: Course } | null;
@@ -30,6 +31,7 @@ type AppModalsProps = {
   onCloseImport: () => void;
   onSchoolUsernameChange: (username: string) => void;
   onSchoolPasswordChange: (password: string) => void;
+  onRememberSchoolCredentialsChange: (remember: boolean) => void;
   onCloseSchoolSync: () => void;
   onSyncSchoolData: () => void;
   onCloseCourseDetail: () => void;
@@ -51,6 +53,7 @@ export function AppModals({
   schoolSyncMode,
   schoolUsername,
   schoolPassword,
+  rememberSchoolCredentials,
   schoolSyncStatus,
   schoolSyncMessage,
   detailCourse,
@@ -61,6 +64,7 @@ export function AppModals({
   onCloseImport,
   onSchoolUsernameChange,
   onSchoolPasswordChange,
+  onRememberSchoolCredentialsChange,
   onCloseSchoolSync,
   onSyncSchoolData,
   onCloseCourseDetail,
@@ -93,10 +97,12 @@ export function AppModals({
           mode={schoolSyncMode}
           username={schoolUsername}
           password={schoolPassword}
+          rememberCredentials={rememberSchoolCredentials}
           status={schoolSyncStatus}
           message={schoolSyncMessage}
           onUsernameChange={onSchoolUsernameChange}
           onPasswordChange={onSchoolPasswordChange}
+          onRememberCredentialsChange={onRememberSchoolCredentialsChange}
           onClose={onCloseSchoolSync}
           onImport={onSyncSchoolData}
         />

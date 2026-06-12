@@ -24,6 +24,11 @@ if [[ ! -f ".env" ]]; then
   exit 1
 fi
 
+set -a
+# shellcheck disable=SC1091
+source ".env"
+set +a
+
 if ! "$PYTHON_BIN" -m uvicorn --version >/dev/null 2>&1; then
   echo "找不到 uvicorn：目前使用 $PYTHON_BIN。"
   echo "請先安裝 backend 依賴，例如："

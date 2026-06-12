@@ -6,20 +6,30 @@ type SettingsPageProps = {
   initialSettings: AppData['targets'];
   schoolUsername: string;
   selectionTargetLabel: string;
+  hasSavedSchoolCredentials: boolean;
   syncStatus: 'idle' | 'loading' | 'error' | 'success';
   syncMessage: string;
+  officialSelectionStatus: 'idle' | 'loading' | 'error' | 'success';
+  officialSelectionMessage: string;
   onSaveTargets: (targets: AppData['targets']) => void;
   onOpenSchoolSync: () => void;
+  onOpenOfficialSelectionSync: () => void;
+  onClearSavedSchoolCredentials: () => void;
 };
 
 export function SettingsPage({
   initialSettings,
   schoolUsername,
   selectionTargetLabel,
+  hasSavedSchoolCredentials,
   syncStatus,
   syncMessage,
+  officialSelectionStatus,
+  officialSelectionMessage,
   onSaveTargets,
   onOpenSchoolSync,
+  onOpenOfficialSelectionSync,
+  onClearSavedSchoolCredentials,
 }: SettingsPageProps) {
   const [settingsForm, setSettingsForm] = useState(initialSettings);
 
@@ -36,19 +46,36 @@ export function SettingsPage({
             <h1 className="mt-1 text-2xl font-semibold text-slate-950">資料同步與畢業門檻</h1>
             <p className="mt-1 text-sm text-slate-500">校務資料同步、畢業門檻數字與帳號層級設定集中放在這裡，不混進選課流程。</p>
           </div>
-          <button
-            onClick={onOpenSchoolSync}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            <RefreshCw className="h-4 w-4" />
-            同步校務資料
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={onOpenSchoolSync}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              <RefreshCw className="h-4 w-4" />
+              同步校務資料
+            </button>
+            <button
+              onClick={onOpenOfficialSelectionSync}
+              disabled={officialSelectionStatus === 'loading'}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${officialSelectionStatus === 'loading' ? 'animate-spin' : ''}`} />
+              同步官方初選
+            </button>
+          </div>
         </div>
         {syncMessage && (
           <p className={`mt-4 rounded-md px-3 py-2 text-sm ${
             syncStatus === 'error' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
           }`}>
             {syncMessage}
+          </p>
+        )}
+        {officialSelectionMessage && (
+          <p className={`mt-3 rounded-md px-3 py-2 text-sm ${
+            officialSelectionStatus === 'error' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
+          }`}>
+            官方初選：{officialSelectionMessage}
           </p>
         )}
       </section>
@@ -75,8 +102,25 @@ export function SettingsPage({
         <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2">
           <InfoRow label="目前學號" value={schoolUsername.trim() || '尚未設定'} />
           <InfoRow label="推定選課目標" value={selectionTargetLabel} />
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 md:col-span-2">
-            密碼保存需由後端加密與金鑰管理處理；目前開發版只在同步流程中使用，不在前端或本地草稿中保存明文密碼。
+          <div className="flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-sm text-blue-800 md:col-span-2 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="font-medium">
+                {hasSavedSchoolCredentials ? '校務帳密已加密保存於資料庫。' : '尚未保存校務密碼。'}
+              </p>
+              <p className="mt-1 text-xs text-blue-700">
+                {hasSavedSchoolCredentials
+                  ? '官方 session 過期時，可直接重新同步官方初選，不必再輸入密碼。'
+                  : '請在同步視窗勾選保存並成功同步一次，之後官方 session 過期才可直接重新同步。'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClearSavedSchoolCredentials}
+              disabled={!hasSavedSchoolCredentials}
+              className="inline-flex justify-center rounded-md border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+            >
+              清除保存密碼
+            </button>
           </div>
         </div>
       </section>

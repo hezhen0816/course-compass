@@ -1,5 +1,12 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
-import { importAcademicHistory, syncSchoolSchedule } from '../../api';
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  deleteSavedSchoolCredentials,
+  getSavedSchoolCredentials,
+  importAcademicHistory,
+  saveSchoolCredentials,
+  syncSchoolSchedule,
+} from '../../api';
+import { supabase } from '../../supabase';
 import type { AppData, RequirementSet } from '../../types';
 import {
   RETAKE_SET_ID,
@@ -15,6 +22,7 @@ type UseSchoolSyncOptions = {
   data: AppData;
   setData: Dispatch<SetStateAction<AppData>>;
   querySemester: string;
+  accessToken?: string;
   setActiveSemesterId: (semesterId: string) => void;
   markHistoryMigrated: () => void;
 };
@@ -23,18 +31,97 @@ export function useSchoolSync({
   data,
   setData,
   querySemester,
+  accessToken,
   setActiveSemesterId,
   markHistoryMigrated,
 }: UseSchoolSyncOptions) {
   const [isSchoolSyncOpen, setIsSchoolSyncOpen] = useState(false);
   const [schoolUsername, setSchoolUsername] = useState('');
-  const [schoolPassword, setSchoolPassword] = useState('');
+  const [schoolPassword, setSchoolPasswordState] = useState('');
+  const [rememberSchoolCredentials, setRememberSchoolCredentials] = useState(false);
+  const [hasSavedSchoolCredentials, setHasSavedSchoolCredentials] = useState(false);
   const [schoolSyncStatus, setSchoolSyncStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
   const [schoolSyncMessage, setSchoolSyncMessage] = useState('');
 
+  const getLatestAccessToken = useCallback(async () => {
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) return session.access_token;
+    }
+    return accessToken || '';
+  }, [accessToken]);
+
+  const runCredentialRequest = useCallback(async <T,>(
+    request: (token: string) => Promise<T>,
+    options: { refreshOnAuthError?: boolean } = {},
+  ): Promise<T> => {
+    const token = await getLatestAccessToken();
+    if (!token) {
+      throw new Error('請先登入後再保存校務帳密。');
+    }
+
+    try {
+      return await request(token);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (!options.refreshOnAuthError || !supabase || !/登入狀態已失效|請重新登入|401/.test(message)) {
+        throw error;
+      }
+
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (!session?.access_token || session.access_token === token) {
+        throw error;
+      }
+      return request(session.access_token);
+    }
+  }, [getLatestAccessToken]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let isActive = true;
+    const loadCredentials = async () => {
+      try {
+        const credentials = await getSavedSchoolCredentials(accessToken);
+        if (!isActive) return;
+        setHasSavedSchoolCredentials(credentials.hasPassword);
+        setRememberSchoolCredentials(credentials.hasPassword);
+        if (credentials.username) setSchoolUsername(credentials.username);
+      } catch (error) {
+        if (!isActive) return;
+        setHasSavedSchoolCredentials(false);
+        setRememberSchoolCredentials(false);
+        console.warn('Failed to load saved school credentials', error);
+      }
+    };
+    void loadCredentials();
+    return () => {
+      isActive = false;
+    };
+  }, [accessToken]);
+
+  const saveCredentialsIfNeeded = async (username: string, password: string) => {
+    if (!rememberSchoolCredentials) return;
+    await runCredentialRequest(
+      (token) => saveSchoolCredentials(token, username, password),
+      { refreshOnAuthError: true },
+    );
+    setHasSavedSchoolCredentials(true);
+  };
+
+  const handleRememberSchoolCredentialsChange = (remember: boolean) => {
+    setRememberSchoolCredentials(remember);
+    if (!remember && hasSavedSchoolCredentials) {
+      void runCredentialRequest(deleteSavedSchoolCredentials)
+        .then(() => setHasSavedSchoolCredentials(false))
+        .catch((error) => console.warn('Failed to delete saved school credentials', error));
+    }
+  };
+
   const closeSchoolSyncModal = () => {
     setIsSchoolSyncOpen(false);
-    setSchoolPassword('');
+    if (!rememberSchoolCredentials) {
+      setSchoolPasswordState('');
+    }
     setSchoolSyncStatus('idle');
     setSchoolSyncMessage('');
   };
@@ -46,6 +133,17 @@ export function useSchoolSync({
       setSchoolSyncMessage(`已依學號與查詢學期 ${querySemester} 推算最新課表會匯入「${inferredSemester.name}」。`);
       setSchoolSyncStatus('idle');
     }
+  };
+
+  const handleSchoolPasswordChange = (password: string) => {
+    setSchoolPasswordState(password);
+  };
+
+  const clearSavedSchoolCredentials = async () => {
+    await runCredentialRequest(deleteSavedSchoolCredentials);
+    setRememberSchoolCredentials(false);
+    setHasSavedSchoolCredentials(false);
+    setSchoolPasswordState('');
   };
 
   const syncSchoolData = async () => {
@@ -112,9 +210,19 @@ export function useSchoolSync({
       }));
       setActiveSemesterId(importSemesterId);
       markHistoryMigrated();
-      setSchoolPassword('');
+      let credentialMessage = '';
+      if (rememberSchoolCredentials) {
+        try {
+          await saveCredentialsIfNeeded(username, password);
+          credentialMessage = '校務帳密已加密保存。';
+        } catch (error) {
+          credentialMessage = `但帳密保存失敗：${error instanceof Error ? error.message : '未知錯誤'}`;
+        }
+      } else {
+        setSchoolPasswordState('');
+      }
       setSchoolSyncStatus('success');
-      setSchoolSyncMessage(`已同步完成：最新課表 ${courses.length} 門匯入「${targetSemester.name}」，歷年紀錄 ${historyRecords.length} 筆，${scheduledHistoryCourseCount} 門補到歷史節次，${importedCourseCount} 門寫入學期，${retakeRequirements.length} 門列為待重修。`);
+      setSchoolSyncMessage(`已同步完成：最新課表 ${courses.length} 門匯入「${targetSemester.name}」，歷年紀錄 ${historyRecords.length} 筆，${scheduledHistoryCourseCount} 門補到歷史節次，${importedCourseCount} 門寫入學期，${retakeRequirements.length} 門列為待重修。${credentialMessage ? ` ${credentialMessage}` : ''}`);
     } catch (error) {
       setSchoolSyncStatus('error');
       setSchoolSyncMessage(error instanceof Error ? error.message : '校務資料同步失敗。');
@@ -125,11 +233,17 @@ export function useSchoolSync({
     isSchoolSyncOpen,
     schoolUsername,
     schoolPassword,
+    rememberSchoolCredentials,
+    hasSavedSchoolCredentials,
     schoolSyncStatus,
     schoolSyncMessage,
     openSchoolSyncModal: () => setIsSchoolSyncOpen(true),
     closeSchoolSyncModal,
-    setSchoolPassword,
+    setSchoolPassword: handleSchoolPasswordChange,
+    setRememberSchoolCredentials: handleRememberSchoolCredentialsChange,
+    clearSavedSchoolCredentials,
+    saveCredentialsIfNeeded,
+    getLatestAccessToken,
     handleSchoolUsernameChange,
     syncSchoolData,
   };

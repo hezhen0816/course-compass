@@ -36,7 +36,13 @@ class MoodleAssignmentsRequest(BaseModel):
 
 class OfficialSelectionSyncRequest(BaseModel):
     username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    password: str | None = None
+    profile_key: str | None = None
+    verify_ssl: bool = DEFAULT_VERIFY_SSL
+
+
+class OfficialSelectionKeepAliveRequest(BaseModel):
+    username: str = Field(min_length=1)
     profile_key: str | None = None
     verify_ssl: bool = DEFAULT_VERIFY_SSL
 
@@ -44,6 +50,7 @@ class OfficialSelectionSyncRequest(BaseModel):
 class OfficialSelectionCourseActionRequest(BaseModel):
     username: str = Field(min_length=1)
     course_no: str = Field(min_length=1)
+    password: str | None = None
     profile_key: str | None = None
     verify_ssl: bool = DEFAULT_VERIFY_SSL
 
@@ -51,8 +58,19 @@ class OfficialSelectionCourseActionRequest(BaseModel):
 class OfficialSelectionPriorityUpdateRequest(BaseModel):
     username: str = Field(min_length=1)
     ordered_course_nos: list[str] = Field(min_length=1)
+    password: str | None = None
     profile_key: str | None = None
     verify_ssl: bool = DEFAULT_VERIFY_SSL
+
+
+class SchoolCredentialsSaveRequest(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
+class SchoolCredentialsResponse(BaseModel):
+    username: str = ""
+    hasPassword: bool = False
 
 
 class CourseRow(BaseModel):
@@ -165,6 +183,9 @@ class OfficialSelectionRegisteredCourse(BaseModel):
     raw_priority: str = ""
     course_no: str
     course_name: str
+    credits: float | None = None
+    require_option: str = ""
+    teacher: str = ""
 
 
 class OfficialSelectionSyncResponse(BaseModel):

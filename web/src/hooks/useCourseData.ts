@@ -55,6 +55,7 @@ function normalizeSelectionPlan(plan: SelectionPlan | undefined): SelectionPlan 
     targetAcademicTerm: plan.targetAcademicTerm || '',
     targetLabel: plan.targetLabel || '',
     courses: (plan.courses || []).map(normalizeCourse),
+    officialSelectionCache: plan.officialSelectionCache || undefined,
     updatedAt: plan.updatedAt || undefined,
   };
 }

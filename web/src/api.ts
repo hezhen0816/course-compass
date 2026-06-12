@@ -5,6 +5,7 @@ import type {
   OfficialSelectionSyncResponse,
   RequirementPdfImportResponse,
   ScheduleSyncResponse,
+  SchoolCredentials,
 } from './types';
 
 const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
@@ -26,6 +27,19 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function authHeaders(accessToken: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
+function jsonHeaders(accessToken?: string): HeadersInit {
+  return {
+    'Content-Type': 'application/json',
+    ...(accessToken ? authHeaders(accessToken) : {}),
+  };
+}
+
 export function fetchCourseSemesters(): Promise<CourseSemesterInfo[]> {
   return apiRequest<CourseSemesterInfo[]>('/api/courses/semesters');
 }
@@ -41,6 +55,34 @@ export function importRequirementsPdf(file: File): Promise<RequirementPdfImportR
   return apiRequest<RequirementPdfImportResponse>('/api/planner/import-requirements/pdf', {
     method: 'POST',
     body: formData,
+  });
+}
+
+export function getSavedSchoolCredentials(accessToken: string): Promise<SchoolCredentials> {
+  return apiRequest<SchoolCredentials>('/api/school-credentials', {
+    headers: authHeaders(accessToken),
+  });
+}
+
+export function saveSchoolCredentials(
+  accessToken: string,
+  username: string,
+  password: string,
+): Promise<SchoolCredentials> {
+  return apiRequest<SchoolCredentials>('/api/school-credentials', {
+    method: 'PUT',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function deleteSavedSchoolCredentials(accessToken: string): Promise<SchoolCredentials> {
+  return apiRequest<SchoolCredentials>('/api/school-credentials', {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
   });
 }
 
@@ -72,23 +114,46 @@ export function importAcademicHistory(username: string, password: string): Promi
   });
 }
 
-export function syncOfficialInitialSelection(username: string, password: string): Promise<OfficialSelectionSyncResponse> {
+export function syncOfficialInitialSelection(
+  username: string,
+  password: string,
+  accessToken?: string,
+): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/sync', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(accessToken),
     body: JSON.stringify({
       username,
-      password,
+      ...(password ? { password } : {}),
       profile_key: username,
       verify_ssl: false,
     }),
   });
 }
 
-export function joinOfficialInitialSelectionCourse(username: string, courseNo: string): Promise<OfficialSelectionSyncResponse> {
+export function keepOfficialInitialSelectionAlive(
+  username: string,
+  accessToken?: string,
+): Promise<{ session_valid: boolean; checked_at: string }> {
+  return apiRequest<{ session_valid: boolean; checked_at: string }>('/api/official-selection/a02/keep-alive', {
+    method: 'POST',
+    headers: jsonHeaders(accessToken),
+    body: JSON.stringify({
+      username,
+      profile_key: username,
+      verify_ssl: false,
+    }),
+  });
+}
+
+export function joinOfficialInitialSelectionCourse(
+  username: string,
+  courseNo: string,
+  accessToken?: string,
+): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/join', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(accessToken),
     body: JSON.stringify({
       username,
       course_no: courseNo,
@@ -98,10 +163,14 @@ export function joinOfficialInitialSelectionCourse(username: string, courseNo: s
   });
 }
 
-export function addOfficialInitialSelectionWaitlistCourse(username: string, courseNo: string): Promise<OfficialSelectionSyncResponse> {
+export function addOfficialInitialSelectionWaitlistCourse(
+  username: string,
+  courseNo: string,
+  accessToken?: string,
+): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/add-to-waitlist', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(accessToken),
     body: JSON.stringify({
       username,
       course_no: courseNo,
@@ -111,10 +180,14 @@ export function addOfficialInitialSelectionWaitlistCourse(username: string, cour
   });
 }
 
-export function removeOfficialInitialSelectionCourse(username: string, courseNo: string): Promise<OfficialSelectionSyncResponse> {
+export function removeOfficialInitialSelectionCourse(
+  username: string,
+  courseNo: string,
+  accessToken?: string,
+): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/remove', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(accessToken),
     body: JSON.stringify({
       username,
       course_no: courseNo,
@@ -127,10 +200,11 @@ export function removeOfficialInitialSelectionCourse(username: string, courseNo:
 export function reorderOfficialInitialSelectionCourses(
   username: string,
   orderedCourseNos: string[],
+  accessToken?: string,
 ): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/reorder', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(accessToken),
     body: JSON.stringify({
       username,
       ordered_course_nos: orderedCourseNos,

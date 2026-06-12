@@ -23,7 +23,13 @@ SEMESTERS_INFO_URL = "https://querycourse.ntust.edu.tw/QueryCourse/api/semesters
 DEFAULT_TIMEOUT = 30
 DEFAULT_VERIFY_SSL = os.environ.get("NTUST_VERIFY_SSL", "false").lower() in {"true", "1", "yes"}
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("VITE_SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+SCHOOL_CREDENTIALS_ENCRYPTION_SECRET = (
+    os.environ.get("SCHOOL_CREDENTIALS_ENCRYPTION_SECRET")
+    or os.environ.get("COURSE_COMPASS_CREDENTIALS_SECRET")
+    or ""
+)
 
 DAY_CODES = {
     0: "M",

@@ -72,7 +72,13 @@ export interface SelectionPlan {
   targetAcademicTerm: string;
   targetLabel?: string;
   courses: Course[];
+  officialSelectionCache?: OfficialSelectionSyncResponse | null;
   updatedAt?: string;
+}
+
+export interface SchoolCredentials {
+  username: string;
+  hasPassword: boolean;
 }
 
 export interface AppTargets {
@@ -265,6 +271,9 @@ export interface OfficialSelectionRegisteredCourse {
   raw_priority: string;
   course_no: string;
   course_name: string;
+  credits?: number | null;
+  require_option?: string;
+  teacher?: string;
 }
 
 export interface OfficialSelectionSyncResponse {

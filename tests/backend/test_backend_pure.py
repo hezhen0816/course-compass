@@ -8,8 +8,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import app as backend_app
+from backend import credentials
 from backend import history, moodle, official_selection, planner_pdf, snapshots, tr_rooms
 from backend.schedule import find_latest_course_list_url, group_schedule_entries
+
+
+class FakeJSONResponse:
+    def __init__(self, payload: object) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> object:
+        return self._payload
 
 
 def test_group_schedule_entries_orders_slots_and_preserves_metadata() -> None:
@@ -119,7 +131,15 @@ def test_official_selection_parser_reads_a02_workspace_div_tables() -> None:
         {"course_no": "PE127A022", "course_name": "體育(撞球)(上)", "teacher": "蔡尚明"}
     ]
     assert parsed["registered_courses"] == [
-        {"priority": 1, "course_no": "FE1581701", "course_name": "休閒英文", "raw_priority": "1"}
+        {
+            "priority": 1,
+            "course_no": "FE1581701",
+            "course_name": "休閒英文",
+            "raw_priority": "1",
+            "credits": None,
+            "require_option": "",
+            "teacher": "",
+        }
     ]
     assert parsed["schedule_rows"] == [{"節次": "1", "星期一": "", "星期二": "休閒英文 TR-312"}]
     assert parsed["notices"] == ["請直接拖拉「登記志願清單」中的課程來變更志願序。"]
@@ -202,6 +222,137 @@ def test_official_selection_arraydata_form_rows_matches_saveidx_shape() -> None:
         ("Arraydata[1][2]", "體育(撞球)(上)"),
         ("Arraydata[1][3]", "取消加入"),
     ]
+
+
+def test_official_selection_action_uses_saved_credentials_for_session(monkeypatch) -> None:
+    calls: list[tuple[str, str, str, bool] | tuple[str, str]] = []
+
+    class FakeOfficialSelectionClient:
+        def ensure_session(self, username: str, password: str, verify_ssl: bool) -> None:
+            calls.append(("ensure_session", username, password, verify_ssl))
+
+        def add_course_to_waitlist(self, course_no: str, verify_ssl: bool) -> dict[str, object]:
+            calls.append(("add_course_to_waitlist", course_no))
+            return {
+                "source_url": "https://example.test/a02",
+                "page_title": "初選登記選課",
+                "synced_at": "2026-06-13T10:00:00+08:00",
+                "session_valid": True,
+                "available_count": 0,
+                "registered_count": 1,
+                "available_courses": [],
+                "registered_courses": [
+                    {
+                        "priority": 1,
+                        "raw_priority": "1",
+                        "course_no": course_no,
+                        "course_name": "資料結構",
+                    }
+                ],
+                "schedule_rows": [],
+                "selection_list_rows": [],
+                "required_preset_rows": [],
+                "notices": [],
+            }
+
+    monkeypatch.setattr(backend_app, "_authorization_context", lambda authorization: ("user-1", "token-1"))
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_secret",
+        lambda user_id, access_token: {
+            "username": "B11430207",
+            "password": "saved-password",
+            "hasPassword": True,
+        },
+    )
+    monkeypatch.setattr(backend_app, "get_official_selection_client", lambda profile_key: FakeOfficialSelectionClient())
+    client = TestClient(backend_app.app)
+
+    response = client.post(
+        "/api/official-selection/a02/add-to-waitlist",
+        headers={"Authorization": "Bearer token-1"},
+        json={
+            "username": "B11430207",
+            "course_no": "CS2002302",
+            "profile_key": "B11430207",
+            "verify_ssl": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["registered_courses"][0]["course_no"] == "CS2002302"
+    assert calls == [
+        ("ensure_session", "B11430207", "saved-password", False),
+        ("add_course_to_waitlist", "CS2002302"),
+    ]
+
+
+def test_school_credentials_status_reads_service_role_table_without_password(monkeypatch) -> None:
+    monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(credentials, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setattr(
+        credentials.requests,
+        "get",
+        lambda url, headers, timeout: FakeJSONResponse(
+            [
+                {
+                    "school_account": "B11430207",
+                    "password_ciphertext": "encrypted-password",
+                    "key_version": 1,
+                    "last_verified_at": "2026-06-13T02:00:00Z",
+                }
+            ]
+        ),
+    )
+
+    assert credentials.get_school_credentials_status("user-1", "access-token") == {
+        "username": "B11430207",
+        "hasPassword": True,
+    }
+
+
+def test_school_credentials_secret_decrypts_service_role_table(monkeypatch) -> None:
+    monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(credentials, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setattr(credentials, "decrypt_school_password", lambda token: f"plain:{token}")
+    monkeypatch.setattr(
+        credentials.requests,
+        "get",
+        lambda url, headers, timeout: FakeJSONResponse(
+            [
+                {
+                    "school_account": "B11430207",
+                    "password_ciphertext": "encrypted-password",
+                    "key_version": 1,
+                    "last_verified_at": "2026-06-13T02:00:00Z",
+                }
+            ]
+        ),
+    )
+
+    assert credentials.get_school_credentials_secret("user-1", "access-token") == {
+        "username": "B11430207",
+        "password": "plain:encrypted-password",
+        "hasPassword": True,
+    }
+
+
+def test_school_credentials_status_does_not_return_password(monkeypatch) -> None:
+    monkeypatch.setattr(backend_app, "_current_user_context", lambda authorization: ("user-1", "token-1"))
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_status",
+        lambda user_id, access_token: {
+            "username": "B11430207",
+            "hasPassword": True,
+        },
+    )
+    client = TestClient(backend_app.app)
+
+    response = client.get("/api/school-credentials", headers={"Authorization": "Bearer token-1"})
+
+    assert response.status_code == 200
+    assert response.json() == {"username": "B11430207", "hasPassword": True}
 
 
 def test_tr_room_parsing_and_node_selection() -> None:

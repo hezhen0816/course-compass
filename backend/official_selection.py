@@ -358,6 +358,7 @@ def parse_a02_workspace(html: str) -> dict[str, Any]:
     schedule_rows = _parse_schedule_table_rows(soup.select_one("#loginModal table"))
     selection_list_rows = _parse_generic_table_rows(soup.select_one("#loginModal2 table"))
     required_preset_rows = _parse_generic_table_rows(soup.select_one("#DetermineTable"))
+    registered = _merge_registered_course_details(registered, selection_list_rows)
 
     return {
         "page_title": normalize(soup.title.get_text(" ", strip=True) if soup.title else ""),
@@ -450,9 +451,45 @@ def _parse_registered_courses(soup: BeautifulSoup) -> list[dict[str, str | int |
                 "course_no": course_no,
                 "course_name": course_name,
                 "raw_priority": priority_text,
+                "credits": None,
+                "require_option": "",
+                "teacher": "",
             }
         )
     return courses
+
+
+def _merge_registered_course_details(
+    registered_courses: list[dict[str, Any]],
+    selection_list_rows: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    details_by_course_no: dict[str, dict[str, Any]] = {}
+    for row in selection_list_rows:
+        course_no = _row_value(row, ["課碼", "課程代碼", "課號"]).strip().upper()
+        if not course_no:
+            continue
+        details_by_course_no[course_no] = {
+            "course_no": course_no,
+            "course_name": _row_value(row, ["課程名稱", "課名"]),
+            "credits": _as_float(_row_value(row, ["學分數", "學分"])),
+            "require_option": _row_value(row, ["必、選修", "必選修", "必修選修", "必選別"]),
+            "teacher": _row_value(row, ["上課教師", "授課教師", "教師"]),
+        }
+
+    merged: list[dict[str, Any]] = []
+    for course in registered_courses:
+        course_no = str(course.get("course_no") or "").strip().upper()
+        details = details_by_course_no.get(course_no, {})
+        merged.append(
+            {
+                **course,
+                "course_name": details.get("course_name") or course.get("course_name") or "",
+                "credits": details.get("credits"),
+                "require_option": details.get("require_option") or "",
+                "teacher": details.get("teacher") or "",
+            }
+        )
+    return merged
 
 
 def _parse_schedule_table_rows(table: Tag | None) -> list[dict[str, str]]:
@@ -568,6 +605,19 @@ def _clean_cell_text(cell: Tag) -> str:
 def _as_int(value: str) -> int | None:
     match = re.search(r"\d+", value)
     return int(match.group(0)) if match else None
+
+
+def _as_float(value: str) -> float | None:
+    match = re.search(r"\d+(?:\.\d+)?", value)
+    return float(match.group(0)) if match else None
+
+
+def _row_value(row: dict[str, str], aliases: list[str]) -> str:
+    compact_aliases = {normalize(alias).replace(" ", "") for alias in aliases}
+    for key, value in row.items():
+        if normalize(key).replace(" ", "") in compact_aliases:
+            return value
+    return ""
 
 
 def _is_auth_response(response: requests.Response) -> bool:

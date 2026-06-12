@@ -1,0 +1,278 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import time
+from datetime import datetime
+from typing import Any
+from urllib.parse import quote
+
+import requests
+from cryptography.fernet import Fernet, InvalidToken
+
+try:
+    from .config import (
+        DEFAULT_TIMEOUT,
+        SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
+        SUPABASE_ANON_KEY,
+        SUPABASE_SERVICE_ROLE_KEY,
+        SUPABASE_URL,
+    )
+except ImportError:  # pragma: no cover
+    from config import (
+        DEFAULT_TIMEOUT,
+        SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
+        SUPABASE_ANON_KEY,
+        SUPABASE_SERVICE_ROLE_KEY,
+        SUPABASE_URL,
+    )
+
+
+class CredentialStoreError(RuntimeError):
+    pass
+
+
+def _is_placeholder(value: str) -> bool:
+    normalized = value.strip().lower()
+    return not normalized or normalized in {"your-service-role-key", "your-anon-key", "your-publishable-or-anon-key"}
+
+
+def _require_public_supabase_config() -> None:
+    if not SUPABASE_URL or _is_placeholder(SUPABASE_ANON_KEY):
+        raise CredentialStoreError("後端尚未設定 Supabase publishable/anon key，無法保存校務帳密。")
+
+
+def _require_service_supabase_config() -> None:
+    if not SUPABASE_URL or _is_placeholder(SUPABASE_SERVICE_ROLE_KEY):
+        raise CredentialStoreError("後端尚未設定 Supabase service role key，無法保存校務帳密。")
+
+
+def _fernet() -> Fernet:
+    secret = SCHOOL_CREDENTIALS_ENCRYPTION_SECRET.strip()
+    if _is_placeholder(secret):
+        raise CredentialStoreError("後端尚未設定校務帳密加密金鑰。")
+    digest = hashlib.sha256(secret.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def encrypt_school_password(password: str) -> str:
+    return _fernet().encrypt(password.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_school_password(token: str) -> str:
+    try:
+        return _fernet().decrypt(token.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise CredentialStoreError("已保存的校務密碼無法解密，請重新保存帳密。") from exc
+
+
+def _supabase_headers(*, json_body: bool = False, bearer_token: str | None = None) -> dict[str, str]:
+    api_key = SUPABASE_ANON_KEY if bearer_token else SUPABASE_SERVICE_ROLE_KEY
+    if _is_placeholder(api_key):
+        api_key = SUPABASE_ANON_KEY if not _is_placeholder(SUPABASE_ANON_KEY) else SUPABASE_SERVICE_ROLE_KEY
+    headers = {
+        "apikey": api_key,
+        "Authorization": f"Bearer {bearer_token or SUPABASE_SERVICE_ROLE_KEY}",
+        "Accept": "application/json",
+    }
+    if json_body:
+        headers["Content-Type"] = "application/json"
+        headers["Prefer"] = "return=representation,resolution=merge-duplicates"
+    return headers
+
+
+def _service_role_headers(*, json_body: bool = False) -> dict[str, str]:
+    _require_service_supabase_config()
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Accept": "application/json",
+    }
+    if json_body:
+        headers["Content-Type"] = "application/json"
+        headers["Prefer"] = "return=representation,resolution=merge-duplicates"
+    return headers
+
+
+def resolve_user_id(access_token: str) -> str:
+    try:
+        payload_part = access_token.split(".")[1]
+        payload_part += "=" * (-len(payload_part) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_part.encode("utf-8")))
+    except (IndexError, ValueError, json.JSONDecodeError) as exc:
+        raise CredentialStoreError("登入 token 格式無法解析，請重新登入。") from exc
+
+    exp = payload.get("exp")
+    if isinstance(exp, (int, float)) and exp <= time.time():
+        raise CredentialStoreError("登入狀態已過期，請重新登入。")
+
+    user_id = str(payload.get("sub") or "")
+    if not user_id:
+        raise CredentialStoreError("無法解析目前登入使用者。")
+    return user_id
+
+
+def load_user_content(user_id: str, access_token: str | None = None) -> dict[str, Any]:
+    _require_public_supabase_config()
+    endpoint = (
+        f"{SUPABASE_URL}/rest/v1/user_data"
+        f"?user_id=eq.{quote(user_id, safe='')}&select=content"
+    )
+    response = requests.get(endpoint, headers=_supabase_headers(bearer_token=access_token), timeout=DEFAULT_TIMEOUT)
+    response.raise_for_status()
+    rows = response.json()
+    if not rows:
+        return {"schemaVersion": 2, "settings": {}}
+    content = rows[0].get("content")
+    return content if isinstance(content, dict) else {"schemaVersion": 2, "settings": {}}
+
+
+def save_user_content(user_id: str, content: dict[str, Any], access_token: str | None = None) -> None:
+    _require_public_supabase_config()
+    body = {
+        "user_id": user_id,
+        "content": content,
+        "content_version": 2,
+        "last_writer": "backend",
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id",
+        headers=_supabase_headers(json_body=True, bearer_token=access_token),
+        json=body,
+        timeout=DEFAULT_TIMEOUT,
+    )
+    response.raise_for_status()
+
+
+def _settings(content: dict[str, Any]) -> dict[str, Any]:
+    settings = content.get("settings")
+    if not isinstance(settings, dict):
+        settings = {}
+        content["settings"] = settings
+    return settings
+
+
+def _load_school_credentials_row(user_id: str) -> dict[str, Any] | None:
+    endpoint = (
+        f"{SUPABASE_URL}/rest/v1/school_credentials"
+        f"?user_id=eq.{quote(user_id, safe='')}"
+        "&select=school_account,password_ciphertext,key_version,last_verified_at"
+    )
+    response = requests.get(endpoint, headers=_service_role_headers(), timeout=DEFAULT_TIMEOUT)
+    response.raise_for_status()
+    rows = response.json()
+    return rows[0] if rows else None
+
+
+def _upsert_school_credentials_row(user_id: str, username: str, password_ciphertext: str) -> None:
+    body = {
+        "user_id": user_id,
+        "school_account": username,
+        "password_ciphertext": password_ciphertext,
+        "key_version": 1,
+        "last_verified_at": datetime.utcnow().isoformat() + "Z",
+    }
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/school_credentials?on_conflict=user_id",
+        headers=_service_role_headers(json_body=True),
+        json=body,
+        timeout=DEFAULT_TIMEOUT,
+    )
+    response.raise_for_status()
+
+
+def _delete_school_credentials_row(user_id: str) -> None:
+    endpoint = f"{SUPABASE_URL}/rest/v1/school_credentials?user_id=eq.{quote(user_id, safe='')}"
+    response = requests.delete(endpoint, headers=_service_role_headers(), timeout=DEFAULT_TIMEOUT)
+    response.raise_for_status()
+
+
+def _legacy_school_credentials_status(user_id: str, access_token: str | None = None) -> dict[str, Any]:
+    content = load_user_content(user_id, access_token)
+    settings = _settings(content)
+    credentials = settings.get("schoolCredentials")
+    fallback_username = str(settings.get("school_account") or "")
+    if not isinstance(credentials, dict):
+        return {"username": fallback_username, "hasPassword": False}
+    username = str(credentials.get("username") or fallback_username)
+    encrypted_password = str(credentials.get("passwordCiphertext") or "")
+    if not encrypted_password:
+        return {"username": username, "hasPassword": False}
+    return {
+        "username": username,
+        "hasPassword": True,
+    }
+
+
+def _legacy_school_credentials_secret(user_id: str, access_token: str | None = None) -> dict[str, Any]:
+    content = load_user_content(user_id, access_token)
+    settings = _settings(content)
+    credentials = settings.get("schoolCredentials")
+    fallback_username = str(settings.get("school_account") or "")
+    if not isinstance(credentials, dict):
+        return {"username": fallback_username, "password": "", "hasPassword": False}
+    username = str(credentials.get("username") or fallback_username)
+    encrypted_password = str(credentials.get("passwordCiphertext") or "")
+    if not encrypted_password:
+        return {"username": username, "password": "", "hasPassword": False}
+    return {
+        "username": username,
+        "password": decrypt_school_password(encrypted_password),
+        "hasPassword": True,
+    }
+
+
+def get_school_credentials_status(user_id: str, access_token: str | None = None) -> dict[str, Any]:
+    try:
+        row = _load_school_credentials_row(user_id)
+    except (CredentialStoreError, requests.RequestException):
+        row = None
+    if row:
+        return {
+            "username": str(row.get("school_account") or ""),
+            "hasPassword": bool(row.get("password_ciphertext")),
+        }
+    return _legacy_school_credentials_status(user_id, access_token)
+
+
+def get_school_credentials_secret(user_id: str, access_token: str | None = None) -> dict[str, Any]:
+    try:
+        row = _load_school_credentials_row(user_id)
+    except (CredentialStoreError, requests.RequestException):
+        row = None
+    if not row:
+        return _legacy_school_credentials_secret(user_id, access_token)
+    username = str(row.get("school_account") or "")
+    encrypted_password = str(row.get("password_ciphertext") or "")
+    if not encrypted_password:
+        return {"username": username, "password": "", "hasPassword": False}
+    return {
+        "username": username,
+        "password": decrypt_school_password(encrypted_password),
+        "hasPassword": True,
+    }
+
+
+def put_school_credentials(user_id: str, username: str, password: str, access_token: str | None = None) -> dict[str, Any]:
+    encrypted_password = encrypt_school_password(password)
+    _upsert_school_credentials_row(user_id, username, encrypted_password)
+    content = load_user_content(user_id, access_token)
+    settings = _settings(content)
+    settings["school_account"] = username
+    settings.pop("schoolCredentials", None)
+    settings.pop("school_password", None)
+    save_user_content(user_id, content, access_token)
+    return {"username": username, "hasPassword": True}
+
+
+def delete_school_credentials(user_id: str, access_token: str | None = None) -> dict[str, Any]:
+    _delete_school_credentials_row(user_id)
+    content = load_user_content(user_id, access_token)
+    settings = _settings(content)
+    username = str(settings.get("school_account") or "")
+    settings.pop("schoolCredentials", None)
+    settings.pop("school_password", None)
+    save_user_content(user_id, content, access_token)
+    return {"username": username, "hasPassword": False}
