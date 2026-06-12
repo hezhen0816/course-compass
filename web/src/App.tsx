@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -745,7 +745,7 @@ export default function CoursePlannerWebApp() {
   const [schoolPassword, setSchoolPassword] = useState('');
   const [schoolSyncStatus, setSchoolSyncStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
   const [schoolSyncMessage, setSchoolSyncMessage] = useState('');
-  const [hasMigratedHistoryCourses, setHasMigratedHistoryCourses] = useState(false);
+  const hasMigratedHistoryCoursesRef = useRef(false);
   const [detailCourse, setDetailCourse] = useState<{ semesterId: string; semesterName: string; course: Course } | null>(null);
 
   useEffect(() => {
@@ -766,9 +766,9 @@ export default function CoursePlannerWebApp() {
   }, []);
 
   useEffect(() => {
-    if (hasMigratedHistoryCourses || data.historyRecords.length === 0) return;
+    if (hasMigratedHistoryCoursesRef.current || data.historyRecords.length === 0) return;
     if (data.semesters.some((semester) => semester.courses.some(isHistoryImportedCourse))) {
-      setHasMigratedHistoryCourses(true);
+      hasMigratedHistoryCoursesRef.current = true;
       return;
     }
     const merged = mergeHistoryRecordsIntoSemesters(data.semesters, data.historyRecords, schoolUsername);
@@ -778,9 +778,8 @@ export default function CoursePlannerWebApp() {
       const next = mergeHistoryRecordsIntoSemesters(prev.semesters, prev.historyRecords, schoolUsername);
       return next.importedCourseCount > 0 ? { ...prev, semesters: next.semesters } : prev;
     });
-    if (merged.firstSemesterId) setActiveSemesterId(merged.firstSemesterId);
-    setHasMigratedHistoryCourses(true);
-  }, [data.historyRecords, data.semesters, hasMigratedHistoryCourses, schoolUsername, setData]);
+    hasMigratedHistoryCoursesRef.current = true;
+  }, [data.historyRecords, data.semesters, schoolUsername, setData]);
 
   const stats = useMemo<PlannerStats>(() => {
     const current: PlannerStats = {
@@ -1049,7 +1048,7 @@ export default function CoursePlannerWebApp() {
         })(),
       }));
       setActiveSemesterId(importSemesterId);
-      setHasMigratedHistoryCourses(true);
+      hasMigratedHistoryCoursesRef.current = true;
       setSchoolPassword('');
       setSchoolSyncStatus('success');
       setSchoolSyncMessage(`已同步完成：最新課表 ${courses.length} 門匯入「${targetSemester.name}」，歷年紀錄 ${historyRecords.length} 筆，${scheduledHistoryCourseCount} 門補到歷史節次，${importedCourseCount} 門寫入學期，${retakeRequirements.length} 門列為待重修。`);

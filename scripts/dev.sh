@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 BACKEND_PID=""
 WEB_PID=""
-PYTHON_BIN="${PYTHON_BIN:-}"
+PYTHON_BIN="$(bash scripts/python.sh --print)"
 
 cleanup() {
   if [[ -n "$WEB_PID" ]] && kill -0 "$WEB_PID" 2>/dev/null; then
@@ -22,16 +22,6 @@ trap cleanup EXIT INT TERM
 if [[ ! -f ".env" ]]; then
   echo "找不到 .env；backend 會缺少必要環境變數。請先依 .env.example 建立 .env。"
   exit 1
-fi
-
-if [[ -z "$PYTHON_BIN" ]]; then
-  if [[ -x ".venv/bin/python" ]]; then
-    PYTHON_BIN=".venv/bin/python"
-  elif [[ -x "$HOME/.venvs/course_planner/bin/python" ]]; then
-    PYTHON_BIN="$HOME/.venvs/course_planner/bin/python"
-  else
-    PYTHON_BIN="python3"
-  fi
 fi
 
 if ! "$PYTHON_BIN" -m uvicorn --version >/dev/null 2>&1; then
