@@ -33,9 +33,18 @@ class CredentialStoreError(RuntimeError):
     pass
 
 
+PLACEHOLDER_VALUES = {
+    "replace-with-a-long-random-secret",
+    "replace-with-openssl-rand-hex-32",
+    "your-anon-key",
+    "your-publishable-or-anon-key",
+    "your-service-role-key",
+}
+
+
 def _is_placeholder(value: str) -> bool:
     normalized = value.strip().lower()
-    return not normalized or normalized in {"your-service-role-key", "your-anon-key", "your-publishable-or-anon-key"}
+    return not normalized or normalized in PLACEHOLDER_VALUES
 
 
 def _require_public_supabase_config() -> None:
@@ -52,6 +61,8 @@ def _fernet() -> Fernet:
     secret = SCHOOL_CREDENTIALS_ENCRYPTION_SECRET.strip()
     if _is_placeholder(secret):
         raise CredentialStoreError("後端尚未設定校務帳密加密金鑰。")
+    if len(secret) < 32:
+        raise CredentialStoreError("校務帳密加密金鑰長度不足，請設定至少 32 字元的隨機字串。")
     digest = hashlib.sha256(secret.encode("utf-8")).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 

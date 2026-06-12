@@ -94,7 +94,7 @@ VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
-SCHOOL_CREDENTIALS_ENCRYPTION_SECRET=...
+SCHOOL_CREDENTIALS_ENCRYPTION_SECRET=... # 建議使用 openssl rand -hex 32 產生
 NTUST_VERIFY_SSL=false
 ```
 
@@ -103,7 +103,7 @@ NTUST_VERIFY_SSL=false
 - `VITE_SUPABASE_*` 給 Web 前端使用
 - `SUPABASE_SERVICE_ROLE_KEY` 只給 Python 後端使用
 - iOS 不應直接持有 `service_role`
-- `SCHOOL_CREDENTIALS_ENCRYPTION_SECRET` 只給 Python 後端使用，用於加解密 `public.school_credentials.password_ciphertext`
+- `SCHOOL_CREDENTIALS_ENCRYPTION_SECRET` 只給 Python 後端使用，用於加解密 `public.school_credentials.password_ciphertext`；不可使用 `.env.example` placeholder，長度需至少 32 字元
 - Web 不會讀取或保存校務密碼明文；官方選課 session 過期時由後端使用已保存密文重新登入
 - iOS 仍有舊版 `school_password` 相容欄位；SQL migration 不會直接刪除 plaintext，後端會在下一次 authenticated credential use 時加密遷移到 `public.school_credentials` 並清除舊欄位
 

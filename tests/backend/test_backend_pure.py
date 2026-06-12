@@ -337,6 +337,33 @@ def test_school_credentials_secret_decrypts_service_role_table(monkeypatch) -> N
     }
 
 
+def test_school_credentials_rejects_placeholder_encryption_secret(monkeypatch) -> None:
+    monkeypatch.setattr(
+        credentials,
+        "SCHOOL_CREDENTIALS_ENCRYPTION_SECRET",
+        "replace-with-openssl-rand-hex-32",
+    )
+
+    with pytest.raises(credentials.CredentialStoreError, match="尚未設定校務帳密加密金鑰"):
+        credentials.encrypt_school_password("password")
+
+
+def test_school_credentials_rejects_short_encryption_secret(monkeypatch) -> None:
+    monkeypatch.setattr(credentials, "SCHOOL_CREDENTIALS_ENCRYPTION_SECRET", "short-secret")
+
+    with pytest.raises(credentials.CredentialStoreError, match="至少 32 字元"):
+        credentials.encrypt_school_password("password")
+
+
+def test_school_credentials_encryption_round_trip(monkeypatch) -> None:
+    monkeypatch.setattr(credentials, "SCHOOL_CREDENTIALS_ENCRYPTION_SECRET", "x" * 32)
+
+    token = credentials.encrypt_school_password("saved-password")
+
+    assert token != "saved-password"
+    assert credentials.decrypt_school_password(token) == "saved-password"
+
+
 def test_school_credentials_status_reads_legacy_plaintext_password(monkeypatch) -> None:
     monkeypatch.setattr(credentials, "_load_school_credentials_row", lambda user_id: None)
     monkeypatch.setattr(
