@@ -35,7 +35,7 @@ try:
         official_session_expires_at,
         save_school_session_state,
     )
-    from .snapshots import (
+    from .services.snapshots import (
         ensure_schedule_entry_slot_times,
         load_history_snapshot,
         load_moodle_assignments_snapshot,
@@ -75,7 +75,7 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         official_session_expires_at,
         save_school_session_state,
     )
-    from snapshots import (
+    from services.snapshots import (
         ensure_schedule_entry_slot_times,
         load_history_snapshot,
         load_moodle_assignments_snapshot,
