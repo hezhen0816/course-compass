@@ -28,7 +28,7 @@ try:
     from .integrations.tr_rooms import (
         fetch_query_courses_filtered,
     )
-    from .planner_pdf import parse_requirement_pdf
+    from .services.planner_pdf import parse_requirement_pdf
     from .school_sessions import (
         delete_school_session,
         load_school_session_state,
@@ -68,7 +68,7 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from integrations.tr_rooms import (
         fetch_query_courses_filtered,
     )
-    from planner_pdf import parse_requirement_pdf
+    from services.planner_pdf import parse_requirement_pdf
     from school_sessions import (
         delete_school_session,
         load_school_session_state,

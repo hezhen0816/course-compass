@@ -29,6 +29,7 @@
 - Pydantic request/response schemas 已移到 `backend/schemas/*` 並按 domain 拆分，舊 `backend/models.py` 與 `backend/schemas/models.py` 暫時保留相容 wrapper。
 - 官方選課 session 的加解密 payload、TTL、load/save/delete domain 流程已抽到 `backend/services/school_sessions.py`，舊 `backend/school_sessions.py` 保留相容 wrapper 與依賴注入。
 - 校務帳密狀態、legacy promotion、save/delete cleanup 流程已抽到 `backend/services/credentials.py`，舊 `backend/credentials.py` 保留相容 wrapper、加密與 Supabase Auth 驗證。
+- 雙主修 PDF 需求解析已移到 `backend/services/planner_pdf.py`，舊 `backend/planner_pdf.py` 暫時保留相容 wrapper。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
 
 ## 目前架構
@@ -53,6 +54,7 @@ backend/
     tr_rooms.py          # course query and room status helpers
   services/
     credentials.py       # school credential domain flow and legacy cleanup
+    planner_pdf.py       # requirement PDF import parsing service
     school_sessions.py   # official session domain flow, encryption payload, TTL helpers
     session_context.py   # backend-owned credential/session context helpers
   core/
@@ -71,6 +73,7 @@ backend/
     school_sessions.py   # Supabase RPC access for encrypted official session rows
     snapshots.py         # Supabase REST access for schedule/history/Moodle snapshot rows
   credentials.py         # compatibility wrapper, encryption, and Supabase Auth validation
+  planner_pdf.py         # compatibility wrapper; remove after imports migrate
   school_sessions.py     # compatibility wrapper and dependency injection for school session service
   config.py              # compatibility wrapper; remove after imports migrate
   time_utils.py          # compatibility wrapper; remove after imports migrate
