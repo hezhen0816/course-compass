@@ -32,6 +32,7 @@ backend/
     health.py            # health route
     planner.py           # planner PDF import route
     school_credentials.py # school credential status/save/delete routes
+    tr_rooms.py          # TR room status route
   credentials.py         # app_private.school_credentials access and encryption
   school_sessions.py     # app_private.school_sessions access and encryption
   official_selection.py  # official A02 parser/client/action helpers
