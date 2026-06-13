@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from backend import app as backend_app
 from backend.api import tr_rooms as tr_rooms_api
 from backend import credentials, school_sessions
+from backend.repositories import school_sessions as school_session_repository
 from backend import history, moodle, official_selection, planner_pdf, snapshots, tr_rooms
 from backend.schedule import find_latest_course_list_url, group_schedule_entries
 from scripts import migrate_legacy_school_credentials as legacy_credential_migration
@@ -930,6 +931,45 @@ def test_school_session_store_round_trip_uses_service_role_rpc(monkeypatch) -> N
         "expires_at": "2026-06-13T04:00:00Z",
         "last_keep_alive_at": "2026-06-13T03:30:00Z",
     }
+
+
+def test_school_session_repository_writes_expected_rpc_payload() -> None:
+    calls: list[tuple[str, dict[str, object], dict[str, str], int]] = []
+
+    class FakeRPCResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: int) -> FakeRPCResponse:
+        calls.append((url, json, headers, timeout))
+        return FakeRPCResponse()
+
+    school_session_repository.save_school_session_row(
+        "00000000-0000-0000-0000-000000000001",
+        " B11430207 ",
+        "encrypted-session",
+        expires_at="2026-06-13T04:00:00Z",
+        last_keep_alive_at="2026-06-13T03:30:00Z",
+        supabase_url="https://example.supabase.co",
+        timeout=12,
+        service_role_headers=lambda json_body=False: {"Authorization": f"json={json_body}"},
+        post=fake_post,
+    )
+
+    assert calls == [
+        (
+            "https://example.supabase.co/rest/v1/rpc/upsert_school_session",
+            {
+                "p_user_id": "00000000-0000-0000-0000-000000000001",
+                "p_school_account": "B11430207",
+                "p_session_ciphertext": "encrypted-session",
+                "p_expires_at": "2026-06-13T04:00:00Z",
+                "p_last_keep_alive_at": "2026-06-13T03:30:00Z",
+            },
+            {"Authorization": "json=True"},
+            12,
+        )
+    ]
 
 
 def test_school_credentials_status_reads_legacy_plaintext_password(monkeypatch) -> None:

@@ -14,6 +14,7 @@ try:
         encrypt_sensitive_value,
         _service_role_headers,
     )
+    from .repositories import school_sessions as school_session_repository
 except ImportError:  # pragma: no cover
     from config import DEFAULT_TIMEOUT, SUPABASE_URL
     from credentials import (
@@ -22,6 +23,7 @@ except ImportError:  # pragma: no cover
         encrypt_sensitive_value,
         _service_role_headers,
     )
+    from repositories import school_sessions as school_session_repository
 
 
 OFFICIAL_SESSION_TTL_SECONDS = 25 * 60
@@ -46,33 +48,29 @@ def decrypt_school_session_state(ciphertext: str) -> dict[str, Any]:
     return payload
 
 
-def _rpc_url(name: str) -> str:
-    return f"{SUPABASE_URL}/rest/v1/rpc/{name}"
-
-
 def _post_rpc(name: str, payload: dict[str, Any]) -> requests.Response:
-    response = requests.post(
-        _rpc_url(name),
-        headers=_service_role_headers(json_body=True),
-        json=payload,
+    return school_session_repository.post_rpc(
+        name,
+        payload,
+        supabase_url=SUPABASE_URL,
         timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
     )
-    response.raise_for_status()
-    return response
 
 
 def load_school_session_state(user_id: str, username: str) -> dict[str, Any] | None:
     if not username.strip():
         return None
-    response = _post_rpc(
-        "get_school_session",
-        {"p_user_id": user_id, "p_school_account": username.strip()},
+    row = school_session_repository.load_school_session_row(
+        user_id,
+        username,
+        supabase_url=SUPABASE_URL,
+        timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
     )
-    rows = response.json()
-    if not rows:
-        return None
-    row = rows[0] if isinstance(rows, list) else rows
-    if not isinstance(row, dict):
+    if row is None:
         return None
     ciphertext = str(row.get("session_ciphertext") or "")
     if not ciphertext:
@@ -95,20 +93,25 @@ def save_school_session_state(
 ) -> None:
     if not username.strip():
         return
-    _post_rpc(
-        "upsert_school_session",
-        {
-            "p_user_id": user_id,
-            "p_school_account": username.strip(),
-            "p_session_ciphertext": encrypt_school_session_state(session_state),
-            "p_expires_at": (expires_at or official_session_expires_at()).isoformat(),
-            "p_last_keep_alive_at": (last_keep_alive_at or datetime.now(timezone.utc)).isoformat(),
-        },
+    school_session_repository.save_school_session_row(
+        user_id,
+        username,
+        encrypt_school_session_state(session_state),
+        expires_at=(expires_at or official_session_expires_at()).isoformat(),
+        last_keep_alive_at=(last_keep_alive_at or datetime.now(timezone.utc)).isoformat(),
+        supabase_url=SUPABASE_URL,
+        timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
     )
 
 
 def delete_school_session(user_id: str, username: str | None = None) -> None:
-    _post_rpc(
-        "delete_school_session",
-        {"p_user_id": user_id, "p_school_account": username.strip() if username else None},
+    school_session_repository.delete_school_session_row(
+        user_id,
+        username,
+        supabase_url=SUPABASE_URL,
+        timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
     )
