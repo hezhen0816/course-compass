@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import quote
 
 import requests
 
 try:
     from .config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
     from .integrations.schedule import group_schedule_entries
+    from .repositories import snapshots as snapshot_repository
 except ImportError:  # pragma: no cover
     from config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
     from integrations.schedule import group_schedule_entries
+    from repositories import snapshots as snapshot_repository
 
 
 def _supabase_headers(content_type: bool = False) -> dict[str, str]:
@@ -28,37 +29,31 @@ def _persist_snapshot(table: str, timestamp_field: str, profile_key: str, school
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return False
 
-    endpoint = f"{SUPABASE_URL}/rest/v1/{table}"
-    body = {
-        "profile_key": profile_key,
-        "school_account": school_account,
-        "payload": payload,
-        timestamp_field: payload[timestamp_field],
-    }
-    if "student_name" in payload:
-        body["student_name"] = payload.get("student_name")
-
-    response = requests.post(endpoint, headers=_supabase_headers(content_type=True), json=body, timeout=DEFAULT_TIMEOUT)
-    if response.status_code >= 300:
-        raise RuntimeError(f"Supabase 寫入 {table} 失敗：{response.status_code} {response.text}")
-    return True
+    return snapshot_repository.persist_snapshot_row(
+        table,
+        timestamp_field,
+        profile_key,
+        school_account,
+        payload,
+        supabase_url=SUPABASE_URL,
+        headers=_supabase_headers(content_type=True),
+        timeout=DEFAULT_TIMEOUT,
+        post=requests.post,
+    )
 
 
 def _load_snapshot(table: str, profile_key: str) -> dict[str, Any] | None:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return None
 
-    endpoint = (
-        f"{SUPABASE_URL}/rest/v1/{table}"
-        f"?profile_key=eq.{quote(profile_key, safe='')}&select=payload"
+    return snapshot_repository.load_snapshot_row(
+        table,
+        profile_key,
+        supabase_url=SUPABASE_URL,
+        headers=_supabase_headers(),
+        timeout=DEFAULT_TIMEOUT,
+        get=requests.get,
     )
-    response = requests.get(endpoint, headers=_supabase_headers(), timeout=DEFAULT_TIMEOUT)
-    if response.status_code >= 300:
-        raise RuntimeError(f"Supabase 讀取 {table} 失敗：{response.status_code} {response.text}")
-    rows = response.json()
-    if not rows:
-        return None
-    return rows[0]["payload"]
 
 
 def persist_snapshot(profile_key: str, school_account: str, payload: dict[str, Any]) -> bool:
@@ -67,6 +62,7 @@ def persist_snapshot(profile_key: str, school_account: str, payload: dict[str, A
 
 def load_snapshot(profile_key: str) -> dict[str, Any] | None:
     return _load_snapshot("schedule_sync_snapshots", profile_key)
+
 
 def ensure_schedule_entry_slot_times(payload: dict[str, Any]) -> dict[str, Any]:
     schedule_entries = payload.get("schedule_entries")
@@ -87,7 +83,6 @@ def ensure_schedule_entry_slot_times(payload: dict[str, Any]) -> dict[str, Any]:
         "schedule_entries": rebuilt_entries,
         "schedule_entry_count": len(rebuilt_entries),
     }
-
 
 
 def persist_history_snapshot(profile_key: str, school_account: str, payload: dict[str, Any]) -> bool:

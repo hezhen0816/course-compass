@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from backend import app as backend_app
 from backend.api import tr_rooms as tr_rooms_api
 from backend import credentials, school_sessions
+from backend.repositories import snapshots as snapshot_repository
 from backend.repositories import school_sessions as school_session_repository
 from backend import history, moodle, official_selection, planner_pdf, snapshots, tr_rooms
 from backend.schedule import find_latest_course_list_url, group_schedule_entries
@@ -1424,6 +1425,41 @@ def test_supabase_load_snapshot_builds_encoded_query(monkeypatch) -> None:
         "https://example.supabase.co/rest/v1/schedule_sync_snapshots"
         "?profile_key=eq.abc%2F123&select=payload"
     )
+
+
+def test_snapshot_repository_builds_encoded_query() -> None:
+    seen: dict[str, object] = {}
+
+    class Response:
+        status_code = 200
+        text = "ok"
+
+        @staticmethod
+        def json() -> list[dict[str, object]]:
+            return [{"payload": {"ok": True}}]
+
+    def fake_get(url: str, **kwargs: object) -> Response:
+        seen["url"] = url
+        seen["headers"] = kwargs["headers"]
+        seen["timeout"] = kwargs["timeout"]
+        return Response()
+
+    assert snapshot_repository.load_snapshot_row(
+        "schedule_sync_snapshots",
+        "abc/123",
+        supabase_url="https://example.supabase.co",
+        headers={"Authorization": "Bearer service"},
+        timeout=12,
+        get=fake_get,
+    ) == {"ok": True}
+    assert seen == {
+        "url": (
+            "https://example.supabase.co/rest/v1/schedule_sync_snapshots"
+            "?profile_key=eq.abc%2F123&select=payload"
+        ),
+        "headers": {"Authorization": "Bearer service"},
+        "timeout": 12,
+    }
 
 
 def test_supabase_persist_snapshot_reuses_common_writer(monkeypatch) -> None:
