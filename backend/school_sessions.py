@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -9,43 +8,45 @@ import requests
 try:
     from .core.config import DEFAULT_TIMEOUT, SUPABASE_URL
     from .credentials import (
-        CredentialStoreError,
         decrypt_sensitive_value,
         encrypt_sensitive_value,
         _service_role_headers,
     )
     from .repositories import school_sessions as school_session_repository
+    from .services import school_sessions as school_session_service
 except ImportError:  # pragma: no cover
     from core.config import DEFAULT_TIMEOUT, SUPABASE_URL
     from credentials import (
-        CredentialStoreError,
         decrypt_sensitive_value,
         encrypt_sensitive_value,
         _service_role_headers,
     )
     from repositories import school_sessions as school_session_repository
+    from services import school_sessions as school_session_service
 
 
 OFFICIAL_SESSION_TTL_SECONDS = 25 * 60
 
 
 def official_session_expires_at() -> datetime:
-    return datetime.now(timezone.utc) + timedelta(seconds=OFFICIAL_SESSION_TTL_SECONDS)
+    return school_session_service.official_session_expires_at(
+        OFFICIAL_SESSION_TTL_SECONDS,
+        lambda: datetime.now(timezone.utc),
+    )
 
 
 def encrypt_school_session_state(session_state: dict[str, Any]) -> str:
-    raw = json.dumps(session_state, ensure_ascii=True, separators=(",", ":"))
-    return encrypt_sensitive_value(raw)
+    return school_session_service.encrypt_school_session_state(
+        session_state,
+        lambda raw: encrypt_sensitive_value(raw),
+    )
 
 
 def decrypt_school_session_state(ciphertext: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(decrypt_sensitive_value(ciphertext))
-    except json.JSONDecodeError as exc:
-        raise CredentialStoreError("已保存的官方選課 session 格式無法解析，請重新同步。") from exc
-    if not isinstance(payload, dict):
-        raise CredentialStoreError("已保存的官方選課 session 格式錯誤，請重新同步。")
-    return payload
+    return school_session_service.decrypt_school_session_state(
+        ciphertext,
+        lambda token: decrypt_sensitive_value(token),
+    )
 
 
 def _post_rpc(name: str, payload: dict[str, Any]) -> requests.Response:
@@ -60,27 +61,19 @@ def _post_rpc(name: str, payload: dict[str, Any]) -> requests.Response:
 
 
 def load_school_session_state(user_id: str, username: str) -> dict[str, Any] | None:
-    if not username.strip():
-        return None
-    row = school_session_repository.load_school_session_row(
+    return school_session_service.load_school_session_state(
         user_id,
         username,
-        supabase_url=SUPABASE_URL,
-        timeout=DEFAULT_TIMEOUT,
-        service_role_headers=_service_role_headers,
-        post=requests.post,
+        lambda selected_user_id, selected_username: school_session_repository.load_school_session_row(
+            selected_user_id,
+            selected_username,
+            supabase_url=SUPABASE_URL,
+            timeout=DEFAULT_TIMEOUT,
+            service_role_headers=_service_role_headers,
+            post=requests.post,
+        ),
+        lambda ciphertext: decrypt_school_session_state(ciphertext),
     )
-    if row is None:
-        return None
-    ciphertext = str(row.get("session_ciphertext") or "")
-    if not ciphertext:
-        return None
-    return {
-        "school_account": str(row.get("school_account") or username),
-        "session_state": decrypt_school_session_state(ciphertext),
-        "expires_at": row.get("expires_at"),
-        "last_keep_alive_at": row.get("last_keep_alive_at"),
-    }
 
 
 def save_school_session_state(
@@ -91,27 +84,41 @@ def save_school_session_state(
     expires_at: datetime | None = None,
     last_keep_alive_at: datetime | None = None,
 ) -> None:
-    if not username.strip():
-        return
-    school_session_repository.save_school_session_row(
+    school_session_service.save_school_session_state(
         user_id,
         username,
-        encrypt_school_session_state(session_state),
-        expires_at=(expires_at or official_session_expires_at()).isoformat(),
-        last_keep_alive_at=(last_keep_alive_at or datetime.now(timezone.utc)).isoformat(),
-        supabase_url=SUPABASE_URL,
-        timeout=DEFAULT_TIMEOUT,
-        service_role_headers=_service_role_headers,
-        post=requests.post,
+        session_state,
+        lambda selected_user_id, selected_username, ciphertext, selected_expires_at, selected_last_keep_alive_at: (
+            school_session_repository.save_school_session_row(
+                selected_user_id,
+                selected_username,
+                ciphertext,
+                expires_at=selected_expires_at,
+                last_keep_alive_at=selected_last_keep_alive_at,
+                supabase_url=SUPABASE_URL,
+                timeout=DEFAULT_TIMEOUT,
+                service_role_headers=_service_role_headers,
+                post=requests.post,
+            )
+        ),
+        lambda state: encrypt_school_session_state(state),
+        lambda: official_session_expires_at(),
+        lambda: datetime.now(timezone.utc),
+        expires_at=expires_at,
+        last_keep_alive_at=last_keep_alive_at,
     )
 
 
 def delete_school_session(user_id: str, username: str | None = None) -> None:
-    school_session_repository.delete_school_session_row(
+    school_session_service.delete_school_session(
         user_id,
         username,
-        supabase_url=SUPABASE_URL,
-        timeout=DEFAULT_TIMEOUT,
-        service_role_headers=_service_role_headers,
-        post=requests.post,
+        lambda selected_user_id, selected_username: school_session_repository.delete_school_session_row(
+            selected_user_id,
+            selected_username,
+            supabase_url=SUPABASE_URL,
+            timeout=DEFAULT_TIMEOUT,
+            service_role_headers=_service_role_headers,
+            post=requests.post,
+        ),
     )

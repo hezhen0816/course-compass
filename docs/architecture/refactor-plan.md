@@ -27,6 +27,7 @@
 - 校務帳密 private RPC row 存取已集中到 `backend/repositories/credentials.py`，加解密、Auth token 驗證與 legacy promotion 還保留在 `backend/credentials.py`。
 - 共用設定與台北時間 helper 已移到 `backend/core/config.py` 與 `backend/core/time_utils.py`，舊 `backend/config.py`、`backend/time_utils.py` 暫時保留相容 wrapper。
 - Pydantic request/response schemas 已移到 `backend/schemas/*` 並按 domain 拆分，舊 `backend/models.py` 與 `backend/schemas/models.py` 暫時保留相容 wrapper。
+- 官方選課 session 的加解密 payload、TTL、load/save/delete domain 流程已抽到 `backend/services/school_sessions.py`，舊 `backend/school_sessions.py` 保留相容 wrapper 與依賴注入。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
 
 ## 目前架構
@@ -50,6 +51,7 @@ backend/
     schedule.py          # school schedule sync parser/client
     tr_rooms.py          # course query and room status helpers
   services/
+    school_sessions.py   # official session domain flow, encryption payload, TTL helpers
     session_context.py   # backend-owned credential/session context helpers
   core/
     config.py            # backend settings, constants, NTUST/Supabase URLs
@@ -67,7 +69,7 @@ backend/
     school_sessions.py   # Supabase RPC access for encrypted official session rows
     snapshots.py         # Supabase REST access for schedule/history/Moodle snapshot rows
   credentials.py         # app_private.school_credentials access and encryption
-  school_sessions.py     # app_private.school_sessions access and encryption
+  school_sessions.py     # compatibility wrapper and dependency injection for school session service
   config.py              # compatibility wrapper; remove after imports migrate
   time_utils.py          # compatibility wrapper; remove after imports migrate
   models.py              # compatibility wrapper; remove after imports migrate
@@ -126,6 +128,7 @@ tests/
    - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, and snapshot row access have started.
    - Core config/time helpers are now in `backend/core/*`; retire compatibility wrappers after scripts and external imports settle.
    - Pydantic API schemas are now split by domain in `backend/schemas/*`; retire compatibility wrappers after scripts and external imports settle.
+   - School session domain flow is now in `backend/services/school_sessions.py`; credential service extraction remains.
    - Keep compatibility imports while tests are being migrated.
 4. Add typed table migrations behind a backup-first cutover.
    - Create full `user_data_refactor_backup` before any destructive change.
