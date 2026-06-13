@@ -28,7 +28,9 @@
 backend/
   app.py                 # FastAPI app setup and remaining route handlers
   api/
+    courses.py           # course semester/search routes
     health.py            # health route
+    planner.py           # planner PDF import route
     school_credentials.py # school credential status/save/delete routes
   credentials.py         # app_private.school_credentials access and encryption
   school_sessions.py     # app_private.school_sessions access and encryption
