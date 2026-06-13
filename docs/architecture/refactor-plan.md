@@ -30,6 +30,7 @@ backend/
   api/
     courses.py           # course semester/search routes
     health.py            # health route
+    official_selection.py # official A02 sync, keep-alive, and confirmed action routes
     planner.py           # planner PDF import route
     school_credentials.py # school credential status/save/delete routes
     sync.py              # schedule, history, and Moodle sync/snapshot routes

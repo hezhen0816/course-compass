@@ -4,12 +4,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 import requests
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from .api.courses import create_courses_router
     from .api.health import create_health_router
+    from .api.official_selection import create_official_selection_router
     from .api.planner import create_planner_router
     from .api.school_credentials import create_school_credentials_router
     from .api.sync import create_sync_router
@@ -23,13 +24,6 @@ try:
         resolve_user_id,
     )
     from .history import fetch_history_records
-    from .models import (
-        OfficialSelectionCourseActionRequest,
-        OfficialSelectionKeepAliveRequest,
-        OfficialSelectionPriorityUpdateRequest,
-        OfficialSelectionSyncRequest,
-        OfficialSelectionSyncResponse,
-    )
     from .moodle import fetch_moodle_assignments
     from .official_selection import get_official_selection_client
     from .planner_pdf import parse_requirement_pdf
@@ -56,6 +50,7 @@ try:
 except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from api.courses import create_courses_router
     from api.health import create_health_router
+    from api.official_selection import create_official_selection_router
     from api.planner import create_planner_router
     from api.school_credentials import create_school_credentials_router
     from api.sync import create_sync_router
@@ -69,13 +64,6 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         resolve_user_id,
     )
     from history import fetch_history_records
-    from models import (
-        OfficialSelectionCourseActionRequest,
-        OfficialSelectionKeepAliveRequest,
-        OfficialSelectionPriorityUpdateRequest,
-        OfficialSelectionSyncRequest,
-        OfficialSelectionSyncResponse,
-    )
     from moodle import fetch_moodle_assignments
     from official_selection import get_official_selection_client
     from planner_pdf import parse_requirement_pdf
@@ -341,163 +329,23 @@ app.include_router(
         lambda: now().isoformat(),
     )
 )
-
-
-@app.post("/api/official-selection/a02/sync", response_model=OfficialSelectionSyncResponse)
-def sync_initial_selection_workspace(
-    request: OfficialSelectionSyncRequest,
-    authorization: str | None = Header(default=None),
-) -> OfficialSelectionSyncResponse:
-    try:
-        profile_key = request.profile_key or request.username
-        context = _optional_authorization_context(authorization)
-        client = get_official_selection_client(profile_key)
-        if _reuse_official_session(client, request.username, context, request.verify_ssl):
-            payload = client.fetch_current_a02_workspace(request.verify_ssl)
-        else:
-            password = _official_password(request.username, request.password, authorization)
-            if not password:
-                raise HTTPException(status_code=400, detail="請輸入校務密碼，或先保存校務帳密後再同步官方初選。")
-            payload = client.fetch_a02_workspace(request.username, password, request.verify_ssl)
-            _persist_official_session(context, request.username, client)
-        return OfficialSelectionSyncResponse.model_validate(
-            {
-                **payload,
-                "profile_key": profile_key,
-                "school_account": request.username,
-            }
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/official-selection/a02/keep-alive")
-def keep_initial_selection_session_alive(
-    request: OfficialSelectionKeepAliveRequest,
-    authorization: str | None = Header(default=None),
-) -> dict[str, Any]:
-    try:
-        profile_key = request.profile_key or request.username
-        context = _optional_authorization_context(authorization)
-        client = get_official_selection_client(profile_key)
-        session_valid = _reuse_official_session(client, request.username, context, request.verify_ssl)
-        if not session_valid:
-            saved_credentials = _saved_school_credentials(request.username, authorization)
-            if saved_credentials:
-                client.ensure_session(request.username, saved_credentials[1], request.verify_ssl)
-                session_valid = True
-                _persist_official_session(context, request.username, client)
-            else:
-                _delete_official_session(context, request.username)
-        return {
-            "profile_key": profile_key,
-            "school_account": request.username,
-            "session_valid": session_valid,
-            "checked_at": now().isoformat(),
-        }
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"官方選課系統 keep-alive 失敗：{exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/official-selection/a02/join", response_model=OfficialSelectionSyncResponse)
-def join_initial_selection_course(
-    request: OfficialSelectionCourseActionRequest,
-    authorization: str | None = Header(default=None),
-) -> OfficialSelectionSyncResponse:
-    try:
-        _require_official_action_confirmation(request.confirmed)
-        profile_key = request.profile_key or request.username
-        context = _optional_authorization_context(authorization)
-        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
-        payload = client.join_course(request.course_no, request.verify_ssl)
-        _persist_official_session(context, request.username, client)
-        return OfficialSelectionSyncResponse.model_validate(
-            {
-                **payload,
-                "profile_key": profile_key,
-                "school_account": request.username,
-            }
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/official-selection/a02/add-to-waitlist", response_model=OfficialSelectionSyncResponse)
-def add_initial_selection_waitlist_course(
-    request: OfficialSelectionCourseActionRequest,
-    authorization: str | None = Header(default=None),
-) -> OfficialSelectionSyncResponse:
-    try:
-        _require_official_action_confirmation(request.confirmed)
-        profile_key = request.profile_key or request.username
-        context = _optional_authorization_context(authorization)
-        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
-        payload = client.add_course_to_waitlist(request.course_no, request.verify_ssl)
-        _persist_official_session(context, request.username, client)
-        return OfficialSelectionSyncResponse.model_validate(
-            {
-                **payload,
-                "profile_key": profile_key,
-                "school_account": request.username,
-            }
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/official-selection/a02/remove", response_model=OfficialSelectionSyncResponse)
-def remove_initial_selection_course(
-    request: OfficialSelectionCourseActionRequest,
-    authorization: str | None = Header(default=None),
-) -> OfficialSelectionSyncResponse:
-    try:
-        _require_official_action_confirmation(request.confirmed)
-        profile_key = request.profile_key or request.username
-        context = _optional_authorization_context(authorization)
-        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
-        payload = client.remove_course(request.course_no, request.verify_ssl)
-        _persist_official_session(context, request.username, client)
-        return OfficialSelectionSyncResponse.model_validate(
-            {
-                **payload,
-                "profile_key": profile_key,
-                "school_account": request.username,
-            }
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/official-selection/a02/reorder", response_model=OfficialSelectionSyncResponse)
-def reorder_initial_selection_courses(
-    request: OfficialSelectionPriorityUpdateRequest,
-    authorization: str | None = Header(default=None),
-) -> OfficialSelectionSyncResponse:
-    try:
-        _require_official_action_confirmation(request.confirmed)
-        profile_key = request.profile_key or request.username
-        context = _optional_authorization_context(authorization)
-        client = _ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
-        payload = client.reorder_registered_courses(request.ordered_course_nos, request.verify_ssl)
-        _persist_official_session(context, request.username, client)
-        return OfficialSelectionSyncResponse.model_validate(
-            {
-                **payload,
-                "profile_key": profile_key,
-                "school_account": request.username,
-            }
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+app.include_router(
+    create_official_selection_router(
+        lambda profile_key: get_official_selection_client(profile_key),
+        lambda authorization: _optional_authorization_context(authorization),
+        lambda client, username, context, verify_ssl: _reuse_official_session(client, username, context, verify_ssl),
+        lambda profile_key, username, password, authorization, verify_ssl: _ensure_official_session(
+            profile_key,
+            username,
+            password,
+            authorization,
+            verify_ssl,
+        ),
+        lambda context, username, client: _persist_official_session(context, username, client),
+        lambda context, username: _delete_official_session(context, username),
+        lambda username, password, authorization: _official_password(username, password, authorization),
+        lambda username, authorization: _saved_school_credentials(username, authorization),
+        lambda confirmed: _require_official_action_confirmation(confirmed),
+        lambda: now().isoformat(),
+    )
+)
