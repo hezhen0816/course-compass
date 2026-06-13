@@ -286,6 +286,20 @@ def test_official_selection_parser_expands_split_class_restriction_message() -> 
     ]
 
 
+def test_official_selection_parser_keeps_full_script_alert_before_regex_fallback() -> None:
+    html = """
+    <html>
+      <body>
+        <script>alert("這門課遴選不開放選修，所以無法選修。");</script>
+      </body>
+    </html>
+    """
+
+    assert official_selection._parse_action_response_notices(html) == [
+        "這門課遴選不開放選修，所以無法選修。"
+    ]
+
+
 def test_official_selection_parser_maps_schedule_weekday_columns_by_position() -> None:
     html = """
     <html>
@@ -439,6 +453,50 @@ def test_official_selection_join_refreshes_workspace_before_and_after_post(monke
     ]
     assert payload["session_valid"] is True
     assert payload["registered_courses"][0]["course_no"] == "CS2002302"
+
+
+def test_official_selection_waitlist_uses_single_add_endpoint(monkeypatch) -> None:
+    events: list[object] = []
+    workspace_html = """
+    <html>
+      <body>
+        <div id="draggable"></div>
+        <table id="cartTable">
+          <tr><td>志願序</td><td>課碼</td><td>課程名稱</td><td>取消加入</td></tr>
+        </table>
+      </body>
+    </html>
+    """
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.headers: dict[str, str] = {}
+
+        def post(self, endpoint: str, **kwargs: object) -> FakeHTTPResponse:
+            events.append(("post", endpoint, kwargs["data"]))
+            return FakeHTTPResponse(url=endpoint)
+
+    client = official_selection.OfficialSelectionClient()
+    client.session = FakeSession()  # type: ignore[assignment]
+
+    def fake_get_workspace_page(verify_ssl: bool) -> FakeHTTPResponse:
+        events.append(("get_workspace", verify_ssl))
+        return FakeHTTPResponse(text=workspace_html)
+
+    monkeypatch.setattr(client, "_get_workspace_page", fake_get_workspace_page)
+    monkeypatch.setattr(client, "_fetch_course_list_schedule_rows", lambda verify_ssl: [])
+
+    client.add_course_to_waitlist(" ba2208302 ", verify_ssl=False)
+
+    assert events == [
+        ("get_workspace", False),
+        (
+            "post",
+            official_selection.INITIAL_SELECTION_EXTRA_JOIN_URL,
+            {"CourseNo": "BA2208302", "type": 3},
+        ),
+        ("get_workspace", False),
+    ]
 
 
 def test_official_selection_join_preserves_action_rejection_notice(monkeypatch) -> None:

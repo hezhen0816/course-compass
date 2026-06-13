@@ -14,6 +14,7 @@ try:
     from ..core.config import (
         COURSE_LIST_URL,
         DEFAULT_TIMEOUT,
+        INITIAL_SELECTION_EXTRA_JOIN_URL,
         INITIAL_SELECTION_JOIN_URL,
         INITIAL_SELECTION_REMOVE_URL,
         INITIAL_SELECTION_SAVE_INDEX_URL,
@@ -26,6 +27,7 @@ except ImportError:  # pragma: no cover
     from core.config import (
         COURSE_LIST_URL,
         DEFAULT_TIMEOUT,
+        INITIAL_SELECTION_EXTRA_JOIN_URL,
         INITIAL_SELECTION_JOIN_URL,
         INITIAL_SELECTION_REMOVE_URL,
         INITIAL_SELECTION_SAVE_INDEX_URL,
@@ -173,7 +175,7 @@ class OfficialSelectionClient:
     def add_course_to_waitlist(self, course_no: str, verify_ssl: bool) -> dict[str, Any]:
         return self._submit_course_action(
             course_no=course_no,
-            endpoint=INITIAL_SELECTION_JOIN_URL,
+            endpoint=INITIAL_SELECTION_EXTRA_JOIN_URL,
             action_type=3,
             verify_ssl=verify_ssl,
         )
@@ -628,8 +630,13 @@ def _parse_action_response_notices(html: str) -> list[str]:
 
     soup = BeautifulSoup(html, "html.parser")
     notices: list[str] = []
-    for text in _extract_known_action_error_patterns(html):
-        _append_unique_notice(notices, text)
+    for script in soup.find_all("script"):
+        if not isinstance(script, Tag):
+            continue
+        script_text = script.get_text("\n", strip=True)
+        script_messages = _extract_script_action_messages(script_text)
+        for text in script_messages:
+            _append_unique_notice(notices, text)
     if notices:
         return notices[:5]
 
@@ -651,6 +658,11 @@ def _parse_action_response_notices(html: str) -> list[str]:
     if notices:
         return notices[:5]
 
+    for text in _extract_known_action_error_patterns(html):
+        _append_unique_notice(notices, text)
+    if notices:
+        return notices[:5]
+
     body = soup.body or soup
     for text in _extract_action_notice_candidates(body.get_text("\n", strip=True)):
         _append_unique_notice(notices, text)
@@ -658,12 +670,8 @@ def _parse_action_response_notices(html: str) -> list[str]:
         if not isinstance(script, Tag):
             continue
         script_text = script.get_text("\n", strip=True)
-        script_messages = _extract_script_action_messages(script_text)
-        for text in script_messages:
+        for text in _extract_action_notice_candidates(script_text):
             _append_unique_notice(notices, text)
-        if not script_messages:
-            for text in _extract_action_notice_candidates(script_text):
-                _append_unique_notice(notices, text)
     if notices:
         return notices[:5]
 
@@ -683,6 +691,8 @@ def _extract_known_action_error_patterns(text: str) -> list[str]:
         r"不符合.*?條件[，,、 ]*.*?無法選修[。.]?",
         r"選修的這門課與.*?衝堂[，,、 ]*.*?無法選修[。.]?",
         r"衝堂[，,、 ]*.*?無法選修[。.]?",
+        r"這門課遴選不開放選修[，,、 ]*所以無法選修[。.]?",
+        r"這門課.*?無法選修[。.]?",
         r"課程人數額滿[。.]?",
         r"人數額滿[。.]?",
         r"名額已滿[。.]?",
@@ -752,7 +762,7 @@ def _merge_unique_texts(primary: list[str], secondary: list[str]) -> list[str]:
 
 
 def _append_unique_notice(notices: list[str], text: str) -> None:
-    normalized = normalize(text)
+    normalized = _canonical_action_notice(normalize(text))
     if not normalized:
         return
     for existing in list(notices):
@@ -761,6 +771,12 @@ def _append_unique_notice(notices: list[str], text: str) -> None:
         if existing in normalized:
             notices.remove(existing)
     notices.append(normalized)
+
+
+def _canonical_action_notice(text: str) -> str:
+    if _has_class_restriction_rejection(text):
+        return "本門課設有選課班級條件，您不符合條件，無法選修。"
+    return text
 
 
 def _extract_div_table_rows(container: Tag | None) -> list[list[str]]:
