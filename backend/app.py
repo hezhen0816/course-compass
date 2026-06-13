@@ -21,11 +21,14 @@ try:
         put_school_credentials,
         resolve_user_id,
     )
-    from .history import fetch_history_records
-    from .moodle import fetch_moodle_assignments
-    from .official_selection import get_official_selection_client
+    from .integrations.history import fetch_history_records
+    from .integrations.moodle import fetch_moodle_assignments
+    from .integrations.official_selection import get_official_selection_client
+    from .integrations.schedule import fetch_schedule
+    from .integrations.tr_rooms import (
+        fetch_query_courses_filtered,
+    )
     from .planner_pdf import parse_requirement_pdf
-    from .schedule import fetch_schedule
     from .school_sessions import (
         delete_school_session,
         load_school_session_state,
@@ -42,9 +45,6 @@ try:
         persist_snapshot,
     )
     from .time_utils import now
-    from .tr_rooms import (
-        fetch_query_courses_filtered,
-    )
     from .services import session_context
 except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from api.courses import create_courses_router
@@ -61,11 +61,14 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         put_school_credentials,
         resolve_user_id,
     )
-    from history import fetch_history_records
-    from moodle import fetch_moodle_assignments
-    from official_selection import get_official_selection_client
+    from integrations.history import fetch_history_records
+    from integrations.moodle import fetch_moodle_assignments
+    from integrations.official_selection import get_official_selection_client
+    from integrations.schedule import fetch_schedule
+    from integrations.tr_rooms import (
+        fetch_query_courses_filtered,
+    )
     from planner_pdf import parse_requirement_pdf
-    from schedule import fetch_schedule
     from school_sessions import (
         delete_school_session,
         load_school_session_state,
@@ -82,9 +85,6 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         persist_snapshot,
     )
     from time_utils import now
-    from tr_rooms import (
-        fetch_query_courses_filtered,
-    )
     from services import session_context
 
 

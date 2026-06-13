@@ -20,13 +20,15 @@
 - 官方選課 session 已移到 `app_private.school_sessions`，以 server-side key 加密。
 - Legacy `user_data.content.settings.school_password` production plaintext 已清除。
 - Backend 已改用 Supabase Auth `/auth/v1/user` 驗證 access token，不再本地 decode JWT payload 當作身份驗證。
+- Backend route handlers 已拆到 `backend/api/*`，校務 session/context helper 已拆到 `backend/services/session_context.py`。
+- NTUST、Moodle、官方選課、課表與 TR 查詢 client/parser 已拆到 `backend/integrations/*`，舊 `backend/*.py` import 路徑暫時保留相容 wrapper。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
 
 ## 目前架構
 
 ```text
 backend/
-  app.py                 # FastAPI app setup and remaining route handlers
+  app.py                 # FastAPI app setup and router wiring
   api/
     courses.py           # course semester/search routes
     health.py            # health route
@@ -35,13 +37,22 @@ backend/
     school_credentials.py # school credential status/save/delete routes
     sync.py              # schedule, history, and Moodle sync/snapshot routes
     tr_rooms.py          # TR room status route
+  integrations/
+    history.py           # academic history parser/client
+    moodle.py            # Moodle assignments sync
+    ntust_common.py      # shared NTUST SSO/form helpers
+    official_selection.py # official A02 parser/client/action helpers
+    schedule.py          # school schedule sync parser/client
+    tr_rooms.py          # course query and room status helpers
+  services/
+    session_context.py   # backend-owned credential/session context helpers
   credentials.py         # app_private.school_credentials access and encryption
   school_sessions.py     # app_private.school_sessions access and encryption
-  official_selection.py  # official A02 parser/client/action helpers
-  schedule.py            # school schedule sync parser/client
-  history.py             # academic history parser/client
-  moodle.py              # Moodle assignments sync
-  tr_rooms.py            # course query and room status helpers
+  official_selection.py  # compatibility wrapper; remove after imports migrate
+  schedule.py            # compatibility wrapper; remove after imports migrate
+  history.py             # compatibility wrapper; remove after imports migrate
+  moodle.py              # compatibility wrapper; remove after imports migrate
+  tr_rooms.py            # compatibility wrapper; remove after imports migrate
 web/src/
   features/              # feature-level UI and hooks
   hooks/useCourseData.ts # current user_data.content compatibility layer
@@ -87,8 +98,8 @@ tests/
    - Move historical docs and reference images into `docs/archive/2026-refactor/`.
    - Move long-lived test fixtures into `tests/fixtures/`.
 3. Split backend responsibilities without changing API behavior.
-   - Move route handlers out of `backend/app.py` into `backend/api/*`.
-   - Move parsing/client code into `backend/integrations/*`.
+   - Route handlers are now in `backend/api/*`; keep shrinking `backend/app.py` to setup/wiring only.
+   - Parsing/client code is now in `backend/integrations/*`; retire compatibility wrappers after internal imports settle.
    - Move Supabase reads/writes into `backend/repositories/*`.
    - Keep compatibility imports while tests are being migrated.
 4. Add typed table migrations behind a backup-first cutover.

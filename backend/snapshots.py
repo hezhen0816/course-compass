@@ -7,10 +7,10 @@ import requests
 
 try:
     from .config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
-    from .schedule import group_schedule_entries
+    from .integrations.schedule import group_schedule_entries
 except ImportError:  # pragma: no cover
     from config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
-    from schedule import group_schedule_entries
+    from integrations.schedule import group_schedule_entries
 
 
 def _supabase_headers(content_type: bool = False) -> dict[str, str]:

@@ -7,7 +7,7 @@ try:
     from ..config import DEFAULT_VERIFY_SSL
     from ..models import TRRoomStatusResponse
     from ..time_utils import now
-    from ..tr_rooms import (
+    from ..integrations.tr_rooms import (
         build_tr_meetings,
         fetch_current_query_semester,
         fetch_query_courses,
@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
     from config import DEFAULT_VERIFY_SSL
     from models import TRRoomStatusResponse
     from time_utils import now
-    from tr_rooms import (
+    from integrations.tr_rooms import (
         build_tr_meetings,
         fetch_current_query_semester,
         fetch_query_courses,
