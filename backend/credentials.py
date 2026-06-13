@@ -18,6 +18,7 @@ try:
         SUPABASE_URL,
     )
     from .repositories import credentials as credential_repository
+    from .services import credentials as credential_service
 except ImportError:  # pragma: no cover
     from core.config import (
         DEFAULT_TIMEOUT,
@@ -27,6 +28,7 @@ except ImportError:  # pragma: no cover
         SUPABASE_URL,
     )
     from repositories import credentials as credential_repository
+    from services import credentials as credential_service
 
 
 class CredentialStoreError(RuntimeError):
@@ -179,11 +181,7 @@ def save_user_content(user_id: str, content: dict[str, Any], access_token: str |
 
 
 def _settings(content: dict[str, Any]) -> dict[str, Any]:
-    settings = content.get("settings")
-    if not isinstance(settings, dict):
-        settings = {}
-        content["settings"] = settings
-    return settings
+    return credential_service.settings(content)
 
 
 def _load_school_credentials_row(user_id: str) -> dict[str, Any] | None:
@@ -221,50 +219,20 @@ def _delete_school_credentials_row(user_id: str) -> None:
 
 
 def _legacy_school_credentials_status(user_id: str, access_token: str | None = None) -> dict[str, Any]:
-    content = load_user_content(user_id, access_token)
-    settings = _settings(content)
-    credentials = settings.get("schoolCredentials")
-    fallback_username = str(settings.get("school_account") or "")
-    plaintext_password = str(settings.get("school_password") or "")
-    if not isinstance(credentials, dict):
-        return {"username": fallback_username, "hasPassword": bool(plaintext_password)}
-    username = str(credentials.get("username") or fallback_username)
-    encrypted_password = str(credentials.get("passwordCiphertext") or "")
-    if not encrypted_password and not plaintext_password:
-        return {"username": username, "hasPassword": False}
-    return {
-        "username": username,
-        "hasPassword": True,
-    }
+    return credential_service.legacy_school_credentials_status(
+        user_id,
+        access_token,
+        lambda selected_user_id, selected_access_token: load_user_content(selected_user_id, selected_access_token),
+    )
 
 
 def _legacy_school_credentials_secret(user_id: str, access_token: str | None = None) -> dict[str, Any]:
-    content = load_user_content(user_id, access_token)
-    settings = _settings(content)
-    credentials = settings.get("schoolCredentials")
-    fallback_username = str(settings.get("school_account") or "")
-    plaintext_password = str(settings.get("school_password") or "")
-    if not isinstance(credentials, dict):
-        return {
-            "username": fallback_username,
-            "password": plaintext_password,
-            "hasPassword": bool(plaintext_password),
-        }
-    username = str(credentials.get("username") or fallback_username)
-    encrypted_password = str(credentials.get("passwordCiphertext") or "")
-    if not encrypted_password and not plaintext_password:
-        return {"username": username, "password": "", "hasPassword": False}
-    if plaintext_password:
-        return {
-            "username": username,
-            "password": plaintext_password,
-            "hasPassword": True,
-        }
-    return {
-        "username": username,
-        "password": decrypt_school_password(encrypted_password),
-        "hasPassword": True,
-    }
+    return credential_service.legacy_school_credentials_secret(
+        user_id,
+        access_token,
+        lambda selected_user_id, selected_access_token: load_user_content(selected_user_id, selected_access_token),
+        lambda password_ciphertext: decrypt_school_password(password_ciphertext),
+    )
 
 
 def _promote_legacy_school_credentials(
@@ -273,78 +241,89 @@ def _promote_legacy_school_credentials(
     password: str,
     access_token: str | None = None,
 ) -> None:
-    if not password:
-        return
-    encrypted_password = encrypt_school_password(password)
-    _upsert_school_credentials_row(user_id, username, encrypted_password)
-    content = load_user_content(user_id, access_token)
-    settings = _settings(content)
-    settings["school_account"] = username
-    settings.pop("schoolCredentials", None)
-    settings.pop("school_password", None)
-    save_user_content(user_id, content, access_token)
+    credential_service.promote_legacy_school_credentials(
+        user_id,
+        username,
+        password,
+        access_token,
+        lambda plaintext: encrypt_school_password(plaintext),
+        lambda selected_user_id, selected_username, password_ciphertext: _upsert_school_credentials_row(
+            selected_user_id,
+            selected_username,
+            password_ciphertext,
+        ),
+        lambda selected_user_id, selected_access_token: load_user_content(selected_user_id, selected_access_token),
+        lambda selected_user_id, content, selected_access_token: save_user_content(
+            selected_user_id,
+            content,
+            selected_access_token,
+        ),
+    )
 
 
 def get_school_credentials_status(user_id: str, access_token: str | None = None) -> dict[str, Any]:
-    try:
-        row = _load_school_credentials_row(user_id)
-    except (CredentialStoreError, requests.RequestException):
-        row = None
-    if row:
-        return {
-            "username": str(row.get("school_account") or ""),
-            "hasPassword": bool(row.get("password_ciphertext")),
-        }
-    return _legacy_school_credentials_status(user_id, access_token)
+    return credential_service.get_school_credentials_status(
+        user_id,
+        access_token,
+        lambda selected_user_id: _load_school_credentials_row(selected_user_id),
+        lambda selected_user_id, selected_access_token: _legacy_school_credentials_status(
+            selected_user_id,
+            selected_access_token,
+        ),
+        (CredentialStoreError, requests.RequestException),
+    )
 
 
 def get_school_credentials_secret(user_id: str, access_token: str | None = None) -> dict[str, Any]:
-    try:
-        row = _load_school_credentials_row(user_id)
-    except (CredentialStoreError, requests.RequestException):
-        row = None
-    if not row:
-        legacy = _legacy_school_credentials_secret(user_id, access_token)
-        if legacy.get("hasPassword"):
-            try:
-                _promote_legacy_school_credentials(
-                    user_id,
-                    str(legacy.get("username") or ""),
-                    str(legacy.get("password") or ""),
-                    access_token,
-                )
-            except (CredentialStoreError, requests.RequestException):
-                pass
-        return legacy
-    username = str(row.get("school_account") or "")
-    encrypted_password = str(row.get("password_ciphertext") or "")
-    if not encrypted_password:
-        return {"username": username, "password": "", "hasPassword": False}
-    return {
-        "username": username,
-        "password": decrypt_school_password(encrypted_password),
-        "hasPassword": True,
-    }
+    return credential_service.get_school_credentials_secret(
+        user_id,
+        access_token,
+        lambda selected_user_id: _load_school_credentials_row(selected_user_id),
+        lambda selected_user_id, selected_access_token: _legacy_school_credentials_secret(
+            selected_user_id,
+            selected_access_token,
+        ),
+        lambda selected_user_id, username, password, selected_access_token: _promote_legacy_school_credentials(
+            selected_user_id,
+            username,
+            password,
+            selected_access_token,
+        ),
+        lambda password_ciphertext: decrypt_school_password(password_ciphertext),
+        (CredentialStoreError, requests.RequestException),
+    )
 
 
 def put_school_credentials(user_id: str, username: str, password: str, access_token: str | None = None) -> dict[str, Any]:
-    encrypted_password = encrypt_school_password(password)
-    _upsert_school_credentials_row(user_id, username, encrypted_password)
-    content = load_user_content(user_id, access_token)
-    settings = _settings(content)
-    settings["school_account"] = username
-    settings.pop("schoolCredentials", None)
-    settings.pop("school_password", None)
-    save_user_content(user_id, content, access_token)
-    return {"username": username, "hasPassword": True}
+    return credential_service.put_school_credentials(
+        user_id,
+        username,
+        password,
+        access_token,
+        lambda plaintext: encrypt_school_password(plaintext),
+        lambda selected_user_id, selected_username, password_ciphertext: _upsert_school_credentials_row(
+            selected_user_id,
+            selected_username,
+            password_ciphertext,
+        ),
+        lambda selected_user_id, selected_access_token: load_user_content(selected_user_id, selected_access_token),
+        lambda selected_user_id, content, selected_access_token: save_user_content(
+            selected_user_id,
+            content,
+            selected_access_token,
+        ),
+    )
 
 
 def delete_school_credentials(user_id: str, access_token: str | None = None) -> dict[str, Any]:
-    _delete_school_credentials_row(user_id)
-    content = load_user_content(user_id, access_token)
-    settings = _settings(content)
-    username = str(settings.get("school_account") or "")
-    settings.pop("schoolCredentials", None)
-    settings.pop("school_password", None)
-    save_user_content(user_id, content, access_token)
-    return {"username": username, "hasPassword": False}
+    return credential_service.delete_school_credentials(
+        user_id,
+        access_token,
+        lambda selected_user_id: _delete_school_credentials_row(selected_user_id),
+        lambda selected_user_id, selected_access_token: load_user_content(selected_user_id, selected_access_token),
+        lambda selected_user_id, content, selected_access_token: save_user_content(
+            selected_user_id,
+            content,
+            selected_access_token,
+        ),
+    )
