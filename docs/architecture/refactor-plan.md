@@ -26,7 +26,10 @@
 
 ```text
 backend/
-  app.py                 # FastAPI app setup and current route handlers
+  app.py                 # FastAPI app setup and remaining route handlers
+  api/
+    health.py            # health route
+    school_credentials.py # school credential status/save/delete routes
   credentials.py         # app_private.school_credentials access and encryption
   school_sessions.py     # app_private.school_sessions access and encryption
   official_selection.py  # official A02 parser/client/action helpers

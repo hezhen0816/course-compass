@@ -9,7 +9,9 @@ from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from .config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from .api.health import create_health_router
+    from .api.school_credentials import create_school_credentials_router
+    from .config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
     from .credentials import (
         CredentialStoreError,
         delete_school_credentials,
@@ -29,8 +31,6 @@ try:
         OfficialSelectionPriorityUpdateRequest,
         OfficialSelectionSyncRequest,
         OfficialSelectionSyncResponse,
-        SchoolCredentialsSaveRequest,
-        SchoolCredentialsResponse,
         CourseSearchResult,
         CourseSemesterInfo,
         RequirementPdfImportResponse,
@@ -71,7 +71,9 @@ try:
         room_sort_key,
     )
 except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
-    from config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from api.health import create_health_router
+    from api.school_credentials import create_school_credentials_router
+    from config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
     from credentials import (
         CredentialStoreError,
         delete_school_credentials,
@@ -91,8 +93,6 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         OfficialSelectionPriorityUpdateRequest,
         OfficialSelectionSyncRequest,
         OfficialSelectionSyncResponse,
-        SchoolCredentialsSaveRequest,
-        SchoolCredentialsResponse,
         CourseSearchResult,
         CourseSemesterInfo,
         RequirementPdfImportResponse,
@@ -162,17 +162,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/health")
-def healthcheck() -> dict[str, Any]:
-    return {
-        "ok": True,
-        "version": API_VERSION,
-        "supabase_configured": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
-        "capabilities": OFFICIAL_SELECTION_CAPABILITIES,
-        "timestamp": now().isoformat(),
-    }
 
 
 def _current_user_context(authorization: str | None) -> tuple[str, str]:
@@ -338,44 +327,21 @@ def _require_official_action_confirmation(confirmed: bool) -> None:
         raise HTTPException(status_code=400, detail="官方選課操作需要使用者明確確認後才能送出。")
 
 
-@app.get("/api/school-credentials", response_model=SchoolCredentialsResponse)
-def get_saved_school_credentials(authorization: str | None = Header(default=None)) -> SchoolCredentialsResponse:
-    user_id, access_token = _current_user_context(authorization)
-    try:
-        return SchoolCredentialsResponse.model_validate(get_school_credentials_status(user_id, access_token))
-    except CredentialStoreError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"讀取校務帳密失敗：{exc}") from exc
-
-
-@app.put("/api/school-credentials", response_model=SchoolCredentialsResponse)
-def save_school_credentials(
-    request: SchoolCredentialsSaveRequest,
-    authorization: str | None = Header(default=None),
-) -> SchoolCredentialsResponse:
-    user_id, access_token = _current_user_context(authorization)
-    try:
-        _delete_official_session((user_id, access_token), request.username.strip())
-        return SchoolCredentialsResponse.model_validate(
-            put_school_credentials(user_id, request.username.strip(), request.password, access_token)
-        )
-    except CredentialStoreError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"保存校務帳密失敗：{exc}") from exc
-
-
-@app.delete("/api/school-credentials", response_model=SchoolCredentialsResponse)
-def remove_saved_school_credentials(authorization: str | None = Header(default=None)) -> SchoolCredentialsResponse:
-    user_id, access_token = _current_user_context(authorization)
-    try:
-        _delete_official_session((user_id, access_token))
-        return SchoolCredentialsResponse.model_validate(delete_school_credentials(user_id, access_token))
-    except CredentialStoreError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"刪除校務帳密失敗：{exc}") from exc
+app.include_router(create_health_router(API_VERSION, OFFICIAL_SELECTION_CAPABILITIES))
+app.include_router(
+    create_school_credentials_router(
+        lambda authorization: _current_user_context(authorization),
+        lambda context, username: _delete_official_session(context, username),
+        lambda user_id, access_token: get_school_credentials_status(user_id, access_token),
+        lambda user_id, username, password, access_token: put_school_credentials(
+            user_id,
+            username,
+            password,
+            access_token,
+        ),
+        lambda user_id, access_token: delete_school_credentials(user_id, access_token),
+    )
+)
 
 
 @app.get("/api/courses/semesters", response_model=list[CourseSemesterInfo])
