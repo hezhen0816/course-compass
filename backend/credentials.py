@@ -17,6 +17,7 @@ try:
         SUPABASE_SERVICE_ROLE_KEY,
         SUPABASE_URL,
     )
+    from .repositories import credentials as credential_repository
 except ImportError:  # pragma: no cover
     from config import (
         DEFAULT_TIMEOUT,
@@ -25,6 +26,7 @@ except ImportError:  # pragma: no cover
         SUPABASE_SERVICE_ROLE_KEY,
         SUPABASE_URL,
     )
+    from repositories import credentials as credential_repository
 
 
 class CredentialStoreError(RuntimeError):
@@ -185,45 +187,37 @@ def _settings(content: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_school_credentials_row(user_id: str) -> dict[str, Any] | None:
-    response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/get_school_credentials",
-        headers=_service_role_headers(json_body=True),
-        json={"p_user_id": user_id},
+    return credential_repository.load_school_credentials_row(
+        user_id,
+        supabase_url=SUPABASE_URL,
         timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
     )
-    response.raise_for_status()
-    rows = response.json()
-    if not rows:
-        return None
-    if isinstance(rows, list):
-        return rows[0] if rows else None
-    return rows if isinstance(rows, dict) else None
 
 
 def _upsert_school_credentials_row(user_id: str, username: str, password_ciphertext: str) -> None:
-    response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/upsert_school_credentials",
-        headers=_service_role_headers(json_body=True),
-        json={
-            "p_user_id": user_id,
-            "p_school_account": username,
-            "p_password_ciphertext": password_ciphertext,
-            "p_key_version": 1,
-            "p_last_verified_at": datetime.now(timezone.utc).isoformat(),
-        },
+    credential_repository.upsert_school_credentials_row(
+        user_id,
+        username,
+        password_ciphertext,
+        key_version=1,
+        last_verified_at=datetime.now(timezone.utc).isoformat(),
+        supabase_url=SUPABASE_URL,
         timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
     )
-    response.raise_for_status()
 
 
 def _delete_school_credentials_row(user_id: str) -> None:
-    response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/delete_school_credentials",
-        headers=_service_role_headers(json_body=True),
-        json={"p_user_id": user_id},
+    credential_repository.delete_school_credentials_row(
+        user_id,
+        supabase_url=SUPABASE_URL,
         timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
     )
-    response.raise_for_status()
 
 
 def _legacy_school_credentials_status(user_id: str, access_token: str | None = None) -> dict[str, Any]:

@@ -24,6 +24,7 @@
 - NTUST、Moodle、官方選課、課表與 TR 查詢 client/parser 已拆到 `backend/integrations/*`，舊 `backend/*.py` import 路徑暫時保留相容 wrapper。
 - 官方選課 session 的 Supabase RPC row 存取已開始集中到 `backend/repositories/school_sessions.py`，加解密與 TTL 仍保留在 `backend/school_sessions.py`。
 - 課表、歷史、Moodle snapshot 的 Supabase REST row 存取已集中到 `backend/repositories/snapshots.py`，快照相容 wrapper 與課表 entry 正規化仍保留在 `backend/snapshots.py`。
+- 校務帳密 private RPC row 存取已集中到 `backend/repositories/credentials.py`，加解密、Auth token 驗證與 legacy promotion 還保留在 `backend/credentials.py`。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
 
 ## 目前架構
@@ -49,6 +50,7 @@ backend/
   services/
     session_context.py   # backend-owned credential/session context helpers
   repositories/
+    credentials.py      # Supabase RPC access for encrypted school credential rows
     school_sessions.py   # Supabase RPC access for encrypted official session rows
     snapshots.py         # Supabase REST access for schedule/history/Moodle snapshot rows
   credentials.py         # app_private.school_credentials access and encryption
@@ -105,7 +107,7 @@ tests/
 3. Split backend responsibilities without changing API behavior.
    - Route handlers are now in `backend/api/*`; keep shrinking `backend/app.py` to setup/wiring only.
    - Parsing/client code is now in `backend/integrations/*`; retire compatibility wrappers after internal imports settle.
-   - Move Supabase reads/writes into `backend/repositories/*`; school session and snapshot access have started, credential access remains.
+   - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, and snapshot row access have started.
    - Keep compatibility imports while tests are being migrated.
 4. Add typed table migrations behind a backup-first cutover.
    - Create full `user_data_refactor_backup` before any destructive change.

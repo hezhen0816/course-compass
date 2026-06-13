@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from backend import app as backend_app
 from backend.api import tr_rooms as tr_rooms_api
 from backend import credentials, school_sessions
+from backend.repositories import credentials as credential_repository
 from backend.repositories import snapshots as snapshot_repository
 from backend.repositories import school_sessions as school_session_repository
 from backend import history, moodle, official_selection, planner_pdf, snapshots, tr_rooms
@@ -789,6 +790,45 @@ def test_school_credentials_writes_and_deletes_private_rpc(monkeypatch) -> None:
         "https://example.supabase.co/rest/v1/rpc/delete_school_credentials",
         {"p_user_id": "user-1"},
     )
+
+
+def test_school_credentials_repository_writes_expected_rpc_payload() -> None:
+    calls: list[tuple[str, dict[str, object], dict[str, str], int]] = []
+
+    class FakeRPCResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: int) -> FakeRPCResponse:
+        calls.append((url, json, headers, timeout))
+        return FakeRPCResponse()
+
+    credential_repository.upsert_school_credentials_row(
+        "user-1",
+        "B11430207",
+        "encrypted-password",
+        key_version=1,
+        last_verified_at="2026-06-13T02:00:00+00:00",
+        supabase_url="https://example.supabase.co",
+        timeout=12,
+        service_role_headers=lambda json_body=False: {"Authorization": f"json={json_body}"},
+        post=fake_post,
+    )
+
+    assert calls == [
+        (
+            "https://example.supabase.co/rest/v1/rpc/upsert_school_credentials",
+            {
+                "p_user_id": "user-1",
+                "p_school_account": "B11430207",
+                "p_password_ciphertext": "encrypted-password",
+                "p_key_version": 1,
+                "p_last_verified_at": "2026-06-13T02:00:00+00:00",
+            },
+            {"Authorization": "json=True"},
+            12,
+        )
+    ]
 
 
 def test_resolve_user_id_validates_token_with_supabase_auth(monkeypatch) -> None:
