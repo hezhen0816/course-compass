@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 try:
     from ..core.config import DEFAULT_VERIFY_SSL
-    from ..schemas.models import TRRoomStatusResponse
+    from ..schemas.tr_rooms import TRRoomStatusResponse
     from ..core.time_utils import now
     from ..integrations.tr_rooms import (
         build_tr_meetings,
@@ -20,7 +20,7 @@ try:
     )
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
     from core.config import DEFAULT_VERIFY_SSL
-    from schemas.models import TRRoomStatusResponse
+    from schemas.tr_rooms import TRRoomStatusResponse
     from core.time_utils import now
     from integrations.tr_rooms import (
         build_tr_meetings,

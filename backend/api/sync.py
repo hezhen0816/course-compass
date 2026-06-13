@@ -7,7 +7,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 
 try:
-    from ..schemas.models import (
+    from ..schemas.sync import (
         HistoryImportRequest,
         HistoryImportResponse,
         MoodleAssignmentsRequest,
@@ -16,7 +16,7 @@ try:
         SyncResponse,
     )
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from schemas.models import (
+    from schemas.sync import (
         HistoryImportRequest,
         HistoryImportResponse,
         MoodleAssignmentsRequest,
