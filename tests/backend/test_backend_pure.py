@@ -235,6 +235,22 @@ def test_official_selection_parser_reads_a02_workspace_div_tables() -> None:
     assert parsed["notices"] == ["請直接拖拉「登記志願清單」中的課程來變更志願序。"]
 
 
+def test_official_selection_parser_reads_action_modal_message() -> None:
+    html = """
+    <html>
+      <body>
+        <div class="modal-body">
+          本門課設有選課班級條件，您不符合條件，無法選修。
+        </div>
+      </body>
+    </html>
+    """
+
+    assert official_selection._parse_action_response_notices(html) == [
+        "本門課設有選課班級條件，您不符合條件，無法選修。"
+    ]
+
+
 def test_official_selection_parser_maps_schedule_weekday_columns_by_position() -> None:
     html = """
     <html>
@@ -388,6 +404,70 @@ def test_official_selection_join_refreshes_workspace_before_and_after_post(monke
     ]
     assert payload["session_valid"] is True
     assert payload["registered_courses"][0]["course_no"] == "CS2002302"
+
+
+def test_official_selection_join_preserves_action_rejection_notice(monkeypatch) -> None:
+    events: list[object] = []
+    workspace_html = """
+    <html>
+      <body>
+        <div class="panel">請直接拖拉「登記志願清單」中的課程來變更志願序。</div>
+        <div id="draggable">
+          <div class="table-row">
+            <div class="table-cell">課碼</div>
+            <div class="table-cell">課程名稱</div>
+            <div class="table-cell">上課教師</div>
+            <div class="table-cell">加入登記</div>
+          </div>
+          <div class="table-row">
+            <div class="table-cell">PE139A021</div>
+            <div class="table-cell">體育(重量訓練)(上)</div>
+            <div class="table-cell">翁睿忻</div>
+            <div class="table-cell">加入登記</div>
+          </div>
+        </div>
+      </body>
+    </html>
+    """
+    rejection_html = """
+    <html>
+      <body>
+        <div class="modal-body">本門課設有選課班級條件，您不符合條件，無法選修。</div>
+      </body>
+    </html>
+    """
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.headers: dict[str, str] = {}
+
+        def post(self, endpoint: str, **kwargs: object) -> FakeHTTPResponse:
+            events.append(("post", endpoint, kwargs["data"]))
+            return FakeHTTPResponse(text=rejection_html, url=endpoint)
+
+    client = official_selection.OfficialSelectionClient()
+    client.session = FakeSession()  # type: ignore[assignment]
+
+    def fake_get_workspace_page(verify_ssl: bool) -> FakeHTTPResponse:
+        events.append(("get_workspace", verify_ssl))
+        return FakeHTTPResponse(text=workspace_html)
+
+    monkeypatch.setattr(client, "_get_workspace_page", fake_get_workspace_page)
+    monkeypatch.setattr(client, "_fetch_course_list_schedule_rows", lambda verify_ssl: [])
+
+    payload = client.join_course("pe139a021", verify_ssl=False)
+
+    assert events == [
+        ("get_workspace", False),
+        (
+            "post",
+            official_selection.INITIAL_SELECTION_JOIN_URL,
+            {"CourseNo": "PE139A021", "type": 1},
+        ),
+        ("get_workspace", False),
+    ]
+    assert payload["notices"][0] == "本門課設有選課班級條件，您不符合條件，無法選修。"
+    assert payload["notices"][1] == "請直接拖拉「登記志願清單」中的課程來變更志願序。"
 
 
 def test_official_selection_action_uses_saved_credentials_for_session(monkeypatch) -> None:

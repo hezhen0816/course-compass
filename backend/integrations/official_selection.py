@@ -231,7 +231,11 @@ class OfficialSelectionClient:
             if _is_auth_response(response):
                 self.is_logged_in = False
                 raise RuntimeError("Session 已失效，請重新同步官方初選資料後再送出。")
-            return self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
+            action_notices = _parse_action_response_notices(response.text)
+            payload = self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
+            if action_notices:
+                payload["notices"] = _merge_unique_texts(action_notices, payload.get("notices", []))
+            return payload
 
     def ensure_session(self, username: str, password: str, verify_ssl: bool) -> requests.Response:
         if self._check_session_quick(verify_ssl):
@@ -306,7 +310,11 @@ class OfficialSelectionClient:
             if _is_auth_response(response):
                 self.is_logged_in = False
                 raise RuntimeError("Session 已失效，請重新同步官方初選資料後再送出。")
-            return self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
+            action_notices = _parse_action_response_notices(response.text)
+            payload = self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
+            if action_notices:
+                payload["notices"] = _merge_unique_texts(action_notices, payload.get("notices", []))
+            return payload
 
     def _check_session_quick(self, verify_ssl: bool) -> bool:
         try:
@@ -604,6 +612,48 @@ def _parse_notice_texts(soup: BeautifulSoup) -> list[str]:
             if text and text not in notices:
                 notices.append(text)
     return notices[:10]
+
+
+def _parse_action_response_notices(html: str) -> list[str]:
+    if not html.strip():
+        return []
+
+    soup = BeautifulSoup(html, "html.parser")
+    notices: list[str] = []
+    selectors = [
+        "#message",
+        "#Msg",
+        ".alert-danger",
+        ".alert-warning",
+        ".alert",
+        ".modal-body",
+        ".ui-dialog-content",
+        ".swal2-html-container",
+    ]
+    for selector in selectors:
+        for element in soup.select(selector):
+            text = normalize(element.get_text(" ", strip=True))
+            if text and text not in notices:
+                notices.append(text)
+
+    if notices:
+        return notices[:5]
+
+    body = soup.body or soup
+    body_text = normalize(body.get_text(" ", strip=True))
+    has_workspace_tables = bool(soup.select("#draggable, #cartTable, #loginModal, table, form"))
+    if body_text and not has_workspace_tables and len(body_text) <= 300:
+        return [body_text]
+    return []
+
+
+def _merge_unique_texts(primary: list[str], secondary: list[str]) -> list[str]:
+    merged: list[str] = []
+    for text in [*primary, *secondary]:
+        normalized = normalize(str(text))
+        if normalized and normalized not in merged:
+            merged.append(normalized)
+    return merged[:10]
 
 
 def _extract_div_table_rows(container: Tag | None) -> list[list[str]]:
