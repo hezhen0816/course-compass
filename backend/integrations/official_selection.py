@@ -231,8 +231,12 @@ class OfficialSelectionClient:
             if _is_auth_response(response):
                 self.is_logged_in = False
                 raise RuntimeError("Session 已失效，請重新同步官方初選資料後再送出。")
-            action_notices = _parse_action_response_notices(response.text)
-            payload = self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
+            workspace_response = self._get_workspace_page(verify_ssl)
+            action_notices = _merge_unique_texts(
+                _parse_action_response_notices(response.text),
+                _parse_action_response_notices(workspace_response.text),
+            )
+            payload = self._workspace_payload(workspace_response, verify_ssl)
             if action_notices:
                 payload["notices"] = _merge_unique_texts(action_notices, payload.get("notices", []))
             return payload
@@ -310,8 +314,12 @@ class OfficialSelectionClient:
             if _is_auth_response(response):
                 self.is_logged_in = False
                 raise RuntimeError("Session 已失效，請重新同步官方初選資料後再送出。")
-            action_notices = _parse_action_response_notices(response.text)
-            payload = self._workspace_payload(self._get_workspace_page(verify_ssl), verify_ssl)
+            workspace_response = self._get_workspace_page(verify_ssl)
+            action_notices = _merge_unique_texts(
+                _parse_action_response_notices(response.text),
+                _parse_action_response_notices(workspace_response.text),
+            )
+            payload = self._workspace_payload(workspace_response, verify_ssl)
             if action_notices:
                 payload["notices"] = _merge_unique_texts(action_notices, payload.get("notices", []))
             return payload
@@ -620,6 +628,11 @@ def _parse_action_response_notices(html: str) -> list[str]:
 
     soup = BeautifulSoup(html, "html.parser")
     notices: list[str] = []
+    for text in _extract_known_action_error_patterns(html):
+        _append_unique_notice(notices, text)
+    if notices:
+        return notices[:5]
+
     selectors = [
         "#message",
         "#Msg",
@@ -633,28 +646,24 @@ def _parse_action_response_notices(html: str) -> list[str]:
     for selector in selectors:
         for element in soup.select(selector):
             text = normalize(element.get_text(" ", strip=True))
-            if text and text not in notices:
-                notices.append(text)
+            _append_unique_notice(notices, text)
 
     if notices:
         return notices[:5]
 
     body = soup.body or soup
     for text in _extract_action_notice_candidates(body.get_text("\n", strip=True)):
-        if text not in notices:
-            notices.append(text)
+        _append_unique_notice(notices, text)
     for script in soup.find_all("script"):
         if not isinstance(script, Tag):
             continue
         script_text = script.get_text("\n", strip=True)
         script_messages = _extract_script_action_messages(script_text)
         for text in script_messages:
-            if text not in notices:
-                notices.append(text)
+            _append_unique_notice(notices, text)
         if not script_messages:
             for text in _extract_action_notice_candidates(script_text):
-                if text not in notices:
-                    notices.append(text)
+                _append_unique_notice(notices, text)
     if notices:
         return notices[:5]
 
@@ -665,16 +674,41 @@ def _parse_action_response_notices(html: str) -> list[str]:
     return []
 
 
+def _extract_known_action_error_patterns(text: str) -> list[str]:
+    normalized_text = normalize(text)
+    patterns = [
+        r"本門課設有選課.*?條件[，,、 ]*您?不符合條件[，,、 ]*無法選修[。.]?",
+        r"設有選課.*?條件[，,、 ]*.*?不符合.*?無法選修[。.]?",
+        r"不符合.*?條件[，,、 ]*.*?無法選修[。.]?",
+        r"選修的這門課與.*?衝堂[，,、 ]*.*?無法選修[。.]?",
+        r"衝堂[，,、 ]*.*?無法選修[。.]?",
+        r"課程人數額滿[。.]?",
+        r"人數額滿[。.]?",
+        r"名額已滿[。.]?",
+        r"重複選課[（(]?.*?[）)]?",
+        r"已經在您的選課表.*?重複選課[。.]?",
+        r"已經修過.*?請勿重複選課[。.]?",
+        r"非選課.*?開放時間[。.]?",
+        r"無法選修[。.]?",
+        r"無法加選[。.]?",
+        r"選修失敗[。.]?",
+    ]
+    matches: list[str] = []
+    for pattern in patterns:
+        for match in re.finditer(pattern, normalized_text, re.IGNORECASE):
+            text_value = normalize(match.group(0))
+            if _is_action_notice_text(text_value):
+                _append_unique_notice(matches, text_value)
+    return matches[:5]
+
+
 def _extract_action_notice_candidates(text: str) -> list[str]:
     candidates: list[str] = []
     for raw_line in re.split(r"[\n\r;]+", text):
         line = normalize(raw_line.strip(" '\"`()[]{}"))
-        if not line or len(line) > 180:
+        if not _is_action_notice_text(line):
             continue
-        if any(skip in line for skip in ("訊息公告", "志願序登記至多", "請直接拖拉", "待選清單")):
-            continue
-        if any(keyword in line for keyword in ("不符合", "無法", "失敗", "額滿", "重複", "已加入", "成功", "不存在")):
-            candidates.append(line)
+        candidates.append(line)
     return candidates
 
 
@@ -687,13 +721,32 @@ def _extract_script_action_messages(text: str) -> list[str]:
     return messages
 
 
+def _is_action_notice_text(text: str) -> bool:
+    if not text or len(text) > 180:
+        return False
+    if any(skip in text for skip in ("訊息公告", "志願序登記至多", "請直接拖拉", "待選清單")):
+        return False
+    return any(keyword in text for keyword in ("不符合", "無法", "失敗", "額滿", "重複", "已加入", "成功", "不存在", "衝堂"))
+
+
 def _merge_unique_texts(primary: list[str], secondary: list[str]) -> list[str]:
     merged: list[str] = []
     for text in [*primary, *secondary]:
         normalized = normalize(str(text))
-        if normalized and normalized not in merged:
-            merged.append(normalized)
+        _append_unique_notice(merged, normalized)
     return merged[:10]
+
+
+def _append_unique_notice(notices: list[str], text: str) -> None:
+    normalized = normalize(text)
+    if not normalized:
+        return
+    for existing in list(notices):
+        if normalized == existing or normalized in existing:
+            return
+        if existing in normalized:
+            notices.remove(existing)
+    notices.append(normalized)
 
 
 def _extract_div_table_rows(container: Tag | None) -> list[list[str]]:
