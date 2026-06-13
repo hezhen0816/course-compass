@@ -698,13 +698,14 @@ def test_moodle_sync_uses_saved_credentials_without_request_password(monkeypatch
     assert calls == [("B11430207", "saved-password", False)]
 
 
-def test_school_credentials_status_reads_service_role_table_without_password(monkeypatch) -> None:
+def test_school_credentials_status_reads_private_rpc_without_password(monkeypatch) -> None:
     monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setattr(credentials, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
-    monkeypatch.setattr(
-        credentials.requests,
-        "get",
-        lambda url, headers, timeout: FakeJSONResponse(
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, str], timeout: int) -> FakeJSONResponse:
+        assert url == "https://example.supabase.co/rest/v1/rpc/get_school_credentials"
+        assert json == {"p_user_id": "user-1"}
+        return FakeJSONResponse(
             [
                 {
                     "school_account": "B11430207",
@@ -713,8 +714,9 @@ def test_school_credentials_status_reads_service_role_table_without_password(mon
                     "last_verified_at": "2026-06-13T02:00:00Z",
                 }
             ]
-        ),
-    )
+        )
+
+    monkeypatch.setattr(credentials.requests, "post", fake_post)
 
     assert credentials.get_school_credentials_status("user-1", "access-token") == {
         "username": "B11430207",
@@ -722,14 +724,14 @@ def test_school_credentials_status_reads_service_role_table_without_password(mon
     }
 
 
-def test_school_credentials_secret_decrypts_service_role_table(monkeypatch) -> None:
+def test_school_credentials_secret_decrypts_private_rpc(monkeypatch) -> None:
     monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setattr(credentials, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
     monkeypatch.setattr(credentials, "decrypt_school_password", lambda token: f"plain:{token}")
     monkeypatch.setattr(
         credentials.requests,
-        "get",
-        lambda url, headers, timeout: FakeJSONResponse(
+        "post",
+        lambda url, headers, json, timeout: FakeJSONResponse(
             [
                 {
                     "school_account": "B11430207",
@@ -746,6 +748,30 @@ def test_school_credentials_secret_decrypts_service_role_table(monkeypatch) -> N
         "password": "plain:encrypted-password",
         "hasPassword": True,
     }
+
+
+def test_school_credentials_writes_and_deletes_private_rpc(monkeypatch) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: int) -> FakeJSONResponse:
+        calls.append((url, json))
+        return FakeJSONResponse(None)
+
+    monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(credentials, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setattr(credentials.requests, "post", fake_post)
+
+    credentials._upsert_school_credentials_row("user-1", "B11430207", "encrypted-password")
+    credentials._delete_school_credentials_row("user-1")
+
+    assert calls[0][0] == "https://example.supabase.co/rest/v1/rpc/upsert_school_credentials"
+    assert calls[0][1]["p_user_id"] == "user-1"
+    assert calls[0][1]["p_school_account"] == "B11430207"
+    assert calls[0][1]["p_password_ciphertext"] == "encrypted-password"
+    assert calls[1] == (
+        "https://example.supabase.co/rest/v1/rpc/delete_school_credentials",
+        {"p_user_id": "user-1"},
+    )
 
 
 def test_school_credentials_rejects_placeholder_encryption_secret(monkeypatch) -> None:
@@ -1046,6 +1072,18 @@ def test_school_credentials_migration_keeps_plaintext_for_backend_promotion() ->
 
     assert "- 'school_password'" not in migration_sql
     assert "backend promotes and removes it" in migration_sql
+
+
+def test_school_credentials_private_migration_moves_public_rows_to_private_schema() -> None:
+    migration_sql = Path("supabase/migrations/20260613130302_move_school_credentials_private.sql").read_text()
+
+    assert "create table if not exists app_private.school_credentials" in migration_sql
+    assert "from public.school_credentials" in migration_sql
+    assert "delete from public.school_credentials" in migration_sql
+    assert "security invoker" in migration_sql
+    assert "security definer" not in migration_sql.lower()
+    assert "grant execute on function public.get_school_credentials(uuid) to service_role" in migration_sql
+    assert "revoke all on function public.get_school_credentials(uuid) from public, anon, authenticated" in migration_sql
 
 
 def test_remove_legacy_school_password_migration_clears_content_and_legacy_content() -> None:

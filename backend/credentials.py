@@ -4,7 +4,7 @@ import base64
 import hashlib
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -157,7 +157,7 @@ def save_user_content(user_id: str, content: dict[str, Any], access_token: str |
         "content": content,
         "content_version": 2,
         "last_writer": "backend",
-        "updated_at": datetime.utcnow().isoformat() + "Z",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     response = requests.post(
         f"{SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id",
@@ -177,37 +177,44 @@ def _settings(content: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_school_credentials_row(user_id: str) -> dict[str, Any] | None:
-    endpoint = (
-        f"{SUPABASE_URL}/rest/v1/school_credentials"
-        f"?user_id=eq.{quote(user_id, safe='')}"
-        "&select=school_account,password_ciphertext,key_version,last_verified_at"
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_school_credentials",
+        headers=_service_role_headers(json_body=True),
+        json={"p_user_id": user_id},
+        timeout=DEFAULT_TIMEOUT,
     )
-    response = requests.get(endpoint, headers=_service_role_headers(), timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
     rows = response.json()
-    return rows[0] if rows else None
+    if not rows:
+        return None
+    if isinstance(rows, list):
+        return rows[0] if rows else None
+    return rows if isinstance(rows, dict) else None
 
 
 def _upsert_school_credentials_row(user_id: str, username: str, password_ciphertext: str) -> None:
-    body = {
-        "user_id": user_id,
-        "school_account": username,
-        "password_ciphertext": password_ciphertext,
-        "key_version": 1,
-        "last_verified_at": datetime.utcnow().isoformat() + "Z",
-    }
     response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/school_credentials?on_conflict=user_id",
+        f"{SUPABASE_URL}/rest/v1/rpc/upsert_school_credentials",
         headers=_service_role_headers(json_body=True),
-        json=body,
+        json={
+            "p_user_id": user_id,
+            "p_school_account": username,
+            "p_password_ciphertext": password_ciphertext,
+            "p_key_version": 1,
+            "p_last_verified_at": datetime.now(timezone.utc).isoformat(),
+        },
         timeout=DEFAULT_TIMEOUT,
     )
     response.raise_for_status()
 
 
 def _delete_school_credentials_row(user_id: str) -> None:
-    endpoint = f"{SUPABASE_URL}/rest/v1/school_credentials?user_id=eq.{quote(user_id, safe='')}"
-    response = requests.delete(endpoint, headers=_service_role_headers(), timeout=DEFAULT_TIMEOUT)
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/delete_school_credentials",
+        headers=_service_role_headers(json_body=True),
+        json={"p_user_id": user_id},
+        timeout=DEFAULT_TIMEOUT,
+    )
     response.raise_for_status()
 
 
