@@ -2,7 +2,7 @@
 
 日期：2026-06-12
 
-狀態：歷史 audit。2026-06-13 起，使用者確認式官方選課送出已實作；這份文件保留當時低風險 UX 觀察，現況以 `README.md` 與 `docs/product_redefinition.md` 為準。
+狀態：歷史 audit。2026-06-13 起，使用者確認式官方選課送出已實作；這份文件保留當時低風險 UX 觀察，現況以 `README.md`、`docs/architecture/refactor-plan.md` 與 `docs/data-contracts/database-schema.md` 為準。
 
 方法：使用 Product Design 檢查角度，檢查實際開啟的 `http://localhost:5173/` Web 介面。
 

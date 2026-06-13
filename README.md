@@ -6,10 +6,10 @@
 - `ios/`：SwiftUI 原生 iPhone App
 - `backend/`：Python 同步服務
 - `supabase/`：migration 與資料庫結構
-- `docs/`：產品定義、UX audit、設計 QA 與參考圖
-- `test_artifacts/`：測試素材與校務頁面樣本
+- `docs/`：現行 architecture/data contract、設計 QA 與歷史歸檔
+- `tests/`：測試與可重跑 fixture
 
-`backend/`、`supabase/`、`docs/`、`test_artifacts/` 都維持在根目錄，方便兩端共用。根目錄只放 workspace 總控設定與跨端文件，不放 build output 或臨時截圖。
+`backend/`、`supabase/`、`docs/`、`tests/` 都維持在根目錄，方便兩端共用。根目錄只放 workspace 總控設定與跨端文件，不放 build output 或臨時截圖。
 
 ## 目錄角色
 
@@ -52,14 +52,16 @@
 
 ### Test Artifacts
 
-- `test_artifacts/course_selection/`：課表與選課頁樣本
-- `test_artifacts/edu_need_history/`：歷史修課紀錄頁樣本
+- `tests/fixtures/course_selection/`：課表與選課頁樣本
+- `tests/fixtures/edu_need_history/`：歷史修課紀錄頁樣本
+- `tests/fixtures/moodle_timeline/`：Moodle 時間軸與待繳事項樣本
 
 ### Docs
 
-- `docs/product_redefinition.md`：目前產品定位、頁面職責與官方選課邊界
-- `docs/web_ux_low_risk_audit.md`：歷史 Web UX audit，保留當時觀察與低風險建議
-- `docs/design/`：設計 QA 記錄與參考圖片
+- `docs/architecture/refactor-plan.md`：目前有效的全專案重構計畫、執行順序與驗證 gate
+- `docs/data-contracts/database-schema.md`：current production schema 與 planned typed schema 的資料責任邊界
+- `docs/design/`：設計 QA 記錄
+- `docs/archive/2026-refactor/`：歷史產品定義、UX audit 與 reference images
 
 ## 開發指令
 
@@ -172,6 +174,6 @@ bash scripts/python.sh scripts/migrate_legacy_school_credentials.py --apply
 ## 維護原則
 
 1. Web 與 iOS 不共用畫面與互動流程，只共用資料規則。
-2. `backend/`、`supabase/`、`docs/`、`test_artifacts/` 維持根目錄，作為共享基礎設施與決策紀錄。
+2. `backend/`、`supabase/`、`docs/`、`tests/` 維持根目錄，作為共享基礎設施、決策紀錄與可重跑 fixture。
 3. 新功能優先先判斷屬於 Web 還是 iOS，再決定落點。
-4. build output、暫存截圖與本機快取不進 repo；可重現的測試 fixture 才放入 `test_artifacts/`。
+4. build output、暫存截圖與本機快取不進 repo；可重現的測試 fixture 才放入 `tests/fixtures/`。

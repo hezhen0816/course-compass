@@ -31,5 +31,5 @@ __pycache__/
 .pytest_cache/
 
 # Local test/debug artifacts
-test_artifacts/**/.venv/
-test_artifacts/**/__pycache__/
+tests/fixtures/**/.venv/
+tests/fixtures/**/__pycache__/

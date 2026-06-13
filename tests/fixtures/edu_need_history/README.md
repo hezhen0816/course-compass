@@ -5,7 +5,7 @@
 ## Python 安裝
 
 ```bash
-cd /Users/hezhen/Project/course_planner/test_artifacts/edu_need_history
+cd /Users/hezhen/GitHub/course_planner/tests/fixtures/edu_need_history
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -13,7 +13,7 @@ python3 -m venv .venv
 ## Python 執行
 
 ```bash
-cd /Users/hezhen/Project/course_planner/test_artifacts/edu_need_history
+cd /Users/hezhen/GitHub/course_planner/tests/fixtures/edu_need_history
 NTUST_USERNAME="你的學號" \
 NTUST_PASSWORD="你的校務密碼" \
 .venv/bin/python fetch_edu_need_history.py
