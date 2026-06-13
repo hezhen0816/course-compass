@@ -7,10 +7,10 @@ from fastapi import APIRouter, Header, HTTPException
 
 try:
     from ..credentials import CredentialStoreError
-    from ..models import SchoolCredentialsResponse, SchoolCredentialsSaveRequest
+    from ..schemas.models import SchoolCredentialsResponse, SchoolCredentialsSaveRequest
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
     from credentials import CredentialStoreError
-    from models import SchoolCredentialsResponse, SchoolCredentialsSaveRequest
+    from schemas.models import SchoolCredentialsResponse, SchoolCredentialsSaveRequest
 
 
 UserContextResolver = Callable[[str | None], tuple[str, str]]

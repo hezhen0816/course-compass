@@ -26,6 +26,7 @@
 - 課表、歷史、Moodle snapshot 的 Supabase REST row 存取已集中到 `backend/repositories/snapshots.py`，快照相容 wrapper 與課表 entry 正規化仍保留在 `backend/snapshots.py`。
 - 校務帳密 private RPC row 存取已集中到 `backend/repositories/credentials.py`，加解密、Auth token 驗證與 legacy promotion 還保留在 `backend/credentials.py`。
 - 共用設定與台北時間 helper 已移到 `backend/core/config.py` 與 `backend/core/time_utils.py`，舊 `backend/config.py`、`backend/time_utils.py` 暫時保留相容 wrapper。
+- Pydantic request/response schemas 已移到 `backend/schemas/models.py`，舊 `backend/models.py` 暫時保留相容 wrapper。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
 
 ## 目前架構
@@ -53,6 +54,8 @@ backend/
   core/
     config.py            # backend settings, constants, NTUST/Supabase URLs
     time_utils.py        # timezone-aware clock helper
+  schemas/
+    models.py            # Pydantic request/response schemas
   repositories/
     credentials.py      # Supabase RPC access for encrypted school credential rows
     school_sessions.py   # Supabase RPC access for encrypted official session rows
@@ -61,6 +64,7 @@ backend/
   school_sessions.py     # app_private.school_sessions access and encryption
   config.py              # compatibility wrapper; remove after imports migrate
   time_utils.py          # compatibility wrapper; remove after imports migrate
+  models.py              # compatibility wrapper; remove after imports migrate
   official_selection.py  # compatibility wrapper; remove after imports migrate
   schedule.py            # compatibility wrapper; remove after imports migrate
   history.py             # compatibility wrapper; remove after imports migrate
@@ -115,6 +119,7 @@ tests/
    - Parsing/client code is now in `backend/integrations/*`; retire compatibility wrappers after internal imports settle.
    - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, and snapshot row access have started.
    - Core config/time helpers are now in `backend/core/*`; retire compatibility wrappers after scripts and external imports settle.
+   - Pydantic API schemas are now in `backend/schemas/*`; retire compatibility wrappers after scripts and external imports settle.
    - Keep compatibility imports while tests are being migrated.
 4. Add typed table migrations behind a backup-first cutover.
    - Create full `user_data_refactor_backup` before any destructive change.

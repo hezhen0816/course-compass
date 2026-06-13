@@ -9,10 +9,10 @@ from fastapi import APIRouter, HTTPException, Query
 
 try:
     from ..core.config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
-    from ..models import CourseSearchResult, CourseSemesterInfo
+    from ..schemas.models import CourseSearchResult, CourseSemesterInfo
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
     from core.config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
-    from models import CourseSearchResult, CourseSemesterInfo
+    from schemas.models import CourseSearchResult, CourseSemesterInfo
 
 
 CourseSearchFetcher = Callable[..., list[dict[str, Any]]]

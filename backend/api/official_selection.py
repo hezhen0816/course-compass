@@ -7,7 +7,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 
 try:
-    from ..models import (
+    from ..schemas.models import (
         OfficialSelectionCourseActionRequest,
         OfficialSelectionKeepAliveRequest,
         OfficialSelectionPriorityUpdateRequest,
@@ -15,7 +15,7 @@ try:
         OfficialSelectionSyncResponse,
     )
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from models import (
+    from schemas.models import (
         OfficialSelectionCourseActionRequest,
         OfficialSelectionKeepAliveRequest,
         OfficialSelectionPriorityUpdateRequest,

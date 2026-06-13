@@ -8,12 +8,12 @@ import requests
 
 try:
     from ..core.config import CLASS_PERIODS, DAY_CODES, DAY_NAMES, DEFAULT_TIMEOUT, QUERY_COURSE_API_URL, SEMESTERS_INFO_URL, TAIPEI
-    from ..models import TRRoomMeeting
+    from ..schemas.models import TRRoomMeeting
     from ..core.time_utils import now
     from .ntust_common import normalize
 except ImportError:  # pragma: no cover
     from core.config import CLASS_PERIODS, DAY_CODES, DAY_NAMES, DEFAULT_TIMEOUT, QUERY_COURSE_API_URL, SEMESTERS_INFO_URL, TAIPEI
-    from models import TRRoomMeeting
+    from schemas.models import TRRoomMeeting
     from integrations.ntust_common import normalize
     from core.time_utils import now
 

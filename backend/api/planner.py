@@ -6,9 +6,9 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 try:
-    from ..models import RequirementPdfImportResponse
+    from ..schemas.models import RequirementPdfImportResponse
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from models import RequirementPdfImportResponse
+    from schemas.models import RequirementPdfImportResponse
 
 
 RequirementPdfParser = Callable[[bytes, str], dict[str, Any]]
