@@ -10,7 +10,7 @@ import requests
 from cryptography.fernet import Fernet, InvalidToken
 
 try:
-    from .config import (
+    from .core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
         SUPABASE_ANON_KEY,
@@ -19,7 +19,7 @@ try:
     )
     from .repositories import credentials as credential_repository
 except ImportError:  # pragma: no cover
-    from config import (
+    from core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
         SUPABASE_ANON_KEY,

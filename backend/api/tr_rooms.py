@@ -4,9 +4,9 @@ import requests
 from fastapi import APIRouter, HTTPException
 
 try:
-    from ..config import DEFAULT_VERIFY_SSL
+    from ..core.config import DEFAULT_VERIFY_SSL
     from ..models import TRRoomStatusResponse
-    from ..time_utils import now
+    from ..core.time_utils import now
     from ..integrations.tr_rooms import (
         build_tr_meetings,
         fetch_current_query_semester,
@@ -19,9 +19,9 @@ try:
         room_sort_key,
     )
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from config import DEFAULT_VERIFY_SSL
+    from core.config import DEFAULT_VERIFY_SSL
     from models import TRRoomStatusResponse
-    from time_utils import now
+    from core.time_utils import now
     from integrations.tr_rooms import (
         build_tr_meetings,
         fetch_current_query_semester,

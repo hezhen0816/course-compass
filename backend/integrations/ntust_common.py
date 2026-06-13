@@ -7,9 +7,9 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 try:
-    from ..config import DEFAULT_TIMEOUT, ENTRY_URL, VERIFY_URL
+    from ..core.config import DEFAULT_TIMEOUT, ENTRY_URL, VERIFY_URL
 except ImportError:  # pragma: no cover
-    from config import DEFAULT_TIMEOUT, ENTRY_URL, VERIFY_URL
+    from core.config import DEFAULT_TIMEOUT, ENTRY_URL, VERIFY_URL
 
 def normalize(text: str | None) -> str:
     return (text or "").replace("\xa0", " ").replace("\r", "").strip()

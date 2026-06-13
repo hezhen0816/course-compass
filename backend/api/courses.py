@@ -8,10 +8,10 @@ import requests
 from fastapi import APIRouter, HTTPException, Query
 
 try:
-    from ..config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
+    from ..core.config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
     from ..models import CourseSearchResult, CourseSemesterInfo
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
+    from core.config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
     from models import CourseSearchResult, CourseSemesterInfo
 
 

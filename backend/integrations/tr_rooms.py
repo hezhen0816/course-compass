@@ -7,15 +7,15 @@ from typing import Any
 import requests
 
 try:
-    from ..config import CLASS_PERIODS, DAY_CODES, DAY_NAMES, DEFAULT_TIMEOUT, QUERY_COURSE_API_URL, SEMESTERS_INFO_URL, TAIPEI
+    from ..core.config import CLASS_PERIODS, DAY_CODES, DAY_NAMES, DEFAULT_TIMEOUT, QUERY_COURSE_API_URL, SEMESTERS_INFO_URL, TAIPEI
     from ..models import TRRoomMeeting
-    from ..time_utils import now
+    from ..core.time_utils import now
     from .ntust_common import normalize
 except ImportError:  # pragma: no cover
-    from config import CLASS_PERIODS, DAY_CODES, DAY_NAMES, DEFAULT_TIMEOUT, QUERY_COURSE_API_URL, SEMESTERS_INFO_URL, TAIPEI
+    from core.config import CLASS_PERIODS, DAY_CODES, DAY_NAMES, DEFAULT_TIMEOUT, QUERY_COURSE_API_URL, SEMESTERS_INFO_URL, TAIPEI
     from models import TRRoomMeeting
     from integrations.ntust_common import normalize
-    from time_utils import now
+    from core.time_utils import now
 
 ROOM_RE = re.compile(r"\bTR-\d+(?:-\d+)?\b", re.IGNORECASE)
 _tr_course_cache: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}

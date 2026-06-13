@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup, Tag
 from requests.cookies import create_cookie
 
 try:
-    from ..config import (
+    from ..core.config import (
         COURSE_LIST_URL,
         DEFAULT_TIMEOUT,
         INITIAL_SELECTION_JOIN_URL,
@@ -19,11 +19,11 @@ try:
         INITIAL_SELECTION_SAVE_INDEX_URL,
         INITIAL_SELECTION_URL,
     )
-    from ..time_utils import now
+    from ..core.time_utils import now
     from .ntust_common import login, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
     from .schedule import find_latest_course_list_url, parse_course_list
 except ImportError:  # pragma: no cover
-    from config import (
+    from core.config import (
         COURSE_LIST_URL,
         DEFAULT_TIMEOUT,
         INITIAL_SELECTION_JOIN_URL,
@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover
     )
     from integrations.ntust_common import login, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
     from integrations.schedule import find_latest_course_list_url, parse_course_list
-    from time_utils import now
+    from core.time_utils import now
 
 
 MIN_LOGIN_INTERVAL_SECONDS = 10

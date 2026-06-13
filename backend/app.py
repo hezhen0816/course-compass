@@ -44,7 +44,7 @@ try:
         persist_moodle_assignments_snapshot,
         persist_snapshot,
     )
-    from .time_utils import now
+    from .core.time_utils import now
     from .services import session_context
 except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from api.courses import create_courses_router
@@ -84,7 +84,7 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         persist_moodle_assignments_snapshot,
         persist_snapshot,
     )
-    from time_utils import now
+    from core.time_utils import now
     from services import session_context
 
 

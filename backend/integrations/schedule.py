@@ -8,13 +8,13 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 try:
-    from ..config import COURSE_LIST_URL, DEFAULT_TIMEOUT
-    from ..time_utils import now
+    from ..core.config import COURSE_LIST_URL, DEFAULT_TIMEOUT
+    from ..core.time_utils import now
     from .ntust_common import login, normalize, split_lines, submit_hidden_form
 except ImportError:  # pragma: no cover
-    from config import COURSE_LIST_URL, DEFAULT_TIMEOUT
+    from core.config import COURSE_LIST_URL, DEFAULT_TIMEOUT
     from integrations.ntust_common import login, normalize, split_lines, submit_hidden_form
-    from time_utils import now
+    from core.time_utils import now
 
 def locate_course_table(print_area: Tag) -> Tag:
     for table in print_area.find_all("table"):

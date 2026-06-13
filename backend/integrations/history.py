@@ -7,13 +7,13 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 try:
-    from ..config import SCORE_DISPLAY_ALL_URL
-    from ..time_utils import now
+    from ..core.config import SCORE_DISPLAY_ALL_URL
+    from ..core.time_utils import now
     from .ntust_common import login_to_target, normalize
 except ImportError:  # pragma: no cover
-    from config import SCORE_DISPLAY_ALL_URL
+    from core.config import SCORE_DISPLAY_ALL_URL
     from integrations.ntust_common import login_to_target, normalize
-    from time_utils import now
+    from core.time_utils import now
 
 
 def extract_score_display_course_tables(soup: BeautifulSoup) -> list[dict[str, Any]]:

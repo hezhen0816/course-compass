@@ -7,7 +7,7 @@ from typing import Any
 import requests
 
 try:
-    from .config import DEFAULT_TIMEOUT, SUPABASE_URL
+    from .core.config import DEFAULT_TIMEOUT, SUPABASE_URL
     from .credentials import (
         CredentialStoreError,
         decrypt_sensitive_value,
@@ -16,7 +16,7 @@ try:
     )
     from .repositories import school_sessions as school_session_repository
 except ImportError:  # pragma: no cover
-    from config import DEFAULT_TIMEOUT, SUPABASE_URL
+    from core.config import DEFAULT_TIMEOUT, SUPABASE_URL
     from credentials import (
         CredentialStoreError,
         decrypt_sensitive_value,

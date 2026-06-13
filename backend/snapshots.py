@@ -5,11 +5,11 @@ from typing import Any
 import requests
 
 try:
-    from .config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from .core.config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
     from .integrations.schedule import group_schedule_entries
     from .repositories import snapshots as snapshot_repository
 except ImportError:  # pragma: no cover
-    from config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from core.config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
     from integrations.schedule import group_schedule_entries
     from repositories import snapshots as snapshot_repository
 

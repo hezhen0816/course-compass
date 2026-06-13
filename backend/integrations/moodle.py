@@ -8,13 +8,13 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 try:
-    from ..config import DEFAULT_TIMEOUT, MOODLE_DASHBOARD_URL, TAIPEI
-    from ..time_utils import now
+    from ..core.config import DEFAULT_TIMEOUT, MOODLE_DASHBOARD_URL, TAIPEI
+    from ..core.time_utils import now
     from .ntust_common import login_to_target, normalize, split_lines
 except ImportError:  # pragma: no cover
-    from config import DEFAULT_TIMEOUT, MOODLE_DASHBOARD_URL, TAIPEI
+    from core.config import DEFAULT_TIMEOUT, MOODLE_DASHBOARD_URL, TAIPEI
     from integrations.ntust_common import login_to_target, normalize, split_lines
-    from time_utils import now
+    from core.time_utils import now
 
 def extract_moodle_timeline_config(soup: BeautifulSoup) -> dict[str, int | str]:
     timeline = soup.select_one('[data-region="timeline"]')

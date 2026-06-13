@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 try:
-    from .config import TAIPEI
-except ImportError:  # pragma: no cover - supports `uvicorn app:app` from backend/.
-    from config import TAIPEI
-
-
-def now() -> datetime:
-    return datetime.now(TAIPEI)
+    from .core.time_utils import *  # noqa: F401,F403
+except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
+    from core.time_utils import *  # type: ignore  # noqa: F401,F403

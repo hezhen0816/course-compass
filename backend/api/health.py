@@ -5,11 +5,11 @@ from typing import Any
 from fastapi import APIRouter
 
 try:
-    from ..config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
-    from ..time_utils import now
+    from ..core.config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from ..core.time_utils import now
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
-    from time_utils import now
+    from core.config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+    from core.time_utils import now
 
 
 def create_health_router(api_version: str, capabilities: dict[str, Any]) -> APIRouter:

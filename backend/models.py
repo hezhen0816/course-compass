@@ -6,9 +6,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 try:
-    from .config import DEFAULT_VERIFY_SSL
+    from .core.config import DEFAULT_VERIFY_SSL
 except ImportError:  # pragma: no cover
-    from config import DEFAULT_VERIFY_SSL
+    from core.config import DEFAULT_VERIFY_SSL
 
 class SyncRequest(BaseModel):
     username: str = Field(min_length=1)
