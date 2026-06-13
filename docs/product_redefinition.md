@@ -111,6 +111,7 @@
 - 校務密碼由後端使用伺服器端金鑰加密後保存到 `app_private.school_credentials`。
 - `app_private.school_credentials` 只透過 service-role-only RPC 存取；Web/iOS 只能透過 backend credential API 查詢保存狀態、保存或刪除。
 - 官方選課 session cookie/state 由後端使用同一組伺服器端金鑰加密後保存到 `app_private.school_sessions`，Web/iOS 不會直接讀取。
+- 後端處理 credential/session API 前，必須用 Supabase Auth `/auth/v1/user` 驗證 access token，不可只靠本地 decode JWT payload。
 - 既有 `user_data.content.settings.school_password` 已由 migration 清除；若使用者尚未重新保存密碼，後續同步或官方送出會要求再輸入一次，成功保存後才寫入 `app_private.school_credentials`。
 
 ## 官方選課整合邊界

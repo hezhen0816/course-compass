@@ -5,6 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
+import requests
 from fastapi.testclient import TestClient
 
 from backend import app as backend_app
@@ -34,6 +35,19 @@ class FakeHTTPResponse:
 
     def raise_for_status(self) -> None:
         return None
+
+
+class FakeAuthResponse:
+    def __init__(self, payload: object, status_code: int = 200) -> None:
+        self._payload = payload
+        self.status_code = status_code
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
+
+    def json(self) -> object:
+        return self._payload
 
 
 def test_group_schedule_entries_orders_slots_and_preserves_metadata() -> None:
@@ -772,6 +786,61 @@ def test_school_credentials_writes_and_deletes_private_rpc(monkeypatch) -> None:
         "https://example.supabase.co/rest/v1/rpc/delete_school_credentials",
         {"p_user_id": "user-1"},
     )
+
+
+def test_resolve_user_id_validates_token_with_supabase_auth(monkeypatch) -> None:
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> FakeAuthResponse:
+        calls.append((url, headers))
+        return FakeAuthResponse({"id": "user-1"})
+
+    monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(credentials, "SUPABASE_ANON_KEY", "anon-key")
+    monkeypatch.setattr(credentials, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setattr(credentials.requests, "get", fake_get)
+
+    assert credentials.resolve_user_id("access-token") == "user-1"
+    assert calls == [
+        (
+            "https://example.supabase.co/auth/v1/user",
+            {
+                "apikey": "anon-key",
+                "Authorization": "Bearer access-token",
+                "Accept": "application/json",
+            },
+        )
+    ]
+
+
+def test_resolve_user_id_rejects_invalid_supabase_auth_token(monkeypatch) -> None:
+    monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(credentials, "SUPABASE_ANON_KEY", "anon-key")
+    monkeypatch.setattr(
+        credentials.requests,
+        "get",
+        lambda url, headers, timeout: FakeAuthResponse({"message": "invalid jwt"}, status_code=401),
+    )
+
+    with pytest.raises(credentials.CredentialStoreError, match="登入狀態已過期或無效"):
+        credentials.resolve_user_id("not-a-real-jwt")
+
+
+def test_resolve_user_id_can_use_service_role_apikey_when_anon_missing(monkeypatch) -> None:
+    captured_headers: list[dict[str, str]] = []
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> FakeAuthResponse:
+        captured_headers.append(headers)
+        return FakeAuthResponse({"id": "user-1"})
+
+    monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(credentials, "SUPABASE_ANON_KEY", "your-anon-key")
+    monkeypatch.setattr(credentials, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setattr(credentials.requests, "get", fake_get)
+
+    assert credentials.resolve_user_id("access-token") == "user-1"
+    assert captured_headers[0]["apikey"] == "service-role-key"
+    assert captured_headers[0]["Authorization"] == "Bearer access-token"
 
 
 def test_school_credentials_rejects_placeholder_encryption_secret(monkeypatch) -> None:

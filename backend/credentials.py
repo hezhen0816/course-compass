@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
-import time
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
@@ -118,20 +116,30 @@ def _service_role_headers(*, json_body: bool = False) -> dict[str, str]:
 
 
 def resolve_user_id(access_token: str) -> str:
-    try:
-        payload_part = access_token.split(".")[1]
-        payload_part += "=" * (-len(payload_part) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(payload_part.encode("utf-8")))
-    except (IndexError, ValueError, json.JSONDecodeError) as exc:
-        raise CredentialStoreError("登入 token 格式無法解析，請重新登入。") from exc
-
-    exp = payload.get("exp")
-    if isinstance(exp, (int, float)) and exp <= time.time():
-        raise CredentialStoreError("登入狀態已過期，請重新登入。")
-
-    user_id = str(payload.get("sub") or "")
+    if not SUPABASE_URL:
+        raise CredentialStoreError("後端尚未設定 Supabase URL，無法驗證登入狀態。")
+    api_key = SUPABASE_ANON_KEY
+    if _is_placeholder(api_key):
+        _require_service_supabase_config()
+        api_key = SUPABASE_SERVICE_ROLE_KEY
+    response = requests.get(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={
+            "apikey": api_key,
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        },
+        timeout=DEFAULT_TIMEOUT,
+    )
+    if response.status_code in {401, 403}:
+        raise CredentialStoreError("登入狀態已過期或無效，請重新登入。")
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise CredentialStoreError("Supabase 使用者驗證回傳格式錯誤，請重新登入。")
+    user_id = str(payload.get("id") or "")
     if not user_id:
-        raise CredentialStoreError("無法解析目前登入使用者。")
+        raise CredentialStoreError("無法驗證目前登入使用者。")
     return user_id
 
 

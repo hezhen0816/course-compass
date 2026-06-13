@@ -112,6 +112,7 @@ NTUST_VERIFY_SSL=false
 - `VITE_SUPABASE_*` 給 Web 前端使用
 - `SUPABASE_SERVICE_ROLE_KEY` 只給 Python 後端使用
 - iOS 不應直接持有 `service_role`
+- 後端使用 Supabase Auth `/auth/v1/user` 驗證 Web/iOS 傳入的 access token，不以本地 JWT payload decode 當作身份驗證
 - `SCHOOL_CREDENTIALS_ENCRYPTION_SECRET` 只給 Python 後端使用，用於加解密 `app_private.school_credentials.password_ciphertext`；不可使用 `.env.example` placeholder，長度需至少 32 字元
 - Web 不會讀取或保存校務密碼明文；官方選課 session 會由後端加密保存，過期或失效時由後端使用已保存密文重新登入
 - iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`；production legacy plaintext 已由 `20260613031804_remove_legacy_school_password_from_user_data.sql` 清除，使用者下次輸入密碼並勾選保存後會寫入 `app_private.school_credentials`
