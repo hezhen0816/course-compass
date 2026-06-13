@@ -266,6 +266,26 @@ def test_official_selection_parser_prefers_action_error_over_announcements() -> 
     ]
 
 
+def test_official_selection_parser_expands_split_class_restriction_message() -> None:
+    html = """
+    <html>
+      <body>
+        <div class="panel">訊息公告(點選可展開、收合) ※請直接拖拉「登記志願清單」中的課程來變更志願序。</div>
+        <div id="Msg">
+          <span>本門課設有選課</span>
+          <span>班級條件</span>
+          <span>您不符合條件</span>
+          <span>無法選修。</span>
+        </div>
+      </body>
+    </html>
+    """
+
+    assert official_selection._parse_action_response_notices(html) == [
+        "本門課設有選課班級條件，您不符合條件，無法選修。"
+    ]
+
+
 def test_official_selection_parser_maps_schedule_weekday_columns_by_position() -> None:
     html = """
     <html>

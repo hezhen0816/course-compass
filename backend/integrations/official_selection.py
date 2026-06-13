@@ -676,6 +676,7 @@ def _parse_action_response_notices(html: str) -> list[str]:
 
 def _extract_known_action_error_patterns(text: str) -> list[str]:
     normalized_text = normalize(text)
+    normalized_plain_text = normalize(BeautifulSoup(text, "html.parser").get_text(" ", strip=True))
     patterns = [
         r"本門課設有選課.*?條件[，,、 ]*您?不符合條件[，,、 ]*無法選修[。.]?",
         r"設有選課.*?條件[，,、 ]*.*?不符合.*?無法選修[。.]?",
@@ -694,6 +695,8 @@ def _extract_known_action_error_patterns(text: str) -> list[str]:
         r"選修失敗[。.]?",
     ]
     matches: list[str] = []
+    if _has_class_restriction_rejection(normalized_text) or _has_class_restriction_rejection(normalized_plain_text):
+        _append_unique_notice(matches, "本門課設有選課班級條件，您不符合條件，無法選修。")
     for pattern in patterns:
         for match in re.finditer(pattern, normalized_text, re.IGNORECASE):
             text_value = normalize(match.group(0))
@@ -702,10 +705,21 @@ def _extract_known_action_error_patterns(text: str) -> list[str]:
     return matches[:5]
 
 
+def _has_class_restriction_rejection(text: str) -> bool:
+    return (
+        ("設有選課" in text or "選課班級" in text or "班級條件" in text)
+        and "不符合" in text
+        and "無法選修" in text
+    )
+
+
 def _extract_action_notice_candidates(text: str) -> list[str]:
     candidates: list[str] = []
     for raw_line in re.split(r"[\n\r;]+", text):
         line = normalize(raw_line.strip(" '\"`()[]{}"))
+        if _has_class_restriction_rejection(line):
+            _append_unique_notice(candidates, "本門課設有選課班級條件，您不符合條件，無法選修。")
+            continue
         if not _is_action_notice_text(line):
             continue
         candidates.append(line)
