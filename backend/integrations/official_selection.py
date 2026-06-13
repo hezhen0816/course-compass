@@ -640,11 +640,51 @@ def _parse_action_response_notices(html: str) -> list[str]:
         return notices[:5]
 
     body = soup.body or soup
+    for text in _extract_action_notice_candidates(body.get_text("\n", strip=True)):
+        if text not in notices:
+            notices.append(text)
+    for script in soup.find_all("script"):
+        if not isinstance(script, Tag):
+            continue
+        script_text = script.get_text("\n", strip=True)
+        script_messages = _extract_script_action_messages(script_text)
+        for text in script_messages:
+            if text not in notices:
+                notices.append(text)
+        if not script_messages:
+            for text in _extract_action_notice_candidates(script_text):
+                if text not in notices:
+                    notices.append(text)
+    if notices:
+        return notices[:5]
+
     body_text = normalize(body.get_text(" ", strip=True))
     has_workspace_tables = bool(soup.select("#draggable, #cartTable, #loginModal, table, form"))
     if body_text and not has_workspace_tables and len(body_text) <= 300:
         return [body_text]
     return []
+
+
+def _extract_action_notice_candidates(text: str) -> list[str]:
+    candidates: list[str] = []
+    for raw_line in re.split(r"[\n\r;]+", text):
+        line = normalize(raw_line.strip(" '\"`()[]{}"))
+        if not line or len(line) > 180:
+            continue
+        if any(skip in line for skip in ("訊息公告", "志願序登記至多", "請直接拖拉", "待選清單")):
+            continue
+        if any(keyword in line for keyword in ("不符合", "無法", "失敗", "額滿", "重複", "已加入", "成功", "不存在")):
+            candidates.append(line)
+    return candidates
+
+
+def _extract_script_action_messages(text: str) -> list[str]:
+    messages: list[str] = []
+    for match in re.finditer(r"(?:alert|swal|Swal\.fire)\s*\(\s*['\"](?P<message>[^'\"]+)['\"]", text):
+        for candidate in _extract_action_notice_candidates(match.group("message")):
+            if candidate not in messages:
+                messages.append(candidate)
+    return messages
 
 
 def _merge_unique_texts(primary: list[str], secondary: list[str]) -> list[str]:

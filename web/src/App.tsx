@@ -244,7 +244,33 @@ export default function CoursePlannerWebApp() {
     force = false,
     virtualReason?: string,
   ) => {
-    if (findScheduledCourseByOffering(offering, selectionData, SELECTION_PLAN_SEMESTER_ID)) {
+    const existingCourse = findScheduledCourseByOffering(offering, selectionData, SELECTION_PLAN_SEMESTER_ID);
+    if (existingCourse && virtualReason && existingCourse.virtualSelection) {
+      setData((prev) => ({
+        ...prev,
+        selectionPlan: {
+          ...prev.selectionPlan,
+          targetAcademicTerm: prev.selectionPlan?.targetAcademicTerm || querySemester,
+          targetLabel: prev.selectionPlan?.targetLabel || selectionTargetLabel,
+          courses: (prev.selectionPlan?.courses ?? selectionCourses).map((course) => (
+            course.id === existingCourse.id
+              ? {
+                  ...course,
+                  virtualSelection: {
+                    status: 'rejected',
+                    reason: virtualReason,
+                    createdAt: new Date().toISOString(),
+                  },
+                }
+              : course
+          )),
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      setPlannerMessage(`已更新虛擬課表原因：${offering.course_name}`);
+      return true;
+    }
+    if (existingCourse) {
       setPlannerMessage(`已在虛擬課程中：${offering.course_name}`);
       return false;
     }

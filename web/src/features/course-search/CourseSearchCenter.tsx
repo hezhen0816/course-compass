@@ -414,11 +414,11 @@ function CourseResultRow({
         <div className="flex justify-end gap-2">
           <button
             onClick={onAddSelectionCourse}
-            disabled={!offering.course_no || isOfficialActionLoading || alreadyVirtual}
+            disabled={!offering.course_no || isOfficialActionLoading}
             className="inline-flex items-center gap-1 rounded-md border border-blue-300 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
           >
             {isOfficialActionLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-            {isOfficialActionLoading ? '處理中' : alreadyVirtual ? '已虛擬加入' : '加入選課清單'}
+            {isOfficialActionLoading ? '處理中' : alreadyVirtual ? '重新送出' : '加入選課清單'}
           </button>
         </div>
       </td>
