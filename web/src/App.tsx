@@ -8,8 +8,8 @@ import {
   reorderOfficialInitialSelectionCourses,
   syncOfficialInitialSelection,
 } from './shared/api';
-import { useAuth } from './hooks/useAuth';
-import { useCourseData } from './hooks/useCourseData';
+import { useAuth } from './shared/hooks/useAuth';
+import { useCourseData } from './shared/hooks/useCourseData';
 import { AuthPage } from './app/AuthPage';
 import { AppModals } from './app/AppModals';
 import { Navbar, type AppPage } from './app/Navbar';

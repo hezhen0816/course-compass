@@ -55,6 +55,7 @@
 - Web 舊版 planner/sidebar/settings UI 元件已移除：`CourseModal`、`SettingsModal`、`SemesterGrid`、`Sidebar`、`ProgressBar`。
 - Web app shell 元件已搬到 `web/src/app/`，修課軌跡課程詳情 modal 已搬到 `web/src/features/history/`。
 - Web 共用 API client、Supabase client 與 planner constants 已搬到 `web/src/shared/`，未引用的舊 `parseCourselist.ts` 與 Vite 預設 `react.svg` 已移除。
+- Web 跨頁 hooks `useAuth`、`useCourseData` 已搬到 `web/src/shared/hooks/`。
 
 ## 目前架構
 
@@ -101,8 +102,9 @@ backend/
     school_sessions.py   # Supabase RPC access for encrypted official session rows
     snapshots.py         # Supabase REST access for schedule/history/Moodle snapshot rows
 web/src/
+  app/                   # app shell components
   features/              # feature-level UI and hooks
-  hooks/useCourseData.ts # current user_data.content compatibility layer
+  shared/                # API client, Supabase client, constants, and cross-page hooks
 ios/App/App/
   ...                    # native app; still compatible with current shared payload
 supabase/migrations/

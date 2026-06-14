@@ -95,6 +95,8 @@ Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `Course
 - `shared/api.ts`
 - `shared/supabase.ts`
 - `shared/constants.ts`
+- `shared/hooks/useAuth.ts`
+- `shared/hooks/useCourseData.ts`
 
 舊 `web/src/utils/parseCourselist.ts` 與 Vite 預設 `web/src/assets/react.svg` 沒有 current import，已移除。
 
