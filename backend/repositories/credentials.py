@@ -2,15 +2,92 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
 HeadersFactory = Callable[..., dict[str, str]]
+GetRequest = Callable[..., requests.Response]
 PostRequest = Callable[..., requests.Response]
 
 
 def rpc_url(supabase_url: str, name: str) -> str:
     return f"{supabase_url}/rest/v1/rpc/{name}"
+
+
+def auth_user_url(supabase_url: str) -> str:
+    return f"{supabase_url}/auth/v1/user"
+
+
+def user_data_content_url(supabase_url: str, user_id: str) -> str:
+    return (
+        f"{supabase_url}/rest/v1/user_data"
+        f"?user_id=eq.{quote(user_id, safe='')}&select=content"
+    )
+
+
+def user_data_upsert_url(supabase_url: str) -> str:
+    return f"{supabase_url}/rest/v1/user_data?on_conflict=user_id"
+
+
+def fetch_auth_user(
+    access_token: str,
+    *,
+    supabase_url: str,
+    api_key: str,
+    timeout: int,
+    get: GetRequest,
+) -> requests.Response:
+    response = get(
+        auth_user_url(supabase_url),
+        headers={
+            "apikey": api_key,
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        },
+        timeout=timeout,
+    )
+    if response.status_code not in {401, 403}:
+        response.raise_for_status()
+    return response
+
+
+def load_user_content(
+    user_id: str,
+    *,
+    supabase_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    get: GetRequest,
+) -> dict[str, Any]:
+    response = get(user_data_content_url(supabase_url, user_id), headers=headers, timeout=timeout)
+    response.raise_for_status()
+    rows = response.json()
+    if not rows:
+        return {"schemaVersion": 2, "settings": {}}
+    content = rows[0].get("content")
+    return content if isinstance(content, dict) else {"schemaVersion": 2, "settings": {}}
+
+
+def save_user_content(
+    user_id: str,
+    content: dict[str, Any],
+    *,
+    supabase_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    updated_at: str,
+    post: PostRequest,
+) -> None:
+    body = {
+        "user_id": user_id,
+        "content": content,
+        "content_version": 2,
+        "last_writer": "backend",
+        "updated_at": updated_at,
+    }
+    response = post(user_data_upsert_url(supabase_url), headers=headers, json=body, timeout=timeout)
+    response.raise_for_status()
 
 
 def post_rpc(

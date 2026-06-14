@@ -23,18 +23,19 @@
 - Backend route handlers 已拆到 `backend/api/*`，校務 session/context helper 已拆到 `backend/services/session_context.py`。
 - NTUST、Moodle、官方選課、課表與 TR 查詢 client/parser 已拆到 `backend/integrations/*`，對應純 re-export wrapper 已移除。
 - 官方選課 session 的 Supabase RPC row 存取已開始集中到 `backend/repositories/school_sessions.py`，加解密與 TTL 仍保留在 `backend/school_sessions.py`。
-- 課表、歷史、Moodle snapshot 的 Supabase REST row 存取已集中到 `backend/repositories/snapshots.py`，快照相容 wrapper 與課表 entry 正規化仍保留在 `backend/snapshots.py`。
-- 校務帳密 private RPC row 存取已集中到 `backend/repositories/credentials.py`，加解密、Auth token 驗證與 legacy promotion 還保留在 `backend/credentials.py`。
+- 課表、歷史、Moodle snapshot 的 Supabase REST row 存取已集中到 `backend/repositories/snapshots.py`，domain flow 已在 `backend/services/snapshots.py`，舊 `backend/snapshots.py` 已移除。
+- 校務帳密 private RPC、Supabase Auth 與 `public.user_data` REST row 存取已開始集中到 `backend/repositories/credentials.py`，加解密、config guard 與 legacy promotion wiring 還保留在 `backend/credentials.py`。
 - 共用設定與台北時間 helper 已移到 `backend/core/config.py` 與 `backend/core/time_utils.py`，舊 `backend/config.py`、`backend/time_utils.py` 已移除。
 - 共用錯誤型別已移到 `backend/core/errors.py`，避免 service/API 反向依賴 credentials 過渡層。
 - Pydantic request/response schemas 已移到 `backend/schemas/*` 並按 domain 拆分，舊 `backend/models.py` 與 `backend/schemas/models.py` 已移除。
 - 官方選課 session 的加解密 payload、TTL、load/save/delete domain 流程已抽到 `backend/services/school_sessions.py`，舊 `backend/school_sessions.py` 保留相容 wrapper 與依賴注入。
 - 校務帳密狀態、legacy promotion、save/delete cleanup 流程已抽到 `backend/services/credentials.py`，舊 `backend/credentials.py` 保留相容 wrapper、加密與 Supabase Auth 驗證。
 - 雙主修 PDF 需求解析已移到 `backend/services/planner_pdf.py`，舊 `backend/planner_pdf.py` 已移除。
-- 課表、歷史、Moodle snapshot domain flow 已移到 `backend/services/snapshots.py`，舊 `backend/snapshots.py` 暫時保留相容 wrapper。
+- 課表、歷史、Moodle snapshot domain flow 已移到 `backend/services/snapshots.py`，舊 `backend/snapshots.py` 已移除。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
 - 已建立 `docs/architecture/refactor-inventory.md` 作為重構盤點基準。
 - 已建立 typed schema foundation migration：`supabase/migrations/20260614211338_add_typed_planner_schema_foundation.sql`。
+- Supabase Auth 與 `public.user_data` REST 存取已開始移到 `backend/repositories/credentials.py`，`backend/credentials.py` 保留加密、config guard 與 legacy promotion wiring。
 
 ## 目前架構
 
@@ -79,7 +80,6 @@ backend/
     snapshots.py         # Supabase REST access for schedule/history/Moodle snapshot rows
   credentials.py         # compatibility wrapper, encryption, and Supabase Auth validation
   school_sessions.py     # compatibility wrapper and dependency injection for school session service
-  snapshots.py           # compatibility wrapper; remove after imports migrate
 web/src/
   features/              # feature-level UI and hooks
   hooks/useCourseData.ts # current user_data.content compatibility layer

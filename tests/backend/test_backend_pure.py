@@ -16,8 +16,7 @@ from backend.integrations.schedule import find_latest_course_list_url, group_sch
 from backend.repositories import credentials as credential_repository
 from backend.repositories import snapshots as snapshot_repository
 from backend.repositories import school_sessions as school_session_repository
-from backend.services import planner_pdf
-from backend import snapshots
+from backend.services import planner_pdf, snapshots
 from scripts import migrate_legacy_school_credentials as legacy_credential_migration
 from scripts import verify_production_backend
 
@@ -1131,6 +1130,75 @@ def test_resolve_user_id_validates_token_with_supabase_auth(monkeypatch) -> None
                 "Authorization": "Bearer access-token",
                 "Accept": "application/json",
             },
+        )
+    ]
+
+
+def test_credential_repository_loads_user_content() -> None:
+    calls: list[tuple[str, dict[str, str], int]] = []
+
+    class FakeUserDataResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> object:
+            return [{"content": {"schemaVersion": 2, "settings": {"school_account": "B11430207"}}}]
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> FakeUserDataResponse:
+        calls.append((url, headers, timeout))
+        return FakeUserDataResponse()
+
+    content = credential_repository.load_user_content(
+        "user/1",
+        supabase_url="https://example.supabase.co",
+        headers={"Authorization": "Bearer token"},
+        timeout=12,
+        get=fake_get,
+    )
+
+    assert calls == [
+        (
+            "https://example.supabase.co/rest/v1/user_data?user_id=eq.user%2F1&select=content",
+            {"Authorization": "Bearer token"},
+            12,
+        )
+    ]
+    assert content == {"schemaVersion": 2, "settings": {"school_account": "B11430207"}}
+
+
+def test_credential_repository_saves_user_content() -> None:
+    calls: list[tuple[str, dict[str, str], dict[str, object], int]] = []
+
+    class FakeUserDataResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: int) -> FakeUserDataResponse:
+        calls.append((url, headers, json, timeout))
+        return FakeUserDataResponse()
+
+    credential_repository.save_user_content(
+        "user-1",
+        {"schemaVersion": 2, "settings": {}},
+        supabase_url="https://example.supabase.co",
+        headers={"Authorization": "Bearer token"},
+        timeout=12,
+        updated_at="2026-06-14T13:00:00+00:00",
+        post=fake_post,
+    )
+
+    assert calls == [
+        (
+            "https://example.supabase.co/rest/v1/user_data?on_conflict=user_id",
+            {"Authorization": "Bearer token"},
+            {
+                "user_id": "user-1",
+                "content": {"schemaVersion": 2, "settings": {}},
+                "content_version": 2,
+                "last_writer": "backend",
+                "updated_at": "2026-06-14T13:00:00+00:00",
+            },
+            12,
         )
     ]
 

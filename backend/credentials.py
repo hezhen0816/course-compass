@@ -4,7 +4,6 @@ import base64
 import hashlib
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import quote
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -124,18 +123,15 @@ def resolve_user_id(access_token: str) -> str:
     if _is_placeholder(api_key):
         _require_service_supabase_config()
         api_key = SUPABASE_SERVICE_ROLE_KEY
-    response = requests.get(
-        f"{SUPABASE_URL}/auth/v1/user",
-        headers={
-            "apikey": api_key,
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-        },
+    response = credential_repository.fetch_auth_user(
+        access_token,
+        supabase_url=SUPABASE_URL,
+        api_key=api_key,
         timeout=DEFAULT_TIMEOUT,
+        get=requests.get,
     )
     if response.status_code in {401, 403}:
         raise CredentialStoreError("登入狀態已過期或無效，請重新登入。")
-    response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):
         raise CredentialStoreError("Supabase 使用者驗證回傳格式錯誤，請重新登入。")
@@ -147,35 +143,26 @@ def resolve_user_id(access_token: str) -> str:
 
 def load_user_content(user_id: str, access_token: str | None = None) -> dict[str, Any]:
     _require_public_supabase_config()
-    endpoint = (
-        f"{SUPABASE_URL}/rest/v1/user_data"
-        f"?user_id=eq.{quote(user_id, safe='')}&select=content"
+    return credential_repository.load_user_content(
+        user_id,
+        supabase_url=SUPABASE_URL,
+        headers=_supabase_headers(bearer_token=access_token),
+        timeout=DEFAULT_TIMEOUT,
+        get=requests.get,
     )
-    response = requests.get(endpoint, headers=_supabase_headers(bearer_token=access_token), timeout=DEFAULT_TIMEOUT)
-    response.raise_for_status()
-    rows = response.json()
-    if not rows:
-        return {"schemaVersion": 2, "settings": {}}
-    content = rows[0].get("content")
-    return content if isinstance(content, dict) else {"schemaVersion": 2, "settings": {}}
 
 
 def save_user_content(user_id: str, content: dict[str, Any], access_token: str | None = None) -> None:
     _require_public_supabase_config()
-    body = {
-        "user_id": user_id,
-        "content": content,
-        "content_version": 2,
-        "last_writer": "backend",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id",
+    credential_repository.save_user_content(
+        user_id,
+        content,
+        supabase_url=SUPABASE_URL,
         headers=_supabase_headers(json_body=True, bearer_token=access_token),
-        json=body,
         timeout=DEFAULT_TIMEOUT,
+        updated_at=datetime.now(timezone.utc).isoformat(),
+        post=requests.post,
     )
-    response.raise_for_status()
 
 
 def _settings(content: dict[str, Any]) -> dict[str, Any]:

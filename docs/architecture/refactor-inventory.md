@@ -48,11 +48,11 @@
 - `backend/tr_rooms.py` -> `backend/integrations/tr_rooms.py`
 - `backend/ntust_common.py` -> `backend/integrations/ntust_common.py`
 - `backend/planner_pdf.py` -> `backend/services/planner_pdf.py`
+- `backend/snapshots.py` -> `backend/services/snapshots.py`
 
 下列檔案仍屬於過渡層。刪除前必須先確認安全邊界、依賴注入與 tests/scripts 都已改到目標 module：
 
 - `backend/credentials.py` error type -> `backend/core/errors.py`
-- `backend/snapshots.py` -> `backend/services/snapshots.py`
 - `backend/credentials.py` -> `backend/services/credentials.py` + `backend/repositories/credentials.py`
 - `backend/school_sessions.py` -> `backend/services/school_sessions.py` + `backend/repositories/school_sessions.py`
 
