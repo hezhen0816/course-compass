@@ -62,7 +62,7 @@
 - Web app implementation 已搬到 `web/src/app/CoursePlannerWebApp.tsx`，根層 `App.tsx` 只保留入口 re-export。
 - Web global stylesheet 已從 `web/src/index.css` 搬到 `web/src/app/global.css`。
 - 已建立 `docs/architecture/test-inventory.md`，把 backend tests 與 fixtures 分成必留、保守保留與可評估瘦身，避免在重構中誤刪 parser/API/DB 安全網。
-- 已建立 typed planner backfill preview/package service `backend/services/typed_planner/backfill.py` 與 CLI wrapper `scripts/preview_typed_planner_backfill.py`，可離線拆解 `public.user_data.content`、輸出 typed table 對帳 counts，並產生本機 raw backup package；不連線、不寫 DB、不把敏感 token 放入 preview。
+- 已建立 typed planner backfill preview/package service `backend/services/typed_planner/backfill.py` 與 CLI wrapper `scripts/typed_planner/preview_backfill.py`，可離線拆解 `public.user_data.content`、輸出 typed table 對帳 counts，並產生本機 raw backup package；不連線、不寫 DB、不把敏感 token 放入 preview。
 - 已建立 no-write typed planner apply plan builder，可從通過 contract/reconciliation 的 package 產生 table order 與 row count 計畫；仍不產生 SQL、不寫 DB。
 
 ## 目前架構

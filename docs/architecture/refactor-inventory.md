@@ -146,18 +146,18 @@ Typed schema foundation：
 - `backend/services/typed_planner/backfill.py`
 - `backend/services/typed_planner/apply.py`
 - `backend/repositories/typed_planner.py`
-- `scripts/preview_typed_planner_backfill.py`
-- `scripts/plan_typed_planner_backfill.py`
-- `scripts/dry_run_typed_planner_backfill_apply.py`
+- `scripts/typed_planner/preview_backfill.py`
+- `scripts/typed_planner/plan_backfill.py`
+- `scripts/typed_planner/dry_run_apply.py`
 - service 保留 preview/package/reconciliation 核心邏輯，script 只做 CLI 包裝。
 - preview/package/reconciliation 目前使用 contract version：`typed-planner-backfill-preview-v1`。
 - 只讀本機 JSON，不連 Supabase、不寫 DB。
 - 輸出 typed table preview rows、row counts、source counts 與 warnings。
 - `metadata.source_payload` 保留原始未知欄位，但遮罩校務密碼、舊 ciphertext 與 GPA API key。
 - `--package-dir` 會產生本機 raw backup、redacted preview、reconciliation 與 manifest；raw backup 可能包含敏感資料，不可提交。
-- `build_typed_planner_apply_plan(package)` 與 `plan_typed_planner_backfill.py` 會驗證 package contract 與對帳狀態，產生 no-write apply plan 的 table order / row counts；`--format batches` 可輸出 no-write PostgREST upsert batch payload；目前仍不產生 SQL、不寫資料庫。
+- `build_typed_planner_apply_plan(package)` 與 `typed_planner/plan_backfill.py` 會驗證 package contract 與對帳狀態，產生 no-write apply plan 的 table order / row counts；`--format batches` 可輸出 no-write PostgREST upsert batch payload；目前仍不產生 SQL、不寫資料庫。
 - `backend/repositories/typed_planner.py` 可 dry-run 或用注入的 `post` 執行 batches；目前未接正式 service/API/CLI apply flow。
-- `dry_run_typed_planner_backfill_apply.py` 只做 dry-run，輸出 repository summary 與 readiness checks，不輸出完整 rows。
+- `typed_planner/dry_run_apply.py` 只做 dry-run，輸出 repository summary 與 readiness checks，不輸出完整 rows。
 - `typed_planner.apply.execute_typed_planner_backfill_package` 是受保護 execute 入口，必須同時提供 `allow_writes=True` 與固定確認字串；目前沒有 CLI/API 暴露。
 
 ## Validation Gates
