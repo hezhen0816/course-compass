@@ -10,11 +10,11 @@ import {
 } from './api';
 import { useAuth } from './hooks/useAuth';
 import { useCourseData } from './hooks/useCourseData';
-import { AuthPage } from './components/AuthPage';
-import { AppModals } from './components/AppModals';
-import { Navbar, type AppPage } from './components/Navbar';
-import { PagePlaceholder } from './components/PagePlaceholder';
-import { SafetyNotice } from './components/SafetyNotice';
+import { AuthPage } from './app/AuthPage';
+import { AppModals } from './app/AppModals';
+import { Navbar, type AppPage } from './app/Navbar';
+import { PagePlaceholder } from './app/PagePlaceholder';
+import { SafetyNotice } from './app/SafetyNotice';
 import { CourseSearchCenter } from './features/course-search/CourseSearchCenter';
 import { useCourseSearch } from './features/course-search/useCourseSearch';
 import { CourseTimelinePage } from './features/history/CourseTimelinePage';

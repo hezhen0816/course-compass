@@ -16,7 +16,7 @@
 
 ## Current Top-Level Layout
 
-- `web/`：React/Vite frontend，目前主要功能分散在 `web/src/features/*` 與 `web/src/App.tsx`。
+- `web/`：React/Vite frontend，目前 app shell 在 `web/src/app/`，主要功能在 `web/src/features/*`，`web/src/App.tsx` 保留跨頁狀態 wiring。
 - `backend/`：FastAPI backend，已部分拆成 `api/`、`core/`、`integrations/`、`repositories/`、`services/`、`schemas/`。
 - `ios/`：native iOS app，仍相容 current shared payload。
 - `supabase/`：production migration history。
@@ -87,6 +87,8 @@
 - `SemesterGrid.tsx`
 - `Sidebar.tsx`
 - `ProgressBar.tsx`
+
+Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `CourseDetailModal` 已移到 `web/src/features/history/`。`web/src/components/` 目前沒有仍需保留的檔案。
 
 ## Database Refactor Baseline
 

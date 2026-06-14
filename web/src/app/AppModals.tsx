@@ -1,6 +1,6 @@
 import type { AppData, Course, CourseSearchResult, PendingRequirement } from '../types';
 import type { ApiImportPreview, PlanningMode } from '../domain/planner';
-import { CourseDetailModal } from './CourseDetailModal';
+import { CourseDetailModal } from '../features/history/CourseDetailModal';
 import { OnboardingModal } from './OnboardingModal';
 import { OfferingModal } from '../features/planning/OfferingModal';
 import { ImportPreviewModal } from '../features/requirements/ImportPreviewModal';
