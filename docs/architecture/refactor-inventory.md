@@ -16,7 +16,7 @@
 
 ## Current Top-Level Layout
 
-- `web/`：React/Vite frontend，目前 app shell 在 `web/src/app/`，主要功能在 `web/src/features/*`，`web/src/App.tsx` 保留跨頁狀態 wiring。
+- `web/`：React/Vite frontend，目前 app shell 與跨頁狀態 wiring 在 `web/src/app/`，主要功能在 `web/src/features/*`，`web/src/App.tsx` 只保留入口 re-export。
 - `backend/`：FastAPI backend，已部分拆成 `api/`、`core/`、`integrations/`、`repositories/`、`services/`、`schemas/`。
 - `ios/`：native iOS app，仍相容 current shared payload。
 - `supabase/`：production migration history。
