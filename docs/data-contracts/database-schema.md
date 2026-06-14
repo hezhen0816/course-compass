@@ -172,11 +172,16 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
   - `preview.json`：typed table preview，敏感欄位已遮罩。
   - `reconciliation.json`：source count 與 typed preview count 對帳結果。
   - `manifest.json`：package 摘要、狀態、檔案清單與是否含敏感 backup。
+- `build_typed_planner_apply_plan(package)` 可把通過對帳的 package 轉成本機 apply plan：
+  - 檢查 `manifest`、`preview`、`reconciliation` 的 `contract_version`。
+  - 要求 `database_writes=false`、`reconciliation.status=passed`，且 package 必須包含完整 preview rows。
+  - 輸出 typed table 寫入順序、各表 row count 與總 row count，供下一階段設計真正 apply lane 前審查。
 
 明確限制：
 - 不連 Supabase。
 - 不寫資料庫。
 - 不產生 production backfill SQL。
+- apply plan 仍是 no-write plan，不產生 SQL，也不執行 upsert。
 - `backup-user-data.json` 是本機原始備份，不可提交到 repo。
 - `reconciliation.json` 只證明本機 preview count 是否一致，不取代 production reconciliation。
 

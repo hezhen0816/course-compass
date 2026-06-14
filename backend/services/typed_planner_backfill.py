@@ -17,6 +17,7 @@ from typing import Any
 
 
 CONTRACT_VERSION = "typed-planner-backfill-preview-v1"
+APPLY_PLAN_MODE = "typed_planner_apply_plan_no_database_writes"
 TABLE_NAMES = [
     "planner_profiles",
     "academic_terms",
@@ -37,6 +38,7 @@ TABLE_NAMES = [
     "course_offering_meetings",
     "sync_runs",
 ]
+APPLY_TABLE_ORDER = list(TABLE_NAMES)
 
 SENSITIVE_KEYS = {"school_password", "passwordCiphertext", "apiKey"}
 WEEKDAY_MAP = {"M": 1, "T": 2, "W": 3, "R": 4, "F": 5}
@@ -48,9 +50,12 @@ PACKAGE_FILES = {
 }
 
 __all__ = [
+    "APPLY_PLAN_MODE",
+    "APPLY_TABLE_ORDER",
     "CONTRACT_VERSION",
     "PACKAGE_FILES",
     "TABLE_NAMES",
+    "build_typed_planner_apply_plan",
     "build_typed_planner_backfill_package",
     "build_typed_planner_preview",
     "build_typed_planner_reconciliation",
@@ -793,6 +798,53 @@ def build_typed_planner_backfill_package(
         "preview": preview,
         "reconciliation": reconciliation,
         "manifest": manifest,
+    }
+
+
+def _require_package_contract(package: dict[str, Any]) -> None:
+    for key in ("manifest", "preview", "reconciliation"):
+        payload = _as_dict(package.get(key))
+        if payload.get("contract_version") != CONTRACT_VERSION:
+            raise ValueError(f"apply plan requires {key}.contract_version {CONTRACT_VERSION!r}")
+
+    manifest = _as_dict(package.get("manifest"))
+    if manifest.get("database_writes") is not False:
+        raise ValueError("apply plan requires a no-write backfill package")
+
+    reconciliation = _as_dict(package.get("reconciliation"))
+    if reconciliation.get("status") != "passed":
+        raise ValueError("apply plan requires passed reconciliation")
+
+    preview = _as_dict(package.get("preview"))
+    if not isinstance(preview.get("tables"), dict):
+        raise ValueError("apply plan requires preview tables; rebuild without --counts-only")
+
+
+def build_typed_planner_apply_plan(package: dict[str, Any]) -> dict[str, Any]:
+    """Build an ordered no-write plan from a verified backfill preview package."""
+    _require_package_contract(package)
+
+    preview = _as_dict(package.get("preview"))
+    manifest = _as_dict(package.get("manifest"))
+    counts = _as_dict(preview.get("counts"))
+    operations = [
+        {
+            "order": order,
+            "table": table_name,
+            "operation": "upsert_preview_rows",
+            "row_count": int(counts.get(table_name) or 0),
+        }
+        for order, table_name in enumerate(APPLY_TABLE_ORDER, start=1)
+    ]
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "mode": APPLY_PLAN_MODE,
+        "database_writes": False,
+        "status": "ready",
+        "source_manifest_status": manifest.get("status"),
+        "operations": operations,
+        "total_row_count": sum(operation["row_count"] for operation in operations),
+        "warnings": [],
     }
 
 

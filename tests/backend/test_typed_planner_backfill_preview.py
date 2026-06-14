@@ -3,9 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.services import typed_planner_backfill
 from backend.services.typed_planner_backfill import (
+    APPLY_PLAN_MODE,
+    APPLY_TABLE_ORDER,
     CONTRACT_VERSION,
+    build_typed_planner_apply_plan,
+    build_typed_planner_backfill_package,
     build_typed_planner_preview,
     build_typed_planner_reconciliation,
     write_typed_planner_backfill_package,
@@ -257,11 +263,68 @@ def test_typed_planner_package_writes_backup_preview_reconciliation_and_manifest
     assert written_manifest["status"] == "passed"
 
 
+def test_typed_planner_apply_plan_orders_tables_without_database_writes() -> None:
+    rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
+    package = build_typed_planner_backfill_package(
+        rows,
+        generated_at="2026-06-15T00:00:00+00:00",
+    )
+
+    plan = build_typed_planner_apply_plan(package)
+
+    assert plan["contract_version"] == CONTRACT_VERSION
+    assert plan["mode"] == APPLY_PLAN_MODE
+    assert plan["database_writes"] is False
+    assert plan["status"] == "ready"
+    assert [operation["table"] for operation in plan["operations"]] == APPLY_TABLE_ORDER
+    assert plan["operations"][0] == {
+        "order": 1,
+        "table": "planner_profiles",
+        "operation": "upsert_preview_rows",
+        "row_count": 1,
+    }
+    assert plan["total_row_count"] == sum(package["preview"]["counts"].values())
+
+
+def test_typed_planner_apply_plan_rejects_counts_only_package() -> None:
+    rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
+    package = build_typed_planner_backfill_package(rows, include_rows=False)
+
+    with pytest.raises(ValueError, match="requires preview tables"):
+        build_typed_planner_apply_plan(package)
+
+
+def test_typed_planner_apply_plan_rejects_failed_reconciliation() -> None:
+    package = build_typed_planner_backfill_package(
+        [
+            {
+                "user_id": "11111111-1111-1111-1111-111111111111",
+                "content": {
+                    "pendingRequirements": [
+                        {
+                            "id": "req-without-set",
+                            "setId": "missing-set",
+                            "kind": "choice",
+                            "title": "缺少需求集",
+                        }
+                    ]
+                },
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="passed reconciliation"):
+        build_typed_planner_apply_plan(package)
+
+
 def test_typed_planner_backfill_service_exports_stable_public_api() -> None:
     assert typed_planner_backfill.__all__ == [
+        "APPLY_PLAN_MODE",
+        "APPLY_TABLE_ORDER",
         "CONTRACT_VERSION",
         "PACKAGE_FILES",
         "TABLE_NAMES",
+        "build_typed_planner_apply_plan",
         "build_typed_planner_backfill_package",
         "build_typed_planner_preview",
         "build_typed_planner_reconciliation",
