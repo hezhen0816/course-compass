@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, RefreshCw, Settings, ShieldCheck } from 'lucide-react';
-import type { AppData, GpaApiSettings } from '../../types';
+import type { AppData, GpaApiSettings, ProgramDepartmentSettings } from '../../types';
+import { listCourseDepartments } from '../../domain/courseDepartments';
 
 const EMPTY_GPA_API_SETTINGS: GpaApiSettings = {
   enabled: false,
   apiKey: '',
 };
+const EMPTY_PROGRAM_DEPARTMENT_SETTINGS: ProgramDepartmentSettings = {};
+const COURSE_DEPARTMENTS = listCourseDepartments();
 
 type SettingsPageProps = {
   initialSettings: AppData['targets'];
@@ -17,8 +20,10 @@ type SettingsPageProps = {
   officialSelectionStatus: 'idle' | 'loading' | 'error' | 'success';
   officialSelectionMessage: string;
   initialGpaApiSettings?: GpaApiSettings;
+  initialProgramDepartmentSettings?: ProgramDepartmentSettings;
   onSaveTargets: (targets: AppData['targets']) => void;
   onSaveGpaApiSettings: (settings: GpaApiSettings) => void;
+  onSaveProgramDepartmentSettings: (settings: ProgramDepartmentSettings) => void;
   onOpenSchoolSync: () => void;
   onOpenOfficialSelectionSync: () => void;
   onClearSavedSchoolCredentials: () => void;
@@ -34,8 +39,10 @@ export function SettingsPage({
   officialSelectionStatus,
   officialSelectionMessage,
   initialGpaApiSettings,
+  initialProgramDepartmentSettings,
   onSaveTargets,
   onSaveGpaApiSettings,
+  onSaveProgramDepartmentSettings,
   onOpenSchoolSync,
   onOpenOfficialSelectionSync,
   onClearSavedSchoolCredentials,
@@ -45,6 +52,11 @@ export function SettingsPage({
     ...EMPTY_GPA_API_SETTINGS,
     ...initialGpaApiSettings,
   });
+  const [programDepartmentForm, setProgramDepartmentForm] = useState<ProgramDepartmentSettings>({
+    ...EMPTY_PROGRAM_DEPARTMENT_SETTINGS,
+    ...initialProgramDepartmentSettings,
+  });
+  const [programDepartmentSaved, setProgramDepartmentSaved] = useState(false);
 
   useEffect(() => {
     setSettingsForm(initialSettings);
@@ -56,6 +68,19 @@ export function SettingsPage({
       ...initialGpaApiSettings,
     });
   }, [initialGpaApiSettings]);
+
+  useEffect(() => {
+    setProgramDepartmentForm({
+      ...EMPTY_PROGRAM_DEPARTMENT_SETTINGS,
+      ...initialProgramDepartmentSettings,
+    });
+  }, [initialProgramDepartmentSettings]);
+
+  useEffect(() => {
+    if (!programDepartmentSaved) return;
+    const timer = window.setTimeout(() => setProgramDepartmentSaved(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [programDepartmentSaved]);
 
   return (
     <div className="space-y-4">
@@ -98,6 +123,66 @@ export function SettingsPage({
             官方選課狀態：{officialSelectionMessage}
           </p>
         )}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
+          <Settings className="h-4 w-4 text-blue-600" />
+          <h2 className="text-base font-semibold text-slate-900">雙主修與輔系系所</h2>
+        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSaveProgramDepartmentSettings({
+              homeDepartmentCode: programDepartmentForm.homeDepartmentCode || undefined,
+              doubleMajorDepartmentCode: programDepartmentForm.doubleMajorDepartmentCode || undefined,
+              minorDepartmentCode: programDepartmentForm.minorDepartmentCode || undefined,
+            });
+            setProgramDepartmentSaved(true);
+          }}
+          className="space-y-4 p-5"
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <DepartmentField
+              label="本系系所"
+              value={programDepartmentForm.homeDepartmentCode || ''}
+              onChange={(value) => setProgramDepartmentForm({
+                ...programDepartmentForm,
+                homeDepartmentCode: value || undefined,
+              })}
+            />
+            <DepartmentField
+              label="雙主修系所"
+              value={programDepartmentForm.doubleMajorDepartmentCode || ''}
+              onChange={(value) => setProgramDepartmentForm({
+                ...programDepartmentForm,
+                doubleMajorDepartmentCode: value || undefined,
+              })}
+            />
+            <DepartmentField
+              label="輔系系所"
+              value={programDepartmentForm.minorDepartmentCode || ''}
+              onChange={(value) => setProgramDepartmentForm({
+                ...programDepartmentForm,
+                minorDepartmentCode: value || undefined,
+              })}
+            />
+          </div>
+          <p className="text-sm text-slate-500">
+            選課工作台會依課碼前兩碼比對這裡設定的系所，改變課程顏色標示。
+          </p>
+          <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className={`text-sm font-medium ${programDepartmentSaved ? 'text-emerald-700' : 'text-slate-400'}`}>
+              {programDepartmentSaved ? '系所設定已更新，將自動同步到資料庫。' : '儲存後會套用到選課工作台顏色。'}
+            </p>
+            <button
+              type="submit"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              儲存系所設定
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -333,6 +418,34 @@ function TextField({
         placeholder={placeholder}
         className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
       />
+    </label>
+  );
+}
+
+function DepartmentField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span className="block text-sm font-medium text-slate-700">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      >
+        <option value="">未設定</option>
+        {COURSE_DEPARTMENTS.map((department) => (
+          <option key={department.code} value={department.code}>
+            {department.code}・{department.name}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

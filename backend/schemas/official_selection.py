@@ -45,6 +45,8 @@ class OfficialSelectionAvailableCourse(BaseModel):
     course_no: str
     course_name: str
     teacher: str
+    gpa: float | None = None
+    gpa_status: str = "not_enabled"
 
 
 class OfficialSelectionRegisteredCourse(BaseModel):
@@ -55,6 +57,28 @@ class OfficialSelectionRegisteredCourse(BaseModel):
     credits: float | None = None
     require_option: str = ""
     teacher: str = ""
+    classroom: str = ""
+    node: str = ""
+    contents: str = ""
+    selected_count: int | None = None
+    capacity: int | None = None
+    gpa: float | None = None
+    gpa_status: str = "not_enabled"
+
+
+class OfficialSelectionRequiredPresetCourse(BaseModel):
+    course_no: str
+    course_name: str
+    credits: float | None = None
+    require_option: str = ""
+    teacher: str = ""
+    classroom: str = ""
+    node: str = ""
+    contents: str = ""
+    selected_count: int | None = None
+    capacity: int | None = None
+    gpa: float | None = None
+    gpa_status: str = "not_enabled"
 
 
 class OfficialSelectionSyncResponse(BaseModel):
@@ -71,4 +95,5 @@ class OfficialSelectionSyncResponse(BaseModel):
     schedule_rows: list[dict[str, str]]
     selection_list_rows: list[dict[str, str]]
     required_preset_rows: list[dict[str, str]]
+    required_preset_courses: list[OfficialSelectionRequiredPresetCourse] = Field(default_factory=list)
     notices: list[str] = Field(default_factory=list)

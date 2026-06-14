@@ -12,6 +12,7 @@ export type CourseCategory =
 export type GenEdDimension = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'None';
 export type CourseProgram = 'home' | 'double_major' | 'minor' | 'other';
 export type RequirementKind = 'course' | 'choice' | 'course_group' | 'credit_pool';
+export type GpaStatus = 'not_enabled' | 'found' | 'no_data' | 'error';
 
 export interface GradingItem {
   id: string;
@@ -41,6 +42,8 @@ export interface ScheduledOffering {
   slots: string[];
   requireOption: string;
   contents: string;
+  gpa?: number | null;
+  gpaStatus?: GpaStatus;
 }
 
 export interface Course {
@@ -100,8 +103,15 @@ export interface GpaApiSettings {
   updatedAt?: string;
 }
 
+export interface ProgramDepartmentSettings {
+  homeDepartmentCode?: string;
+  doubleMajorDepartmentCode?: string;
+  minorDepartmentCode?: string;
+}
+
 export interface AppSettings {
   gpaApi?: GpaApiSettings;
+  programDepartments?: ProgramDepartmentSettings;
   [key: string]: unknown;
 }
 
@@ -185,7 +195,7 @@ export interface CourseSearchResult {
   node: string;
   contents: string;
   gpa?: number | null;
-  gpa_status?: 'not_enabled' | 'found' | 'no_data' | 'error';
+  gpa_status?: GpaStatus;
   selected_count?: number | null;
   capacity?: number | null;
 }
@@ -277,6 +287,8 @@ export interface OfficialSelectionAvailableCourse {
   course_no: string;
   course_name: string;
   teacher: string;
+  gpa?: number | null;
+  gpa_status?: GpaStatus;
 }
 
 export interface OfficialSelectionRegisteredCourse {
@@ -287,6 +299,28 @@ export interface OfficialSelectionRegisteredCourse {
   credits?: number | null;
   require_option?: string;
   teacher?: string;
+  classroom?: string;
+  node?: string;
+  contents?: string;
+  selected_count?: number | null;
+  capacity?: number | null;
+  gpa?: number | null;
+  gpa_status?: GpaStatus;
+}
+
+export interface OfficialSelectionRequiredPresetCourse {
+  course_no: string;
+  course_name: string;
+  credits?: number | null;
+  require_option?: string;
+  teacher?: string;
+  classroom?: string;
+  node?: string;
+  contents?: string;
+  selected_count?: number | null;
+  capacity?: number | null;
+  gpa?: number | null;
+  gpa_status?: GpaStatus;
 }
 
 export interface OfficialSelectionSyncResponse {
@@ -303,5 +337,6 @@ export interface OfficialSelectionSyncResponse {
   schedule_rows: Record<string, string>[];
   selection_list_rows: Record<string, string>[];
   required_preset_rows: Record<string, string>[];
+  required_preset_courses: OfficialSelectionRequiredPresetCourse[];
   notices: string[];
 }

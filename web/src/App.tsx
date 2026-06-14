@@ -106,6 +106,7 @@ export default function CoursePlannerWebApp() {
     resetCourseSearchFilters,
     exportCourseResults,
   } = useCourseSearch(data.settings?.gpaApi);
+  const officialGpaApiKey = data.settings?.gpaApi?.enabled ? data.settings.gpaApi.apiKey.trim() : '';
   const [planningMode, setPlanningMode] = useState<PlanningMode>('lottery');
   const [activeRequirement, setActiveRequirement] = useState<PendingRequirement | null>(null);
   const [offeringResults] = useState<CourseSearchResult[]>([]);
@@ -278,11 +279,11 @@ export default function CoursePlannerWebApp() {
           updatedAt: new Date().toISOString(),
         },
       }));
-      setPlannerMessage(`已更新虛擬課表原因：${offering.course_name}`);
+      setPlannerMessage(`已更新待加簽規劃原因：${offering.course_name}`);
       return true;
     }
     if (existingCourse) {
-      setPlannerMessage(`已在虛擬課程中：${offering.course_name}`);
+      setPlannerMessage(`已在待加簽課程中：${offering.course_name}`);
       return false;
     }
     const conflicts = findConflicts(offering, selectionData, SELECTION_PLAN_SEMESTER_ID);
@@ -294,7 +295,7 @@ export default function CoursePlannerWebApp() {
       ...courseFromOffering(offering, requirement),
       virtualSelection: {
         status: virtualReason ? 'rejected' : 'manual',
-        reason: virtualReason || '手動加入虛擬課表，尚未送入官方選課系統。',
+        reason: virtualReason || '手動加入待加簽規劃，尚未送入官方選課系統。',
         createdAt: new Date().toISOString(),
       },
     };
@@ -311,7 +312,7 @@ export default function CoursePlannerWebApp() {
         ? prev.pendingRequirements.filter((item) => item.id !== requirement.id)
         : prev.pendingRequirements,
     }));
-    setPlannerMessage(`已加入虛擬課表：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
+    setPlannerMessage(`已加入待加簽規劃：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
     return true;
   };
 
@@ -407,43 +408,7 @@ export default function CoursePlannerWebApp() {
             )),
       };
     });
-    if (deletedCourse) setPlannerMessage(`已移除虛擬課程：${deletedCourse.name}`);
-  };
-
-  const moveSelectionCourse = (courseId: string, direction: -1 | 1) => {
-    const moveCourse = (courses: Course[]) => {
-      const currentIndex = courses.findIndex((course) => course.id === courseId);
-      const nextIndex = currentIndex + direction;
-      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= courses.length) return courses;
-      const nextCourses = [...courses];
-      const [course] = nextCourses.splice(currentIndex, 1);
-      nextCourses.splice(nextIndex, 0, course);
-      return nextCourses;
-    };
-
-    setData((prev) => {
-      if (prev.selectionPlan) {
-        const nextCourses = moveCourse(prev.selectionPlan.courses);
-        if (nextCourses === prev.selectionPlan.courses) return prev;
-        return {
-          ...prev,
-          selectionPlan: {
-            ...prev.selectionPlan,
-            courses: nextCourses,
-            updatedAt: new Date().toISOString(),
-          },
-        };
-      }
-
-      return {
-        ...prev,
-        semesters: prev.semesters.map((semester) => (
-          semester.id === activeSemester?.id
-            ? { ...semester, courses: moveCourse(semester.courses) }
-            : semester
-        )),
-      };
-    });
+    if (deletedCourse) setPlannerMessage(`已移除待加簽課程：${deletedCourse.name}`);
   };
 
   const saveCourseDetail = (updatedCourse: Course) => {
@@ -522,10 +487,10 @@ export default function CoursePlannerWebApp() {
     try {
       const accessToken = await getLatestAccessToken();
       const payload = action === 'join'
-        ? await joinOfficialInitialSelectionCourse(username, normalizedCourseNo, accessToken || undefined)
+        ? await joinOfficialInitialSelectionCourse(username, normalizedCourseNo, accessToken || undefined, officialGpaApiKey || undefined)
         : action === 'waitlist'
-          ? await addOfficialInitialSelectionWaitlistCourse(username, normalizedCourseNo, accessToken || undefined)
-          : await removeOfficialInitialSelectionCourse(username, normalizedCourseNo, accessToken || undefined);
+          ? await addOfficialInitialSelectionWaitlistCourse(username, normalizedCourseNo, accessToken || undefined, officialGpaApiKey || undefined)
+          : await removeOfficialInitialSelectionCourse(username, normalizedCourseNo, accessToken || undefined, officialGpaApiKey || undefined);
       updateOfficialSelection(payload);
       setOfficialSelectionStatus('success');
       setOfficialSelectionMessage(`官方已回傳最新狀態：已登記 ${payload.registered_count} 門，待加入 ${payload.available_count} 門。`);
@@ -554,7 +519,7 @@ export default function CoursePlannerWebApp() {
     }
 
     const confirmed = window.confirm(
-      `即將送到官方待加入清單：${normalizedCourseNo} ${offering.course_name}\n\n若官方拒絕或未接受，會改以「虛擬加入」標示在課表上。此操作只會送出一次，不會自動重試。確定繼續？`,
+      `即將送到官方待加入清單：${normalizedCourseNo} ${offering.course_name}\n\n若官方拒絕或未接受，會改以「待加簽」標示在課表上。此操作只會送出一次，不會自動重試。確定繼續？`,
     );
     if (!confirmed) return;
 
@@ -563,7 +528,7 @@ export default function CoursePlannerWebApp() {
     setOfficialSelectionMessage('正在送到官方待加入清單...');
     try {
       const accessToken = await getLatestAccessToken();
-      const payload = await addOfficialInitialSelectionWaitlistCourse(username, normalizedCourseNo, accessToken || undefined);
+      const payload = await addOfficialInitialSelectionWaitlistCourse(username, normalizedCourseNo, accessToken || undefined, officialGpaApiKey || undefined);
       updateOfficialSelection(payload);
       if (officialSelectionContainsCourse(payload, normalizedCourseNo)) {
         setOfficialSelectionStatus('success');
@@ -575,8 +540,8 @@ export default function CoursePlannerWebApp() {
       const reason = payload.notices[0] || '官方回應未將此課加入待選或登記清單。';
       addCourseToSemester(offering, undefined, true, reason);
       setOfficialSelectionStatus('error');
-      setOfficialSelectionMessage(`官方未接受 ${normalizedCourseNo}，已加入虛擬課表：${reason}`);
-      setPlannerMessage(`已虛擬加入：${offering.course_name}。原因：${reason}`);
+      setOfficialSelectionMessage(`官方未接受 ${normalizedCourseNo}，已加入待加簽規劃：${reason}`);
+      setPlannerMessage(`已列入待加簽：${offering.course_name}。原因：${reason}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : '官方選課請求失敗。';
       const shouldRequireResync = /Session|重新同步|登入|帳號|密碼/.test(message);
@@ -587,8 +552,8 @@ export default function CoursePlannerWebApp() {
         return;
       }
       addCourseToSemester(offering, undefined, true, message);
-      setPlannerMessage(`已虛擬加入：${offering.course_name}。原因：${message}`);
-      window.alert(`官方未接受，已加入虛擬課表。\n原因：${message}`);
+      setPlannerMessage(`已列入待加簽：${offering.course_name}。原因：${message}`);
+      window.alert(`官方未接受，已加入待加簽規劃。\n原因：${message}`);
     } finally {
       setOfficialActionCourseNo(null);
     }
@@ -619,7 +584,7 @@ export default function CoursePlannerWebApp() {
     setOfficialSelectionMessage('正在儲存官方志願序...');
     try {
       const accessToken = await getLatestAccessToken();
-      const payload = await reorderOfficialInitialSelectionCourses(username, normalizedCourseNos, accessToken || undefined);
+      const payload = await reorderOfficialInitialSelectionCourses(username, normalizedCourseNos, accessToken || undefined, officialGpaApiKey || undefined);
       updateOfficialSelection(payload);
       setOfficialSelectionStatus('success');
       setOfficialSelectionMessage(`官方已回傳最新志願序：已登記 ${payload.registered_count} 門。`);
@@ -652,7 +617,7 @@ export default function CoursePlannerWebApp() {
     setOfficialSelectionMessage('正在讀取官方選課狀態...');
     try {
       const accessToken = await getLatestAccessToken();
-      const payload = await syncOfficialInitialSelection(username, password, accessToken || undefined);
+      const payload = await syncOfficialInitialSelection(username, password, accessToken || undefined, officialGpaApiKey || undefined);
       updateOfficialSelection(payload);
       let credentialMessage = '';
       if (rememberSchoolCredentials && password) {
@@ -757,7 +722,6 @@ export default function CoursePlannerWebApp() {
             onJoinOfficialCourse={(courseNo, courseName) => void submitOfficialSelectionCourse('join', courseNo, courseName)}
             onRemoveOfficialCourse={(courseNo, courseName) => void submitOfficialSelectionCourse('remove', courseNo, courseName)}
             onSaveOfficialOrder={(orderedCourseNos) => void saveOfficialSelectionOrder(orderedCourseNos)}
-            onMoveCourse={moveSelectionCourse}
             onDeleteCourse={deleteSelectionCourse}
           />
         )}
@@ -773,6 +737,7 @@ export default function CoursePlannerWebApp() {
             officialSelectionStatus={officialSelectionStatus}
             officialSelectionMessage={officialSelectionMessage}
             initialGpaApiSettings={data.settings?.gpaApi}
+            initialProgramDepartmentSettings={data.settings?.programDepartments}
             onOpenSchoolSync={openSchoolDataSync}
             onOpenOfficialSelectionSync={requestOfficialSelectionSync}
             onClearSavedSchoolCredentials={() => void clearSavedSchoolCredentials()}
@@ -785,6 +750,15 @@ export default function CoursePlannerWebApp() {
                 settings: {
                   ...(prev.settings || {}),
                   gpaApi,
+                },
+              }));
+            }}
+            onSaveProgramDepartmentSettings={(programDepartments) => {
+              setData((prev) => ({
+                ...prev,
+                settings: {
+                  ...(prev.settings || {}),
+                  programDepartments,
                 },
               }));
             }}

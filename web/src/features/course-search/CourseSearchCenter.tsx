@@ -126,7 +126,7 @@ export function CourseSearchCenter({
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-slate-950">課程查詢中心</h2>
-            <p className="mt-1 text-sm text-slate-500">查詢官方開課資料，加入官方選課清單；若官方拒絕，會以虛擬加入標示在課表上。</p>
+            <p className="mt-1 text-sm text-slate-500">查詢官方開課資料，加入官方選課清單；若官方拒絕，會以待加簽標示在課表上。</p>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <span>
@@ -363,7 +363,7 @@ export function CourseSearchCenter({
       <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-start justify-between border-b border-slate-100 p-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">虛擬加入 ({virtualCourses.length})</h2>
+            <h2 className="text-base font-semibold text-slate-900">待加簽 ({virtualCourses.length})</h2>
             <p className="mt-1 text-xs text-slate-500">未被官方正式接受的課程。</p>
           </div>
           <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
@@ -389,7 +389,7 @@ export function CourseSearchCenter({
           )}
         </div>
         <div className="space-y-2 border-t border-slate-100 p-4">
-          <p className="text-xs text-slate-500">虛擬課程學分：{formatCredits(virtualCourseCredits)} 學分</p>
+          <p className="text-xs text-slate-500">待加簽課程學分：{formatCredits(virtualCourseCredits)} 學分</p>
           <button
             onClick={onOpenPlanning}
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-blue-700"
@@ -400,7 +400,7 @@ export function CourseSearchCenter({
             disabled
             className="w-full cursor-not-allowed rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400"
           >
-            虛擬清單已自動儲存
+            待加簽清單已自動儲存
           </button>
         </div>
       </aside>
@@ -582,7 +582,7 @@ function CourseResultRow({
         <div className="font-semibold text-slate-900">{offering.course_name}</div>
           <div className="mt-1 flex flex-wrap gap-1">
           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">{requirementLabel(offering.require_option)}</span>
-          {alreadyVirtual && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">已虛擬加入</span>}
+          {alreadyVirtual && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">已列入待加簽</span>}
           {conflicts.length > 0 && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">衝堂</span>}
         </div>
       </td>
@@ -641,7 +641,7 @@ function VirtualCourseCard({
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-semibold text-slate-900">{course.name}</p>
             <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              虛擬
+              待加簽
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-600">

@@ -14,6 +14,7 @@ try:
     from ..core.config import (
         COURSE_LIST_URL,
         DEFAULT_TIMEOUT,
+        INITIAL_SELECTION_CHOOSE_COURSE_LIST_URL,
         INITIAL_SELECTION_EXTRA_JOIN_URL,
         INITIAL_SELECTION_JOIN_URL,
         INITIAL_SELECTION_REMOVE_URL,
@@ -23,10 +24,12 @@ try:
     from ..core.time_utils import now
     from .ntust_common import login, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
     from .schedule import find_latest_course_list_url, parse_course_list
+    from .tr_rooms import fetch_current_query_semester, fetch_query_courses_filtered
 except ImportError:  # pragma: no cover
     from core.config import (
         COURSE_LIST_URL,
         DEFAULT_TIMEOUT,
+        INITIAL_SELECTION_CHOOSE_COURSE_LIST_URL,
         INITIAL_SELECTION_EXTRA_JOIN_URL,
         INITIAL_SELECTION_JOIN_URL,
         INITIAL_SELECTION_REMOVE_URL,
@@ -35,6 +38,7 @@ except ImportError:  # pragma: no cover
     )
     from integrations.ntust_common import login, normalize, requires_hidden_form_callback, split_lines, submit_hidden_form
     from integrations.schedule import find_latest_course_list_url, parse_course_list
+    from integrations.tr_rooms import fetch_current_query_semester, fetch_query_courses_filtered
     from core.time_utils import now
 
 
@@ -238,7 +242,7 @@ class OfficialSelectionClient:
                 _parse_action_response_notices(response.text),
                 _parse_action_response_notices(workspace_response.text),
             )
-            payload = self._workspace_payload(workspace_response, verify_ssl)
+            payload = self._workspace_payload(workspace_response, verify_ssl, refresh_choose_course_list=False)
             if action_notices:
                 payload["notices"] = _merge_unique_texts(action_notices, payload.get("notices", []))
             return payload
@@ -321,7 +325,7 @@ class OfficialSelectionClient:
                 _parse_action_response_notices(response.text),
                 _parse_action_response_notices(workspace_response.text),
             )
-            payload = self._workspace_payload(workspace_response, verify_ssl)
+            payload = self._workspace_payload(workspace_response, verify_ssl, refresh_choose_course_list=False)
             if action_notices:
                 payload["notices"] = _merge_unique_texts(action_notices, payload.get("notices", []))
             return payload
@@ -364,16 +368,34 @@ class OfficialSelectionClient:
         if len(self.login_times) >= MAX_LOGINS_PER_MINUTE:
             raise RuntimeError("登入太頻繁，請稍後再試。")
 
-    def _workspace_payload(self, page_response: requests.Response, verify_ssl: bool) -> dict[str, Any]:
+    def _workspace_payload(
+        self,
+        page_response: requests.Response,
+        verify_ssl: bool,
+        *,
+        refresh_choose_course_list: bool = True,
+    ) -> dict[str, Any]:
         payload = parse_a02_workspace(page_response.text)
+        if refresh_choose_course_list:
+            refreshed_response, refresh_notices = self._refresh_choose_course_list(verify_ssl)
+            if refreshed_response is not None:
+                page_response = refreshed_response
+                payload = parse_a02_workspace(page_response.text)
+            if refresh_notices:
+                payload["notices"] = _merge_unique_texts(payload["notices"], refresh_notices)
+
+        _enrich_registered_courses_from_query_system(payload["registered_courses"], verify_ssl)
+        _enrich_registered_courses_from_query_system(payload["required_preset_courses"], verify_ssl)
         course_list_rows = self._fetch_course_list_schedule_rows(verify_ssl)
         has_workspace_schedule = _schedule_rows_have_weekday_data(payload["schedule_rows"])
         if course_list_rows and not has_workspace_schedule:
             payload["schedule_rows"] = course_list_rows
-            payload["notices"].append("官方功課表由選課清單頁補齊。")
+            payload["notices"].append("官方功課表由正式課程清單補齊。")
         elif course_list_rows and course_list_rows != payload["schedule_rows"]:
             payload["schedule_rows"] = course_list_rows
             payload["notices"].append("官方功課表由正式課程清單校正。")
+        if payload["selection_list_rows"] and not _schedule_rows_have_weekday_data(payload["schedule_rows"]):
+            payload["notices"].append("官方選課清單已取得，但功課表資料仍為空或未取得。")
         return {
             **payload,
             "source_url": page_response.url,
@@ -428,14 +450,40 @@ class OfficialSelectionClient:
         except (RuntimeError, requests.RequestException):
             return []
 
+    def _refresh_choose_course_list(self, verify_ssl: bool) -> tuple[requests.Response | None, list[str]]:
+        try:
+            response = self.session.post(
+                INITIAL_SELECTION_CHOOSE_COURSE_LIST_URL,
+                data={"type": 1},
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Referer": INITIAL_SELECTION_URL,
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                timeout=DEFAULT_TIMEOUT,
+                allow_redirects=True,
+                verify=verify_ssl,
+            )
+            response.raise_for_status()
+            response = self._complete_callback_if_needed(response, verify_ssl)
+            if _is_auth_response(response):
+                self.is_logged_in = False
+                raise RuntimeError("Session 已失效，請重新登入官方選課系統。")
+            notices = _parse_action_response_notices(response.text)
+            return self._get_workspace_page(verify_ssl), notices
+        except requests.RequestException:
+            return None, ["官方選課清單刷新失敗，保留 A02 主頁現有資料。"]
+
 
 def parse_a02_workspace(html: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "html.parser")
     available = _parse_available_courses(soup)
     registered = _parse_registered_courses(soup)
     schedule_rows = _parse_schedule_table_rows(soup.select_one("#loginModal table"))
-    selection_list_rows = _parse_generic_table_rows(soup.select_one("#loginModal2 table"))
-    required_preset_rows = _parse_generic_table_rows(soup.select_one("#DetermineTable"))
+    selection_list_rows = _parse_generic_table_rows(soup.select_one("#loginModal2"))
+    required_preset_table = soup.select_one("#DetermineTable") or _find_table_containing(soup, ["課碼", "課程名稱", "退選"])
+    required_preset_rows = _parse_generic_table_rows(required_preset_table)
+    required_preset_courses = _parse_required_preset_courses(required_preset_rows)
     registered = _merge_registered_course_details(registered, selection_list_rows)
 
     return {
@@ -447,6 +495,7 @@ def parse_a02_workspace(html: str) -> dict[str, Any]:
         "schedule_rows": schedule_rows,
         "selection_list_rows": selection_list_rows,
         "required_preset_rows": required_preset_rows,
+        "required_preset_courses": required_preset_courses,
         "notices": _parse_notice_texts(soup),
     }
 
@@ -570,6 +619,72 @@ def _merge_registered_course_details(
     return merged
 
 
+def _parse_required_preset_courses(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    courses: list[dict[str, Any]] = []
+    for row in rows:
+        course_no = _row_value(row, ["課碼", "課程代碼", "課號"]).strip().upper()
+        if not course_no:
+            continue
+        courses.append(
+            {
+                "course_no": course_no,
+                "course_name": _row_value(row, ["課程名稱", "課名"]),
+                "credits": None,
+                "require_option": "",
+                "teacher": "",
+                "classroom": "",
+                "node": "",
+                "contents": "",
+                "selected_count": None,
+                "capacity": None,
+            }
+        )
+    return courses
+
+
+def _enrich_registered_courses_from_query_system(
+    registered_courses: list[dict[str, Any]],
+    verify_ssl: bool,
+) -> None:
+    if not registered_courses:
+        return
+    try:
+        semester = fetch_current_query_semester(verify_ssl)
+    except (RuntimeError, requests.RequestException):
+        return
+
+    for course in registered_courses:
+        course_no = str(course.get("course_no") or "").strip().upper()
+        if not course_no:
+            continue
+        try:
+            matches = fetch_query_courses_filtered(
+                semester,
+                course_no=course_no,
+                course_name="",
+                verify_ssl=verify_ssl,
+            )
+        except (RuntimeError, requests.RequestException):
+            continue
+        match = next(
+            (
+                item for item in matches
+                if str(item.get("CourseNo") or "").strip().upper() == course_no
+            ),
+            matches[0] if matches else None,
+        )
+        if not match:
+            continue
+        course["classroom"] = str(match.get("ClassRoomNo") or "")
+        course["node"] = str(match.get("Node") or "")
+        course["contents"] = str(match.get("Contents") or "")
+        course["selected_count"] = _as_int(match.get("ChooseStudent"))
+        course["capacity"] = _as_int(match.get("Restrict2"))
+        course["credits"] = _as_float(match.get("CreditPoint")) if _as_float(match.get("CreditPoint")) is not None else course.get("credits")
+        course["require_option"] = str(match.get("RequireOption") or course.get("require_option") or "")
+        course["teacher"] = str(match.get("CourseTeacher") or course.get("teacher") or "")
+
+
 def _parse_schedule_table_rows(table: Tag | None) -> list[dict[str, str]]:
     rows = _extract_html_table_rows(table)
     if not rows:
@@ -601,6 +716,8 @@ def _parse_schedule_table_rows(table: Tag | None) -> list[dict[str, str]]:
 
 def _parse_generic_table_rows(table: Tag | None) -> list[dict[str, str]]:
     rows = _extract_html_table_rows(table)
+    if not rows:
+        rows = _extract_div_table_rows(table)
     if not rows:
         return []
     headers = rows[0]
@@ -835,13 +952,13 @@ def _clean_cell_text(cell: Tag) -> str:
     return normalize(" ".join(lines))
 
 
-def _as_int(value: str) -> int | None:
-    match = re.search(r"\d+", value)
+def _as_int(value: Any) -> int | None:
+    match = re.search(r"\d+", str(value or ""))
     return int(match.group(0)) if match else None
 
 
-def _as_float(value: str) -> float | None:
-    match = re.search(r"\d+(?:\.\d+)?", value)
+def _as_float(value: Any) -> float | None:
+    match = re.search(r"\d+(?:\.\d+)?", str(value or ""))
     return float(match.group(0)) if match else None
 
 

@@ -28,7 +28,7 @@ def query_course_payload(semester: str) -> dict[str, Any]:
         "CourseTeacher": "",
         "Dimension": "",
         "CourseNotes": "",
-        "CampusNotes": "Main_Campus",
+        "CampusNotes": "",
         "ForeignLanguage": 0,
         "OnlyIntensive": 0,
         "OnlyGeneral": 0,

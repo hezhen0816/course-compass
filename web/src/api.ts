@@ -133,10 +133,14 @@ export function syncOfficialInitialSelection(
   username: string,
   password: string,
   accessToken?: string,
+  gpaApiKey?: string,
 ): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/sync', {
     method: 'POST',
-    headers: jsonHeaders(accessToken),
+    headers: {
+      ...jsonHeaders(accessToken),
+      ...(gpaApiKey ? { 'X-GPA-API-Key': gpaApiKey } : {}),
+    },
     body: JSON.stringify({
       username,
       ...(password ? { password } : {}),
@@ -165,10 +169,14 @@ export function joinOfficialInitialSelectionCourse(
   username: string,
   courseNo: string,
   accessToken?: string,
+  gpaApiKey?: string,
 ): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/join', {
     method: 'POST',
-    headers: jsonHeaders(accessToken),
+    headers: {
+      ...jsonHeaders(accessToken),
+      ...(gpaApiKey ? { 'X-GPA-API-Key': gpaApiKey } : {}),
+    },
     body: JSON.stringify({
       username,
       course_no: courseNo,
@@ -183,10 +191,14 @@ export function addOfficialInitialSelectionWaitlistCourse(
   username: string,
   courseNo: string,
   accessToken?: string,
+  gpaApiKey?: string,
 ): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/add-to-waitlist', {
     method: 'POST',
-    headers: jsonHeaders(accessToken),
+    headers: {
+      ...jsonHeaders(accessToken),
+      ...(gpaApiKey ? { 'X-GPA-API-Key': gpaApiKey } : {}),
+    },
     body: JSON.stringify({
       username,
       course_no: courseNo,
@@ -201,10 +213,14 @@ export function removeOfficialInitialSelectionCourse(
   username: string,
   courseNo: string,
   accessToken?: string,
+  gpaApiKey?: string,
 ): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/remove', {
     method: 'POST',
-    headers: jsonHeaders(accessToken),
+    headers: {
+      ...jsonHeaders(accessToken),
+      ...(gpaApiKey ? { 'X-GPA-API-Key': gpaApiKey } : {}),
+    },
     body: JSON.stringify({
       username,
       course_no: courseNo,
@@ -219,10 +235,14 @@ export function reorderOfficialInitialSelectionCourses(
   username: string,
   orderedCourseNos: string[],
   accessToken?: string,
+  gpaApiKey?: string,
 ): Promise<OfficialSelectionSyncResponse> {
   return apiRequest<OfficialSelectionSyncResponse>('/api/official-selection/a02/reorder', {
     method: 'POST',
-    headers: jsonHeaders(accessToken),
+    headers: {
+      ...jsonHeaders(accessToken),
+      ...(gpaApiKey ? { 'X-GPA-API-Key': gpaApiKey } : {}),
+    },
     body: JSON.stringify({
       username,
       ordered_course_nos: orderedCourseNos,

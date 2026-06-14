@@ -141,6 +141,8 @@ export function toScheduledOffering(offering: CourseSearchResult): ScheduledOffe
     slots: parseNodeSlots(offering.node),
     requireOption: offering.require_option,
     contents: offering.contents,
+    gpa: offering.gpa,
+    gpaStatus: offering.gpa_status,
   };
 }
 

@@ -7,6 +7,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 
 try:
+    from ..integrations.gpa import fetch_course_gpa
     from ..schemas.official_selection import (
         OfficialSelectionCourseActionRequest,
         OfficialSelectionKeepAliveRequest,
@@ -15,6 +16,7 @@ try:
         OfficialSelectionSyncResponse,
     )
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
+    from integrations.gpa import fetch_course_gpa
     from schemas.official_selection import (
         OfficialSelectionCourseActionRequest,
         OfficialSelectionKeepAliveRequest,
@@ -54,6 +56,7 @@ def create_official_selection_router(
     def sync_initial_selection_workspace(
         request: OfficialSelectionSyncRequest,
         authorization: str | None = Header(default=None),
+        gpa_api_key: str | None = Header(default=None, alias="X-GPA-API-Key"),
     ) -> OfficialSelectionSyncResponse:
         try:
             profile_key = request.profile_key or request.username
@@ -67,6 +70,7 @@ def create_official_selection_router(
                     raise HTTPException(status_code=400, detail="請輸入校務密碼，或先保存校務帳密後再同步官方初選。")
                 payload = client.fetch_a02_workspace(request.username, password, request.verify_ssl)
                 persist_official_session(context, request.username, client)
+            _attach_gpa_to_payload(payload, gpa_api_key, request.verify_ssl)
             return OfficialSelectionSyncResponse.model_validate(
                 {
                     **payload,
@@ -112,10 +116,12 @@ def create_official_selection_router(
     def join_initial_selection_course(
         request: OfficialSelectionCourseActionRequest,
         authorization: str | None = Header(default=None),
+        gpa_api_key: str | None = Header(default=None, alias="X-GPA-API-Key"),
     ) -> OfficialSelectionSyncResponse:
         return _run_confirmed_course_action(
             request,
             authorization,
+            gpa_api_key,
             require_confirmation,
             ensure_official_session,
             optional_authorization_context,
@@ -127,10 +133,12 @@ def create_official_selection_router(
     def add_initial_selection_waitlist_course(
         request: OfficialSelectionCourseActionRequest,
         authorization: str | None = Header(default=None),
+        gpa_api_key: str | None = Header(default=None, alias="X-GPA-API-Key"),
     ) -> OfficialSelectionSyncResponse:
         return _run_confirmed_course_action(
             request,
             authorization,
+            gpa_api_key,
             require_confirmation,
             ensure_official_session,
             optional_authorization_context,
@@ -142,10 +150,12 @@ def create_official_selection_router(
     def remove_initial_selection_course(
         request: OfficialSelectionCourseActionRequest,
         authorization: str | None = Header(default=None),
+        gpa_api_key: str | None = Header(default=None, alias="X-GPA-API-Key"),
     ) -> OfficialSelectionSyncResponse:
         return _run_confirmed_course_action(
             request,
             authorization,
+            gpa_api_key,
             require_confirmation,
             ensure_official_session,
             optional_authorization_context,
@@ -157,6 +167,7 @@ def create_official_selection_router(
     def reorder_initial_selection_courses(
         request: OfficialSelectionPriorityUpdateRequest,
         authorization: str | None = Header(default=None),
+        gpa_api_key: str | None = Header(default=None, alias="X-GPA-API-Key"),
     ) -> OfficialSelectionSyncResponse:
         try:
             require_confirmation(request.confirmed)
@@ -165,6 +176,7 @@ def create_official_selection_router(
             client = ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
             payload = client.reorder_registered_courses(request.ordered_course_nos, request.verify_ssl)
             persist_official_session(context, request.username, client)
+            _attach_gpa_to_payload(payload, gpa_api_key, request.verify_ssl)
             return OfficialSelectionSyncResponse.model_validate(
                 {
                     **payload,
@@ -186,6 +198,7 @@ CourseActionRunner = Callable[[Any, str, bool], dict[str, Any]]
 def _run_confirmed_course_action(
     request: OfficialSelectionCourseActionRequest,
     authorization: str | None,
+    gpa_api_key: str | None,
     require_confirmation: ConfirmationValidator,
     ensure_official_session: SessionEnsureHandler,
     optional_authorization_context: UserContextResolver,
@@ -199,6 +212,7 @@ def _run_confirmed_course_action(
         client = ensure_official_session(profile_key, request.username, request.password, authorization, request.verify_ssl)
         payload = run_action(client, request.course_no, request.verify_ssl)
         persist_official_session(context, request.username, client)
+        _attach_gpa_to_payload(payload, gpa_api_key, request.verify_ssl)
         return OfficialSelectionSyncResponse.model_validate(
             {
                 **payload,
@@ -210,3 +224,24 @@ def _run_confirmed_course_action(
         raise HTTPException(status_code=502, detail=f"官方選課系統請求失敗：{exc}") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _attach_gpa_to_payload(payload: dict[str, Any], api_key: str | None, verify_ssl: bool) -> None:
+    token = (api_key or "").strip()
+    if not token:
+        return
+
+    cache: dict[str, tuple[float | None, str]] = {}
+    for list_key in ("registered_courses", "available_courses", "required_preset_courses"):
+        courses = payload.get(list_key)
+        if not isinstance(courses, list):
+            continue
+        for course in courses:
+            if not isinstance(course, dict):
+                continue
+            course_no = str(course.get("course_no") or "").strip().upper()
+            if not course_no:
+                continue
+            if course_no not in cache:
+                cache[course_no] = fetch_course_gpa(course_no, token, verify_ssl)
+            course["gpa"], course["gpa_status"] = cache[course_no]
