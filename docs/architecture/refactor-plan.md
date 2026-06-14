@@ -1,9 +1,9 @@
 # Course Compass Refactor Plan
 
-狀態：進行中
-更新：2026-06-14
+狀態：本機結構重構完成；typed database cutover 保留為後續 release lane
+更新：2026-06-15
 
-本文件是目前仍有效的重構執行計畫。過時的產品定位、UX audit、reference images 與舊設計 QA 已從 repo 移除。
+本文件是目前仍有效的重構執行計畫。過時的產品定位、UX audit、reference images 與舊設計 QA 已從 repo 移除；本輪本機重構已完成到可維護的資料夾、命名、文件與測試分層。
 
 ## 目標
 
@@ -62,6 +62,7 @@
 - Web app implementation 已搬到 `web/src/app/CoursePlannerWebApp.tsx`，根層 `App.tsx` 只保留入口 re-export。
 - Web global stylesheet 已從 `web/src/index.css` 搬到 `web/src/app/global.css`。
 - 已建立 `docs/architecture/test-inventory.md`，把 backend tests 與 fixtures 分成必留、保守保留與可評估瘦身，避免在重構中誤刪 parser/API/DB 安全網。
+- Scripts 已分成本機啟動、research fixture capture、migration maintenance、typed planner maintenance 與 deployment checkpoint；production backend verifier 已移到 `scripts/deployment/`，不再混入本機 refactor gate。
 - 已建立 typed planner backfill preview/package service `backend/services/typed_planner/backfill.py` 與 CLI wrapper `scripts/typed_planner/preview_backfill.py`，可離線拆解 `public.user_data.content`、輸出 typed table 對帳 counts，並產生本機 raw backup package；不連線、不寫 DB、不把敏感 token 放入 preview。
 - 已建立 no-write typed planner apply plan builder，可從通過 contract/reconciliation 的 package 產生 table order 與 row count 計畫；仍不產生 SQL、不寫 DB。
 
@@ -156,10 +157,10 @@ tests/
 1. Keep the current local refactor lane green.
    - Verify per phase: `git diff --check`, `npm run backend:check`, `npm run web:lint`, `npm run web:build`.
    - Do not run production backend verifier, Railway checks, or Vercel checks during this refactor goal.
-2. Finish low-risk structure cleanup.
+2. Finish low-risk structure cleanup. 完成
    - Remove historical docs, reference images, and obsolete QA notes that no longer represent the current app.
    - Move long-lived test fixture outputs into `tests/fixtures/`; keep manual capture scripts in `scripts/research/`.
-3. Split backend responsibilities without changing API behavior.
+3. Split backend responsibilities without changing API behavior. 完成
    - Route handlers are now in `backend/api/*`; `backend/app.py` is setup/wiring only.
    - Parsing/client code is now in `backend/integrations/*`; pure backend top-level compatibility wrappers have been removed.
    - Official selection parser regression tests are now isolated in `tests/backend/test_official_selection_parser.py`.
@@ -178,13 +179,13 @@ tests/
    - Pydantic API schemas are now split by domain in `backend/schemas/*`.
    - School session and credential domain flows are now in `backend/services/*`.
    - No pure backend top-level compatibility wrapper remains; future moves should update direct imports and tests in the same phase.
-4. Add typed table migrations behind a backup-first cutover.
+4. Add typed table migrations behind a backup-first cutover. Foundation complete; production cutover deferred.
    - Typed table foundation is additive only; production read/write remains on the current compatibility layer until dual-write and reconciliation are ready.
    - Preview/backfill tool 已可先離線產生 typed table rows、raw backup package、對帳 counts 與 no-write apply plan；下一步才是設計真正 apply lane。
    - Create full `user_data_refactor_backup` before any destructive change or backfill write.
    - Preserve unknown JSON fields in metadata columns.
    - Produce a row-count reconciliation report before production cutover.
-5. Move Web/iOS reads and writes to typed APIs.
+5. Move Web/iOS reads and writes to typed APIs. Release lane, not part of the completed local structure refactor.
    - `public.user_data.content` remains available for one release as rollback/legacy data.
    - Remove whole-payload upsert paths only after Web/iOS compatibility checks pass.
 

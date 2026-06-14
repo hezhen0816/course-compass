@@ -1,9 +1,9 @@
 # Refactor Inventory
 
-狀態：active baseline
-更新：2026-06-14
+狀態：local refactor baseline complete
+更新：2026-06-15
 
-本文件是全專案重構的盤點基準。重構時先更新這份清單，再做搬移或刪除，避免把功能修正、檔案整理與資料庫切換混在同一個不可回溯的變更裡。
+本文件是全專案重構的盤點基準。本輪本機結構重構已完成；後續若進入 typed database production cutover，仍需先更新這份清單，再做搬移、刪除或寫入流程切換，避免把功能修正、檔案整理與資料庫切換混在同一個不可回溯的變更裡。
 
 ## Checkpoint
 
@@ -22,7 +22,7 @@
 - `supabase/`：production migration history。
 - `docs/`：現行架構與資料契約。
 - `tests/`：backend tests 與可回查 fixture outputs。
-- `scripts/`：本機啟動、Python runtime wrapper、typed planner 本機維護工具、research fixture capture scripts、production verifier 與 migration helper。
+- `scripts/`：本機啟動、Python runtime wrapper、typed planner 本機維護工具、research fixture capture scripts、migration helper 與 deployment checkpoint 工具。
 
 ## Generated Or Local-Only Files
 
@@ -109,6 +109,19 @@ Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `Course
 - 官方選課 parser/client/API、credential/session、database migration 與 sync API tests 屬於必留安全網。
 - Fixture outputs 屬於保守保留；手動抓取腳本在 `scripts/research/`，後續若移除，需先確認沒有文件或 parser 回歸流程引用。
 - 不提交本機 cache；`.gitignore` 已排除 `.DS_Store`、`__pycache__`、`.pytest_cache` 與 `*.pyc`。
+
+## Scripts
+
+Current script lanes：
+
+- `scripts/dev.sh`：本機開發啟動。
+- `scripts/python.sh`：固定 Python runtime wrapper。
+- `scripts/migrations/`：一次性或低頻資料遷移維護工具。
+- `scripts/research/`：手動抓取 fixture 的 research scripts，不屬於 production flow。
+- `scripts/typed_planner/`：typed planner preview、plan 與 dry-run apply maintenance tools。
+- `scripts/deployment/`：release/deployment checkpoint 才手動執行的 verifier。
+
+本輪 refactor gate 不會執行 `scripts/deployment/verify_production_backend.py`，也不碰 Vercel 或 Railway。
 
 ## Database Refactor Baseline
 
