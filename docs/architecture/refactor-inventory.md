@@ -89,6 +89,7 @@
 - `ProgressBar.tsx`
 
 Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `CourseDetailModal` 已移到 `web/src/features/history/`。`web/src/components/` 目前沒有仍需保留的檔案。
+全域 stylesheet 也已移到 `web/src/app/global.css`。
 
 共用 frontend infrastructure 已集中到 `web/src/shared/`：
 

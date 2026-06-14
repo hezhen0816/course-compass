@@ -59,6 +59,7 @@
 - Web shared types 已從 `web/src/types/index.ts` 搬到 `web/src/shared/types.ts`。
 - Web 共用 domain helper 已從 `web/src/domain/` 搬到 `web/src/shared/domain/`。
 - Web app implementation 已搬到 `web/src/app/CoursePlannerWebApp.tsx`，根層 `App.tsx` 只保留入口 re-export。
+- Web global stylesheet 已從 `web/src/index.css` 搬到 `web/src/app/global.css`。
 
 ## 目前架構
 
