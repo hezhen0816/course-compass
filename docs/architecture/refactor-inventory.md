@@ -157,7 +157,7 @@ Typed schema foundation：
 - `--package-dir` 會產生本機 raw backup、redacted preview、reconciliation 與 manifest；raw backup 可能包含敏感資料，不可提交。
 - `build_typed_planner_apply_plan(package)` 與 `plan_typed_planner_backfill.py` 會驗證 package contract 與對帳狀態，產生 no-write apply plan 的 table order / row counts；`--format batches` 可輸出 no-write PostgREST upsert batch payload；目前仍不產生 SQL、不寫資料庫。
 - `backend/repositories/typed_planner.py` 可 dry-run 或用注入的 `post` 執行 batches；目前未接正式 service/API/CLI apply flow。
-- `apply_typed_planner_backfill.py` 目前只做 dry-run，輸出 repository summary，不輸出完整 rows。
+- `apply_typed_planner_backfill.py` 目前只做 dry-run，輸出 repository summary 與 readiness checks，不輸出完整 rows。
 
 ## Validation Gates
 

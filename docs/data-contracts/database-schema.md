@@ -184,6 +184,14 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 - `scripts/apply_typed_planner_backfill.py` 目前只做 dry-run：
   - 讀取 package，產生 batches，通過 repository dry-run，輸出 batch count / non-empty count / total row count。
   - 不輸出完整 rows，避免 dry-run report 變成另一份搬移資料。
+  - dry-run report 內含 readiness checks；正式 apply 前必須全部通過：
+    - `package_reconciliation_passed`
+    - `package_is_no_write`
+    - `raw_backup_matches_input`
+    - `preview_tables_present`
+    - `batches_are_no_write`
+    - `repository_dry_run_is_no_write`
+    - `non_empty_batches_present`
 
 明確限制：
 - 不連 Supabase。

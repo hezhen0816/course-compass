@@ -61,12 +61,65 @@ def test_typed_planner_apply_dry_run_summarizes_package_without_rows(tmp_path: P
             "sync_runs",
         ],
     }
+    assert report["readiness"] == {
+        "mode": typed_planner_apply.READINESS_MODE,
+        "status": "ready",
+        "checks": [
+            {
+                "name": "package_reconciliation_passed",
+                "status": "passed",
+                "detail": "manifest.status must be passed",
+            },
+            {
+                "name": "package_is_no_write",
+                "status": "passed",
+                "detail": "manifest.database_writes must be false",
+            },
+            {
+                "name": "raw_backup_matches_input",
+                "status": "passed",
+                "detail": "raw backup must exist and match manifest input row count",
+            },
+            {
+                "name": "preview_tables_present",
+                "status": "passed",
+                "detail": "preview must include table rows; rebuild package without --counts-only",
+            },
+            {
+                "name": "batches_are_no_write",
+                "status": "passed",
+                "detail": "batch artifact must be no-write",
+            },
+            {
+                "name": "repository_dry_run_is_no_write",
+                "status": "passed",
+                "detail": "repository dry-run must not write",
+            },
+            {
+                "name": "non_empty_batches_present",
+                "status": "passed",
+                "detail": "at least one non-empty typed table batch must be present",
+            },
+        ],
+    }
     assert "batches" not in report
     assert "rows" not in report["batch_report"]
+
+
+def test_typed_planner_apply_readiness_blocks_empty_package(tmp_path: Path) -> None:
+    write_typed_planner_backfill_package([], tmp_path)
+
+    report = typed_planner_apply.dry_run_typed_planner_backfill_package(tmp_path)
+
+    assert report["status"] == "blocked"
+    assert report["readiness"]["status"] == "blocked"
+    failed_checks = [check["name"] for check in report["readiness"]["checks"] if check["status"] == "failed"]
+    assert failed_checks == ["non_empty_batches_present"]
 
 
 def test_typed_planner_apply_service_exports_stable_public_api() -> None:
     assert typed_planner_apply.__all__ == [
         "DRY_RUN_MODE",
+        "READINESS_MODE",
         "dry_run_typed_planner_backfill_package",
     ]
