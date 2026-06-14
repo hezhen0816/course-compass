@@ -153,7 +153,7 @@ npm run ios:build
 Vercel Web 只負責前端，官方選課送出能力依賴 Railway backend。部署後用以下指令確認 production backend 已包含校務帳密、官方 session 持久化與官方初選 API：
 
 ```bash
-bash scripts/python.sh scripts/verify_production_backend.py
+bash scripts/python.sh scripts/deployment/verify_production_backend.py
 ```
 
 若此檢查失敗，正式站台可能已更新前端但 backend 仍是舊版，官方選課送出會無法使用。

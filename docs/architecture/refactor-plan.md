@@ -211,6 +211,6 @@ These are intentionally outside the current local refactor lane. Run them only f
 ```bash
 npm run ios:build
 npm run check
-bash scripts/python.sh scripts/verify_production_backend.py
+bash scripts/python.sh scripts/deployment/verify_production_backend.py
 curl -fsS https://course-planner-backend-production.up.railway.app/health
 ```

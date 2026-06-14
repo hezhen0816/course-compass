@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from backend import app as backend_app
-from scripts import verify_production_backend
+from scripts.deployment import verify_production_backend
 
 
 def test_healthcheck_reports_official_selection_capabilities() -> None:

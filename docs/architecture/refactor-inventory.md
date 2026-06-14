@@ -170,7 +170,7 @@ release/deployment lane 才跑；本輪重構不碰 Vercel、Railway 或 product
 
 ```bash
 npm run check
-bash scripts/python.sh scripts/verify_production_backend.py
+bash scripts/python.sh scripts/deployment/verify_production_backend.py
 ```
 
 依使用者要求，不跑瀏覽器自動化測試。
