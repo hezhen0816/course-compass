@@ -14,6 +14,7 @@ from backend.services.typed_planner_backfill import (
     build_typed_planner_backfill_package,
     build_typed_planner_preview,
     build_typed_planner_reconciliation,
+    load_typed_planner_backfill_package,
     write_typed_planner_backfill_package,
 )
 
@@ -286,6 +287,19 @@ def test_typed_planner_apply_plan_orders_tables_without_database_writes() -> Non
     assert plan["total_row_count"] == sum(package["preview"]["counts"].values())
 
 
+def test_typed_planner_apply_plan_loads_written_package(tmp_path: Path) -> None:
+    rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
+    write_typed_planner_backfill_package(rows, tmp_path)
+
+    package = load_typed_planner_backfill_package(tmp_path)
+    plan = build_typed_planner_apply_plan(package)
+
+    assert plan["mode"] == APPLY_PLAN_MODE
+    assert plan["database_writes"] is False
+    assert plan["operations"][0]["table"] == "planner_profiles"
+    assert plan["operations"][0]["row_count"] == 1
+
+
 def test_typed_planner_apply_plan_rejects_counts_only_package() -> None:
     rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
     package = build_typed_planner_backfill_package(rows, include_rows=False)
@@ -328,6 +342,7 @@ def test_typed_planner_backfill_service_exports_stable_public_api() -> None:
         "build_typed_planner_backfill_package",
         "build_typed_planner_preview",
         "build_typed_planner_reconciliation",
+        "load_typed_planner_backfill_package",
         "load_user_data_rows",
         "write_typed_planner_backfill_package",
     ]

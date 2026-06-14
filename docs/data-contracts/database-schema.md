@@ -157,7 +157,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 
 ## Backfill Preview Tool
 
-`backend/services/typed_planner_backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py` 是本機 CLI wrapper。
+`backend/services/typed_planner_backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py` 與 `scripts/plan_typed_planner_backfill.py` 是本機 CLI wrappers。
 
 目前 preview contract version：`typed-planner-backfill-preview-v1`。
 
@@ -190,6 +190,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 ```bash
 bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --counts-only
 bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --package-dir /tmp/course-planner-backfill-preview
+bash scripts/python.sh scripts/plan_typed_planner_backfill.py /tmp/course-planner-backfill-preview --output /tmp/course-planner-backfill-preview/apply-plan.json
 ```
 
 輸入可為：

@@ -59,6 +59,7 @@ __all__ = [
     "build_typed_planner_backfill_package",
     "build_typed_planner_preview",
     "build_typed_planner_reconciliation",
+    "load_typed_planner_backfill_package",
     "load_user_data_rows",
     "write_typed_planner_backfill_package",
 ]
@@ -852,6 +853,16 @@ def _write_json_file(path: Path, payload: dict[str, Any], *, force: bool) -> Non
     if path.exists() and not force:
         raise FileExistsError(f"{path} already exists; pass --force to overwrite")
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def load_typed_planner_backfill_package(package_dir: Path) -> dict[str, Any]:
+    package: dict[str, Any] = {}
+    for key, filename in PACKAGE_FILES.items():
+        payload = json.loads((package_dir / filename).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"{filename} must contain a JSON object")
+        package[key] = payload
+    return package
 
 
 def write_typed_planner_backfill_package(
