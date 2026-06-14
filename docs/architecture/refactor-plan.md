@@ -52,6 +52,7 @@
 - Credential store runtime regression tests 已從大型 backend pure test 拆到 `tests/backend/test_credential_store.py`。
 - Legacy credential migration regression tests 已從大型 backend pure test 拆到 `tests/backend/test_legacy_credential_migration.py`。
 - School credentials API regression test 已從大型 backend pure test 改名整理到 `tests/backend/test_school_credentials_api.py`，舊 `test_backend_pure.py` 已移除。
+- Web 舊版 planner/sidebar/settings UI 元件已移除：`CourseModal`、`SettingsModal`、`SemesterGrid`、`Sidebar`、`ProgressBar`。
 
 ## 目前架構
 

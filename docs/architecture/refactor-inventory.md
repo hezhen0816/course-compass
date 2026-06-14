@@ -78,6 +78,16 @@
 - 舊產品定位、舊 UX audit、參考截圖與過期 QA 記錄不再保留在 repo。
 - 不把臨時截圖、build output、本機 debug dump 放進 `docs/`。
 
+## Web Cleanup
+
+下列舊版 planner/sidebar/settings UI 元件已無 current app import，並已從 `web/src/components/` 移除：
+
+- `CourseModal.tsx`
+- `SettingsModal.tsx`
+- `SemesterGrid.tsx`
+- `Sidebar.tsx`
+- `ProgressBar.tsx`
+
 ## Database Refactor Baseline
 
 Current production truth：
