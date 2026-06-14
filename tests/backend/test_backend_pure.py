@@ -1597,36 +1597,6 @@ def test_legacy_credential_migration_handles_old_ciphertext_payload(monkeypatch)
     assert saved == [{"settings": {"school_account": "B11430207"}}]
 
 
-def test_school_credentials_migration_keeps_plaintext_for_backend_promotion() -> None:
-    migration_sql = Path("supabase/migrations/20260612181431_add_school_credentials_table.sql").read_text()
-
-    assert "- 'school_password'" not in migration_sql
-    assert "backend promotes and removes it" in migration_sql
-
-
-def test_school_credentials_private_migration_moves_public_rows_to_private_schema() -> None:
-    migration_sql = Path("supabase/migrations/20260613130302_move_school_credentials_private.sql").read_text()
-
-    assert "create table if not exists app_private.school_credentials" in migration_sql
-    assert "from public.school_credentials" in migration_sql
-    assert "delete from public.school_credentials" in migration_sql
-    assert "security invoker" in migration_sql
-    assert "security definer" not in migration_sql.lower()
-    assert "grant execute on function public.get_school_credentials(uuid) to service_role" in migration_sql
-    assert "revoke all on function public.get_school_credentials(uuid) from public, anon, authenticated" in migration_sql
-
-
-def test_remove_legacy_school_password_migration_clears_content_and_legacy_content() -> None:
-    migration_sql = Path(
-        "supabase/migrations/20260613031804_remove_legacy_school_password_from_user_data.sql"
-    ).read_text()
-
-    assert "content #>> '{settings,school_password}'" in migration_sql
-    assert "legacy_content #>> '{settings,school_password}'" in migration_sql
-    assert "- 'school_password'" in migration_sql
-    assert "- 'schoolCredentials'" in migration_sql
-
-
 def test_school_credentials_status_does_not_return_password(monkeypatch) -> None:
     monkeypatch.setattr(backend_app, "_current_user_context", lambda authorization: ("user-1", "token-1"))
     monkeypatch.setattr(
