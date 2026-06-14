@@ -1038,7 +1038,9 @@ function GroupedScheduleEventContent({ event }: { event: ScheduleEvent }) {
   return (
     <div className="min-w-0">
       <div className="mb-1 flex items-center justify-between gap-1">
-        <p className="truncate text-xs font-semibold leading-5">{groupedEvents.length} 門同時段</p>
+        <p className="truncate text-xs font-semibold leading-5 group-hover/event:whitespace-normal group-hover/event:break-words">
+          {groupedEvents.length} 門同時段
+        </p>
         {hiddenCount > 0 ? (
           <span className="shrink-0 rounded-full bg-white/75 px-1.5 text-[10px] font-medium text-slate-600">
             +{hiddenCount}
@@ -1047,7 +1049,7 @@ function GroupedScheduleEventContent({ event }: { event: ScheduleEvent }) {
       </div>
       <div className="space-y-0.5">
         {visibleEvents.map((item) => (
-          <div key={item.id} className="flex min-w-0 items-center gap-1 rounded bg-white/50 px-1 py-0.5">
+          <div key={item.id} className="flex min-w-0 items-start gap-1 rounded bg-white/50 px-1 py-0.5">
             {item.rank ? (
               <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${badgeToneClass(item.tone)}`}>
                 {item.rank}
@@ -1055,7 +1057,7 @@ function GroupedScheduleEventContent({ event }: { event: ScheduleEvent }) {
             ) : (
               <span className={`h-2 w-2 shrink-0 rounded-full ${scheduleAccentClass(item.tone)}`} />
             )}
-            <span className="min-w-0 truncate text-[11px] font-medium leading-4 text-slate-800">
+            <span className="min-w-0 truncate text-[11px] font-medium leading-4 text-slate-800 group-hover/event:whitespace-normal group-hover/event:break-words">
               {item.title}
             </span>
           </div>
