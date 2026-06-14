@@ -9,11 +9,16 @@ from backend.services.typed_planner_backfill import build_typed_planner_apply_ba
 
 DRY_RUN_MODE = "typed_planner_backfill_apply_dry_run"
 READINESS_MODE = "typed_planner_backfill_apply_readiness"
+EXECUTE_MODE = "typed_planner_backfill_apply_execute"
+EXECUTE_CONFIRMATION = "APPLY_TYPED_PLANNER_BACKFILL"
 
 __all__ = [
     "DRY_RUN_MODE",
+    "EXECUTE_CONFIRMATION",
+    "EXECUTE_MODE",
     "READINESS_MODE",
     "dry_run_typed_planner_backfill_package",
+    "execute_typed_planner_backfill_package",
 ]
 
 
@@ -84,7 +89,7 @@ def _readiness_report(
     }
 
 
-def dry_run_typed_planner_backfill_package(package_dir: Path) -> dict[str, Any]:
+def _prepare_apply_context(package_dir: Path) -> dict[str, Any]:
     package = load_typed_planner_backfill_package(package_dir)
     batches = build_typed_planner_apply_batches(package)
     repository_report = typed_planner_repository.execute_apply_batches(
@@ -98,12 +103,61 @@ def dry_run_typed_planner_backfill_package(package_dir: Path) -> dict[str, Any]:
     manifest = package["manifest"] if isinstance(package.get("manifest"), dict) else {}
     readiness = _readiness_report(package=package, batches=batches, repository_report=repository_report)
     return {
+        "package": package,
+        "batches": batches,
+        "manifest": manifest,
+        "repository_report": repository_report,
+        "readiness": readiness,
+    }
+
+
+def dry_run_typed_planner_backfill_package(package_dir: Path) -> dict[str, Any]:
+    context = _prepare_apply_context(package_dir)
+    batches = context["batches"]
+    return {
         "mode": DRY_RUN_MODE,
         "contract_version": batches["contract_version"],
         "database_writes": False,
-        "status": readiness["status"],
-        "package_status": manifest.get("status"),
+        "status": context["readiness"]["status"],
+        "package_status": context["manifest"].get("status"),
         "batch_artifact_mode": batches["mode"],
-        "batch_report": repository_report,
-        "readiness": readiness,
+        "batch_report": context["repository_report"],
+        "readiness": context["readiness"],
+    }
+
+
+def execute_typed_planner_backfill_package(
+    package_dir: Path,
+    *,
+    supabase_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    post: typed_planner_repository.PostRequest,
+    allow_writes: bool,
+    confirmation: str,
+) -> dict[str, Any]:
+    if not allow_writes or confirmation != EXECUTE_CONFIRMATION:
+        raise ValueError("typed planner apply requires allow_writes=True and exact confirmation")
+
+    context = _prepare_apply_context(package_dir)
+    if context["readiness"]["status"] != "ready":
+        raise ValueError("typed planner apply requires ready dry-run readiness")
+
+    applied_report = typed_planner_repository.execute_apply_batches(
+        context["batches"],
+        supabase_url=supabase_url,
+        headers=headers,
+        timeout=timeout,
+        post=post,
+        dry_run=False,
+    )
+    return {
+        "mode": EXECUTE_MODE,
+        "contract_version": context["batches"]["contract_version"],
+        "database_writes": True,
+        "status": applied_report["status"],
+        "package_status": context["manifest"].get("status"),
+        "batch_artifact_mode": context["batches"]["mode"],
+        "batch_report": applied_report,
+        "readiness": context["readiness"],
     }

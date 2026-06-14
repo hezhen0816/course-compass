@@ -117,9 +117,113 @@ def test_typed_planner_apply_readiness_blocks_empty_package(tmp_path: Path) -> N
     assert failed_checks == ["non_empty_batches_present"]
 
 
+def test_typed_planner_execute_requires_confirmation_before_posting(tmp_path: Path) -> None:
+    _write_sample_package(tmp_path)
+    calls: list[object] = []
+
+    def fake_post(*_args: object, **_kwargs: object) -> object:
+        calls.append((_args, _kwargs))
+        raise AssertionError("unconfirmed apply must not post")
+
+    try:
+        typed_planner_apply.execute_typed_planner_backfill_package(
+            tmp_path,
+            supabase_url="https://example.supabase.co",
+            headers={"Authorization": "Bearer service"},
+            timeout=12,
+            post=fake_post,
+            allow_writes=False,
+            confirmation=typed_planner_apply.EXECUTE_CONFIRMATION,
+        )
+    except ValueError as exc:
+        assert str(exc) == "typed planner apply requires allow_writes=True and exact confirmation"
+    else:
+        raise AssertionError("execute should reject missing allow_writes")
+
+    assert calls == []
+
+    try:
+        typed_planner_apply.execute_typed_planner_backfill_package(
+            tmp_path,
+            supabase_url="https://example.supabase.co",
+            headers={"Authorization": "Bearer service"},
+            timeout=12,
+            post=fake_post,
+            allow_writes=True,
+            confirmation="WRONG",
+        )
+    except ValueError as exc:
+        assert str(exc) == "typed planner apply requires allow_writes=True and exact confirmation"
+    else:
+        raise AssertionError("execute should reject wrong confirmation")
+
+    assert calls == []
+
+
+def test_typed_planner_execute_rejects_blocked_readiness_before_posting(tmp_path: Path) -> None:
+    write_typed_planner_backfill_package([], tmp_path)
+    calls: list[object] = []
+
+    def fake_post(*_args: object, **_kwargs: object) -> object:
+        calls.append((_args, _kwargs))
+        raise AssertionError("blocked readiness must not post")
+
+    try:
+        typed_planner_apply.execute_typed_planner_backfill_package(
+            tmp_path,
+            supabase_url="https://example.supabase.co",
+            headers={"Authorization": "Bearer service"},
+            timeout=12,
+            post=fake_post,
+            allow_writes=True,
+            confirmation=typed_planner_apply.EXECUTE_CONFIRMATION,
+        )
+    except ValueError as exc:
+        assert str(exc) == "typed planner apply requires ready dry-run readiness"
+    else:
+        raise AssertionError("execute should reject blocked readiness")
+
+    assert calls == []
+
+
+def test_typed_planner_execute_posts_only_after_confirmation_and_ready_dry_run(tmp_path: Path) -> None:
+    _write_sample_package(tmp_path)
+    calls: list[tuple[str, dict[str, str], list[dict[str, object]], int]] = []
+
+    class Response:
+        status_code = 201
+        text = "created"
+
+    def fake_post(url: str, headers: dict[str, str], json: list[dict[str, object]], timeout: int) -> Response:
+        calls.append((url, headers, json, timeout))
+        return Response()
+
+    report = typed_planner_apply.execute_typed_planner_backfill_package(
+        tmp_path,
+        supabase_url="https://example.supabase.co",
+        headers={"Authorization": "Bearer service"},
+        timeout=12,
+        post=fake_post,
+        allow_writes=True,
+        confirmation=typed_planner_apply.EXECUTE_CONFIRMATION,
+    )
+
+    assert report["mode"] == typed_planner_apply.EXECUTE_MODE
+    assert report["database_writes"] is True
+    assert report["status"] == "applied"
+    assert report["readiness"]["status"] == "ready"
+    assert report["batch_report"]["database_writes"] is True
+    assert len(calls) == 1
+    assert calls[0][0] == "https://example.supabase.co/rest/v1/planner_profiles?on_conflict=id"
+    assert calls[0][2][0]["school_account"] == "B11430207"
+
+
 def test_typed_planner_apply_service_exports_stable_public_api() -> None:
     assert typed_planner_apply.__all__ == [
         "DRY_RUN_MODE",
+        "EXECUTE_CONFIRMATION",
+        "EXECUTE_MODE",
         "READINESS_MODE",
         "dry_run_typed_planner_backfill_package",
+        "execute_typed_planner_backfill_package",
     ]
