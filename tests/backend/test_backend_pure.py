@@ -10,12 +10,13 @@ from fastapi.testclient import TestClient
 
 from backend import app as backend_app
 from backend.api import tr_rooms as tr_rooms_api
-from backend import credentials, school_sessions
+from backend import school_sessions
 from backend.integrations import history, moodle, official_selection, tr_rooms
 from backend.integrations.schedule import find_latest_course_list_url, group_schedule_entries
 from backend.repositories import credentials as credential_repository
 from backend.repositories import snapshots as snapshot_repository
 from backend.repositories import school_sessions as school_session_repository
+from backend.services import credential_store as credentials
 from backend.services import planner_pdf, snapshots
 from scripts import migrate_legacy_school_credentials as legacy_credential_migration
 from scripts import verify_production_backend

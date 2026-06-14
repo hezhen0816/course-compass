@@ -14,7 +14,7 @@ try:
     from .api.school_credentials import create_school_credentials_router
     from .api.sync import create_sync_router
     from .api.tr_rooms import create_tr_rooms_router
-    from .credentials import (
+    from .services.credential_store import (
         delete_school_credentials,
         get_school_credentials_secret,
         get_school_credentials_status,
@@ -54,7 +54,7 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from api.school_credentials import create_school_credentials_router
     from api.sync import create_sync_router
     from api.tr_rooms import create_tr_rooms_router
-    from credentials import (
+    from services.credential_store import (
         delete_school_credentials,
         get_school_credentials_secret,
         get_school_credentials_status,

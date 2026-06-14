@@ -49,15 +49,13 @@
 - `backend/ntust_common.py` -> `backend/integrations/ntust_common.py`
 - `backend/planner_pdf.py` -> `backend/services/planner_pdf.py`
 - `backend/snapshots.py` -> `backend/services/snapshots.py`
+- `backend/credentials.py` -> `backend/services/credential_store.py`
 
 下列檔案仍屬於過渡層。刪除前必須先確認安全邊界、依賴注入與 tests/scripts 都已改到目標 module：
 
-- `backend/credentials.py` error type -> `backend/core/errors.py`
-- `backend/credentials.py` security helpers -> `backend/core/security.py`
-- `backend/credentials.py` -> `backend/services/credentials.py` + `backend/repositories/credentials.py`
 - `backend/school_sessions.py` -> `backend/services/school_sessions.py` + `backend/repositories/school_sessions.py`
 
-`credentials.py` 與 `school_sessions.py` 仍含安全邊界與依賴注入行為，最後再收斂，不與單純 re-export wrapper 一起刪。
+`backend/credentials.py` 已退場。credential error type、security helpers、runtime wiring、domain rules 已分別收斂到 `backend/core/errors.py`、`backend/core/security.py`、`backend/services/credential_store.py`、`backend/services/credentials.py` 與 `backend/repositories/credentials.py`。`school_sessions.py` 仍含 session runtime wiring，最後再收斂。
 
 ## Docs
 

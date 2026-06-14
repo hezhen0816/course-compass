@@ -14,11 +14,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT_DIR / ".env")
 sys.path.insert(0, str(ROOT_DIR))
 
-from backend import credentials  # noqa: E402
 from backend.core import security  # noqa: E402
 from backend.core.config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL  # noqa: E402
 from backend.core.errors import CredentialStoreError  # noqa: E402
 from backend.repositories import credentials as credential_repository  # noqa: E402
+from backend.services import credential_store as credentials  # noqa: E402
 
 
 def _service_role_headers(*, json_body: bool = False) -> dict[str, str]:

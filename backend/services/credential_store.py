@@ -6,17 +6,17 @@ from typing import Any
 import requests
 
 try:
-    from .core.config import (
+    from ..core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
         SUPABASE_ANON_KEY,
         SUPABASE_SERVICE_ROLE_KEY,
         SUPABASE_URL,
     )
-    from .core import security
-    from .core.errors import CredentialStoreError
-    from .repositories import credentials as credential_repository
-    from .services import credentials as credential_service
+    from ..core import security
+    from ..core.errors import CredentialStoreError
+    from ..repositories import credentials as credential_repository
+    from . import credentials as credential_service
 except ImportError:  # pragma: no cover
     from core.config import (
         DEFAULT_TIMEOUT,
