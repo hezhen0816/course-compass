@@ -984,7 +984,7 @@ function OfficialScheduleTable({
                       ) : null}
                     </div>
                   )}
-                  {(showMeta || (isNarrow && event.meta)) ? (
+                  {(!isGroup && (showMeta || (isNarrow && event.meta))) ? (
                     <p className={`mt-0.5 truncate text-[11px] group-hover/event:whitespace-normal group-hover/event:break-words ${
                       conflicting ? 'text-red-700' : 'text-slate-600'
                     }`}>
