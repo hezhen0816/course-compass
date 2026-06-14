@@ -1,11 +1,11 @@
 # 台科大 Moodle 時間軸測試資料
 
-這個資料夾包含一個可重跑的 Python 腳本，用來登入 `https://moodle2.ntust.edu.tw/my/`，抓取儀表板「時間軸」目前可見的待處理項目，並輸出代表性的待繳事項資料。
+這個資料夾保存台科大 Moodle 儀表板「時間軸」目前可見待處理項目的代表性輸出資料。重跑抓取用的本機 research script 已移到 `scripts/research/moodle_timeline/`，輸出仍會寫回本資料夾。
 
 ## Python 安裝
 
 ```bash
-cd /Users/hezhen/GitHub/course_planner/tests/fixtures/moodle_timeline
+cd /Users/hezhen/GitHub/course_planner/scripts/research/moodle_timeline
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -13,7 +13,7 @@ python3 -m venv .venv
 ## Python 執行
 
 ```bash
-cd /Users/hezhen/GitHub/course_planner/tests/fixtures/moodle_timeline
+cd /Users/hezhen/GitHub/course_planner/scripts/research/moodle_timeline
 NTUST_USERNAME="你的學號" \
 NTUST_PASSWORD="你的校務密碼" \
 .venv/bin/python fetch_moodle_timeline.py

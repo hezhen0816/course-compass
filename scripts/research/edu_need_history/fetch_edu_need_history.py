@@ -14,7 +14,8 @@ import urllib3
 from bs4 import BeautifulSoup, Tag
 
 
-OUTPUT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parents[3]
+OUTPUT_DIR = ROOT_DIR / "tests/fixtures/edu_need_history"
 TAIPEI = ZoneInfo("Asia/Taipei")
 USERNAME = os.environ.get("NTUST_USERNAME")
 PASSWORD = os.environ.get("NTUST_PASSWORD")

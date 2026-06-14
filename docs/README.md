@@ -7,4 +7,4 @@
 - `architecture/test-inventory.md`：測試與 fixture 的保留等級、刪減邊界與後續瘦身 checkpoint。
 - `data-contracts/database-schema.md`：current production schema 與 planned typed schema 的責任邊界。
 
-大型或可重現的測試 fixture 請放 `tests/fixtures/`；不需要長期保存的 debug 產物請留在 `/tmp` 或本機未追蹤目錄。
+大型或可重現的測試 fixture outputs 請放 `tests/fixtures/`；手動重跑 fixture 的抓取腳本請放 `scripts/research/`；不需要長期保存的 debug 產物請留在 `/tmp` 或本機未追蹤目錄。

@@ -45,9 +45,9 @@
 
 | 路徑 | 保留等級 | 保留理由 |
 | --- | --- | --- |
-| `tests/fixtures/course_selection/` | 保守保留 | 保存台科大選課清單代表性輸出與可重跑腳本，可用來對照官方 parser 行為。 |
-| `tests/fixtures/edu_need_history/` | 保守保留 | 保存歷年修課紀錄代表性輸出，對 history parser 有回歸價值。 |
-| `tests/fixtures/moodle_timeline/` | 可評估瘦身 | Moodle timeline 目前不是核心選課工作台；若未被測試引用，可移到研究資料或刪除代表性輸出，只保留 README。 |
+| `tests/fixtures/course_selection/` | 保守保留 | 保存台科大選課清單代表性輸出；手動抓取腳本在 `scripts/research/course_selection/`。 |
+| `tests/fixtures/edu_need_history/` | 保守保留 | 保存歷年修課紀錄代表性輸出，對 history parser 有回歸價值；手動抓取腳本在 `scripts/research/edu_need_history/`。 |
+| `tests/fixtures/moodle_timeline/` | 可評估瘦身 | Moodle timeline 目前不是核心選課工作台；手動抓取腳本在 `scripts/research/moodle_timeline/`，後續可評估刪除代表性輸出只留 README。 |
 
 ## Current Cleanup Boundary
 
@@ -55,7 +55,7 @@
 
 - 本機未追蹤 cache：`.pytest_cache/`、各層 `__pycache__/`、`*.pyc`、`.DS_Store`。
 - 若後續要進一步瘦身，先查 `rg 'tests/fixtures' tests backend scripts docs`，確認 fixture 是否還被使用。
-- 若 fixture 只作為研究紀錄，優先移到 `docs/research/` 或刪除輸出檔，避免讓 `tests/` 看起來比實際更重。
+- 若 fixture output 只作為研究紀錄，優先移到 `docs/research/` 或刪除輸出檔，避免讓 `tests/` 看起來比實際更重。
 
 ## Next Review Checkpoint
 
@@ -63,4 +63,4 @@
 
 1. `test_health_and_production_verifier.py` 是否應拆成 health test 與 deployment verifier test。
 2. Moodle fixture 是否仍需留在 repo。
-3. `tests/fixtures/*/fetch_*.py` 是否移到 `scripts/research/` 或刪除。
+3. `scripts/research/*` 是否仍需要保留 requirements 與可重跑腳本。

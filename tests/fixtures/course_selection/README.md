@@ -1,11 +1,11 @@
 # 台科大選課清單測試資料
 
-這個資料夾包含一個可重跑的 Python 自動化腳本，用來登入 `https://courseselection.ntust.edu.tw/`、進入「選課清單」，並輸出可比對的代表性資料。
+這個資料夾保存台科大「選課清單」代表性輸出資料。重跑抓取用的本機 research script 已移到 `scripts/research/course_selection/`，輸出仍會寫回本資料夾。
 
 ## Python 安裝
 
 ```bash
-cd /Users/hezhen/GitHub/course_planner/tests/fixtures/course_selection
+cd /Users/hezhen/GitHub/course_planner/scripts/research/course_selection
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -13,7 +13,7 @@ python3 -m venv .venv
 ## Python 執行
 
 ```bash
-cd /Users/hezhen/GitHub/course_planner/tests/fixtures/course_selection
+cd /Users/hezhen/GitHub/course_planner/scripts/research/course_selection
 NTUST_USERNAME="你的學號" \
 NTUST_PASSWORD="你的校務密碼" \
 .venv/bin/python fetch_course_schedule.py

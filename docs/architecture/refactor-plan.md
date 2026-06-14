@@ -147,7 +147,7 @@ docs/
   data-contracts/
 tests/
   backend/
-  fixtures/
+  fixtures/          # representative fixture outputs; capture scripts live in scripts/research/
   # 詳見 docs/architecture/test-inventory.md
 ```
 
@@ -158,7 +158,7 @@ tests/
    - Do not run production backend verifier, Railway checks, or Vercel checks during this refactor goal.
 2. Finish low-risk structure cleanup.
    - Remove historical docs, reference images, and obsolete QA notes that no longer represent the current app.
-   - Move long-lived test fixtures into `tests/fixtures/`.
+   - Move long-lived test fixture outputs into `tests/fixtures/`; keep manual capture scripts in `scripts/research/`.
 3. Split backend responsibilities without changing API behavior.
    - Route handlers are now in `backend/api/*`; keep shrinking `backend/app.py` to setup/wiring only.
    - Parsing/client code is now in `backend/integrations/*`; retire compatibility wrappers after internal imports settle.

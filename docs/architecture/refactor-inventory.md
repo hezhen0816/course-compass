@@ -21,8 +21,8 @@
 - `ios/`：native iOS app，仍相容 current shared payload。
 - `supabase/`：production migration history。
 - `docs/`：現行架構與資料契約。
-- `tests/`：backend tests 與可回查 fixtures。
-- `scripts/`：本機啟動、Python runtime wrapper、typed planner 本機維護工具、production verifier 與 migration helper。
+- `tests/`：backend tests 與可回查 fixture outputs。
+- `scripts/`：本機啟動、Python runtime wrapper、typed planner 本機維護工具、research fixture capture scripts、production verifier 與 migration helper。
 
 ## Generated Or Local-Only Files
 
@@ -102,7 +102,7 @@ Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `Course
 
 ## Tests
 
-目前 backend regression tests 已按 domain 拆分到 `tests/backend/`，不再集中於歷史大型 pure test。測試保留等級與 fixture cleanup 邊界記錄在 `docs/architecture/test-inventory.md`。
+目前 backend regression tests 已按 domain 拆分到 `tests/backend/`，不再集中於歷史大型 pure test。代表性 fixture outputs 保留在 `tests/fixtures/`，手動抓取腳本已移到 `scripts/research/`。測試保留等級與 fixture cleanup 邊界記錄在 `docs/architecture/test-inventory.md`。
 
 重構期間的測試原則：
 

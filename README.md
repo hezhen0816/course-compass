@@ -7,7 +7,8 @@
 - `backend/`：Python 同步服務
 - `supabase/`：migration 與資料庫結構
 - `docs/`：現行 architecture 與 data contract
-- `tests/`：測試與可重跑 fixture
+- `tests/`：測試與代表性 fixture outputs
+- `scripts/research/`：手動重跑 fixture 抓取流程的 research scripts
 
 `backend/`、`supabase/`、`docs/`、`tests/` 都維持在根目錄，方便兩端共用。根目錄只放 workspace 總控設定與跨端文件，不放 build output 或臨時截圖。
 
@@ -55,6 +56,7 @@
 - `tests/fixtures/course_selection/`：課表與選課頁樣本
 - `tests/fixtures/edu_need_history/`：歷史修課紀錄頁樣本
 - `tests/fixtures/moodle_timeline/`：Moodle 時間軸與待繳事項樣本
+- `scripts/research/*/`：手動更新上述 fixture outputs 的抓取腳本
 
 ### Docs
 
@@ -173,6 +175,6 @@ bash scripts/python.sh scripts/migrate_legacy_school_credentials.py --apply
 ## 維護原則
 
 1. Web 與 iOS 不共用畫面與互動流程，只共用資料規則。
-2. `backend/`、`supabase/`、`docs/`、`tests/` 維持根目錄，作為共享基礎設施、決策紀錄與可重跑 fixture。
+2. `backend/`、`supabase/`、`docs/`、`tests/` 維持根目錄，作為共享基礎設施、決策紀錄與代表性 fixture outputs。
 3. 新功能優先先判斷屬於 Web 還是 iOS，再決定落點。
-4. build output、暫存截圖與本機快取不進 repo；可重現的測試 fixture 才放入 `tests/fixtures/`。
+4. build output、暫存截圖與本機快取不進 repo；代表性 fixture outputs 放入 `tests/fixtures/`，手動抓取腳本放入 `scripts/research/`。
