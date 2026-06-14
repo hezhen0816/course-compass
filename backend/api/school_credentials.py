@@ -6,10 +6,10 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 
 try:
-    from ..credentials import CredentialStoreError
+    from ..core.errors import CredentialStoreError
     from ..schemas.school_credentials import SchoolCredentialsResponse, SchoolCredentialsSaveRequest
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from credentials import CredentialStoreError
+    from core.errors import CredentialStoreError
     from schemas.school_credentials import SchoolCredentialsResponse, SchoolCredentialsSaveRequest
 
 

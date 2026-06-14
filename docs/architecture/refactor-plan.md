@@ -21,15 +21,16 @@
 - Legacy `user_data.content.settings.school_password` production plaintext 已清除。
 - Backend 已改用 Supabase Auth `/auth/v1/user` 驗證 access token，不再本地 decode JWT payload 當作身份驗證。
 - Backend route handlers 已拆到 `backend/api/*`，校務 session/context helper 已拆到 `backend/services/session_context.py`。
-- NTUST、Moodle、官方選課、課表與 TR 查詢 client/parser 已拆到 `backend/integrations/*`，舊 `backend/*.py` import 路徑暫時保留相容 wrapper。
+- NTUST、Moodle、官方選課、課表與 TR 查詢 client/parser 已拆到 `backend/integrations/*`，對應純 re-export wrapper 已移除。
 - 官方選課 session 的 Supabase RPC row 存取已開始集中到 `backend/repositories/school_sessions.py`，加解密與 TTL 仍保留在 `backend/school_sessions.py`。
 - 課表、歷史、Moodle snapshot 的 Supabase REST row 存取已集中到 `backend/repositories/snapshots.py`，快照相容 wrapper 與課表 entry 正規化仍保留在 `backend/snapshots.py`。
 - 校務帳密 private RPC row 存取已集中到 `backend/repositories/credentials.py`，加解密、Auth token 驗證與 legacy promotion 還保留在 `backend/credentials.py`。
-- 共用設定與台北時間 helper 已移到 `backend/core/config.py` 與 `backend/core/time_utils.py`，舊 `backend/config.py`、`backend/time_utils.py` 暫時保留相容 wrapper。
-- Pydantic request/response schemas 已移到 `backend/schemas/*` 並按 domain 拆分，舊 `backend/models.py` 與 `backend/schemas/models.py` 暫時保留相容 wrapper。
+- 共用設定與台北時間 helper 已移到 `backend/core/config.py` 與 `backend/core/time_utils.py`，舊 `backend/config.py`、`backend/time_utils.py` 已移除。
+- 共用錯誤型別已移到 `backend/core/errors.py`，避免 service/API 反向依賴 credentials 過渡層。
+- Pydantic request/response schemas 已移到 `backend/schemas/*` 並按 domain 拆分，舊 `backend/models.py` 與 `backend/schemas/models.py` 已移除。
 - 官方選課 session 的加解密 payload、TTL、load/save/delete domain 流程已抽到 `backend/services/school_sessions.py`，舊 `backend/school_sessions.py` 保留相容 wrapper 與依賴注入。
 - 校務帳密狀態、legacy promotion、save/delete cleanup 流程已抽到 `backend/services/credentials.py`，舊 `backend/credentials.py` 保留相容 wrapper、加密與 Supabase Auth 驗證。
-- 雙主修 PDF 需求解析已移到 `backend/services/planner_pdf.py`，舊 `backend/planner_pdf.py` 暫時保留相容 wrapper。
+- 雙主修 PDF 需求解析已移到 `backend/services/planner_pdf.py`，舊 `backend/planner_pdf.py` 已移除。
 - 課表、歷史、Moodle snapshot domain flow 已移到 `backend/services/snapshots.py`，舊 `backend/snapshots.py` 暫時保留相容 wrapper。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
 - 已建立 `docs/architecture/refactor-inventory.md` 作為重構盤點基準。
@@ -63,6 +64,7 @@ backend/
     snapshots.py         # schedule/history/Moodle snapshot domain flow
   core/
     config.py            # backend settings, constants, NTUST/Supabase URLs
+    errors.py            # shared backend exception types
     time_utils.py        # timezone-aware clock helper
   schemas/
     courses.py           # course search schemas
@@ -71,23 +73,13 @@ backend/
     school_credentials.py # school credential schemas
     sync.py              # schedule/history/Moodle sync schemas
     tr_rooms.py          # TR room status schemas
-    models.py            # compatibility re-export; remove after imports migrate
   repositories/
     credentials.py      # Supabase RPC access for encrypted school credential rows
     school_sessions.py   # Supabase RPC access for encrypted official session rows
     snapshots.py         # Supabase REST access for schedule/history/Moodle snapshot rows
   credentials.py         # compatibility wrapper, encryption, and Supabase Auth validation
-  planner_pdf.py         # compatibility wrapper; remove after imports migrate
   school_sessions.py     # compatibility wrapper and dependency injection for school session service
   snapshots.py           # compatibility wrapper; remove after imports migrate
-  config.py              # compatibility wrapper; remove after imports migrate
-  time_utils.py          # compatibility wrapper; remove after imports migrate
-  models.py              # compatibility wrapper; remove after imports migrate
-  official_selection.py  # compatibility wrapper; remove after imports migrate
-  schedule.py            # compatibility wrapper; remove after imports migrate
-  history.py             # compatibility wrapper; remove after imports migrate
-  moodle.py              # compatibility wrapper; remove after imports migrate
-  tr_rooms.py            # compatibility wrapper; remove after imports migrate
 web/src/
   features/              # feature-level UI and hooks
   hooks/useCourseData.ts # current user_data.content compatibility layer

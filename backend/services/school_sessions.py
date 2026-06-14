@@ -6,9 +6,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 try:
-    from ..credentials import CredentialStoreError
+    from ..core.errors import CredentialStoreError
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from credentials import CredentialStoreError
+    from core.errors import CredentialStoreError
 
 
 SessionRowLoader = Callable[[str, str], dict[str, Any] | None]

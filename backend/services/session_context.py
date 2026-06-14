@@ -8,9 +8,9 @@ import requests
 from fastapi import HTTPException
 
 try:
-    from ..credentials import CredentialStoreError
+    from ..core.errors import CredentialStoreError
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
-    from credentials import CredentialStoreError
+    from core.errors import CredentialStoreError
 
 
 UserContext = tuple[str, str]

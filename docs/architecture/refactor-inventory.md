@@ -35,11 +35,12 @@
 
 ## Backend Compatibility Wrappers
 
-下列檔案目前屬於相容 wrapper 或過渡層。刪除前必須先確認所有 internal imports、tests、scripts 都已改到目標 module：
+下列純 re-export wrapper 已在 `codex/project-refactor` 移除：
 
 - `backend/config.py` -> `backend/core/config.py`
 - `backend/time_utils.py` -> `backend/core/time_utils.py`
 - `backend/models.py` -> `backend/schemas/*`
+- `backend/schemas/models.py` -> `backend/schemas/*`
 - `backend/official_selection.py` -> `backend/integrations/official_selection.py`
 - `backend/schedule.py` -> `backend/integrations/schedule.py`
 - `backend/history.py` -> `backend/integrations/history.py`
@@ -47,6 +48,10 @@
 - `backend/tr_rooms.py` -> `backend/integrations/tr_rooms.py`
 - `backend/ntust_common.py` -> `backend/integrations/ntust_common.py`
 - `backend/planner_pdf.py` -> `backend/services/planner_pdf.py`
+
+下列檔案仍屬於過渡層。刪除前必須先確認安全邊界、依賴注入與 tests/scripts 都已改到目標 module：
+
+- `backend/credentials.py` error type -> `backend/core/errors.py`
 - `backend/snapshots.py` -> `backend/services/snapshots.py`
 - `backend/credentials.py` -> `backend/services/credentials.py` + `backend/repositories/credentials.py`
 - `backend/school_sessions.py` -> `backend/services/school_sessions.py` + `backend/repositories/school_sessions.py`

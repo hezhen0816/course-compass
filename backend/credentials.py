@@ -10,6 +10,7 @@ import requests
 from cryptography.fernet import Fernet, InvalidToken
 
 try:
+    from .core.errors import CredentialStoreError
     from .core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
@@ -20,6 +21,7 @@ try:
     from .repositories import credentials as credential_repository
     from .services import credentials as credential_service
 except ImportError:  # pragma: no cover
+    from core.errors import CredentialStoreError
     from core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
@@ -29,10 +31,6 @@ except ImportError:  # pragma: no cover
     )
     from repositories import credentials as credential_repository
     from services import credentials as credential_service
-
-
-class CredentialStoreError(RuntimeError):
-    pass
 
 
 PLACEHOLDER_VALUES = {
