@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from scripts.preview_typed_planner_backfill import build_typed_planner_preview
+import json
+from pathlib import Path
+
+from scripts.preview_typed_planner_backfill import (
+    build_typed_planner_preview,
+    build_typed_planner_reconciliation,
+    write_typed_planner_backfill_package,
+)
 
 
 def _sample_content() -> dict[str, object]:
@@ -176,3 +183,67 @@ def test_typed_planner_backfill_preview_preserves_unknowns_but_redacts_secrets()
 
     profile_source = profile["metadata"]["source_payload"]
     assert profile_source["settings"]["gpaApi"]["apiKey"] == "[redacted]"
+
+
+def test_typed_planner_reconciliation_reports_mismatch_when_source_cannot_map() -> None:
+    preview = build_typed_planner_preview(
+        [
+            {
+                "user_id": "11111111-1111-1111-1111-111111111111",
+                "content": {
+                    "pendingRequirements": [
+                        {
+                            "id": "req-without-set",
+                            "setId": "missing-set",
+                            "kind": "choice",
+                            "title": "缺少需求集",
+                        }
+                    ]
+                },
+            }
+        ],
+        include_rows=False,
+    )
+
+    reconciliation = build_typed_planner_reconciliation(preview)
+
+    assert reconciliation["status"] == "failed"
+    failed_check = next(
+        check for check in reconciliation["checks"] if check["name"] == "pending_requirements_to_requirements"
+    )
+    assert failed_check == {
+        "name": "pending_requirements_to_requirements",
+        "source_count": 1,
+        "target_count": 0,
+        "status": "mismatch",
+    }
+    assert reconciliation["warnings"] == ["pendingRequirements[0] skipped: missing requirement set 'missing-set'"]
+
+
+def test_typed_planner_package_writes_backup_preview_reconciliation_and_manifest(tmp_path: Path) -> None:
+    rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
+
+    manifest = write_typed_planner_backfill_package(
+        rows,
+        tmp_path,
+        include_rows=True,
+        force=False,
+    )
+
+    assert manifest["mode"] == "typed_planner_backfill_package"
+    assert manifest["status"] == "passed"
+    assert manifest["database_writes"] is False
+    assert manifest["contains_sensitive_backup"] is True
+    assert set(manifest["files"]) == {"backup", "preview", "reconciliation", "manifest"}
+
+    backup = json.loads((tmp_path / "backup-user-data.json").read_text(encoding="utf-8"))
+    preview = json.loads((tmp_path / "preview.json").read_text(encoding="utf-8"))
+    reconciliation = json.loads((tmp_path / "reconciliation.json").read_text(encoding="utf-8"))
+    written_manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+
+    assert backup["mode"] == "raw_user_data_backup"
+    assert backup["contains_sensitive_source_data"] is True
+    assert backup["rows"][0]["content"]["settings"]["gpaApi"]["apiKey"] == "secret-token"
+    assert preview["tables"]["planner_profiles"][0]["settings"]["gpaApi"]["apiKey"] == "[redacted]"
+    assert reconciliation["status"] == "passed"
+    assert written_manifest["status"] == "passed"

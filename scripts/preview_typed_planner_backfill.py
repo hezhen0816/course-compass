@@ -6,6 +6,7 @@ import json
 import re
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,12 @@ TABLE_NAMES = [
 
 SENSITIVE_KEYS = {"school_password", "passwordCiphertext", "apiKey"}
 WEEKDAY_MAP = {"M": 1, "T": 2, "W": 3, "R": 4, "F": 5}
+PACKAGE_FILES = {
+    "backup": "backup-user-data.json",
+    "preview": "preview.json",
+    "reconciliation": "reconciliation.json",
+    "manifest": "manifest.json",
+}
 
 
 def _stable_uuid(*parts: object) -> str:
@@ -664,6 +671,135 @@ def build_typed_planner_preview(rows: list[dict[str, Any]], *, include_rows: boo
     return preview
 
 
+def build_typed_planner_reconciliation(preview: dict[str, Any]) -> dict[str, Any]:
+    counts = _as_dict(preview.get("counts"))
+    source_counts = _as_dict(preview.get("source_counts"))
+    warnings = _as_list(preview.get("warnings"))
+
+    def count(key: str) -> int:
+        value = source_counts.get(key) if key in source_counts else counts.get(key)
+        return int(value) if isinstance(value, int) else 0
+
+    def table_count(key: str) -> int:
+        value = counts.get(key)
+        return int(value) if isinstance(value, int) else 0
+
+    expected_selection_candidates = (
+        count("selection_courses")
+        + count("official_registered_courses")
+        + count("official_available_courses")
+        + count("official_required_preset_courses")
+    )
+    checks = [
+        {
+            "name": "valid_users_to_profiles",
+            "source_count": count("valid_user_rows"),
+            "target_count": table_count("planner_profiles"),
+        },
+        {
+            "name": "semesters_to_academic_terms",
+            "source_count": count("semesters"),
+            "target_count": table_count("academic_terms"),
+        },
+        {
+            "name": "semester_courses_to_planner_courses",
+            "source_count": count("semester_courses"),
+            "target_count": table_count("planner_courses"),
+        },
+        {
+            "name": "requirement_sets_to_requirement_sets",
+            "source_count": count("requirement_sets"),
+            "target_count": table_count("requirement_sets"),
+        },
+        {
+            "name": "pending_requirements_to_requirements",
+            "source_count": count("pending_requirements"),
+            "target_count": table_count("requirements"),
+        },
+        {
+            "name": "history_records_to_academic_history_records",
+            "source_count": count("history_records"),
+            "target_count": table_count("academic_history_records"),
+        },
+        {
+            "name": "selection_sources_to_selection_candidates",
+            "source_count": expected_selection_candidates,
+            "target_count": table_count("selection_candidates"),
+        },
+    ]
+    for check in checks:
+        check["status"] = "passed" if check["source_count"] == check["target_count"] else "mismatch"
+
+    has_mismatch = any(check["status"] != "passed" for check in checks)
+    status = "failed" if has_mismatch else "review_required" if warnings else "passed"
+    return {
+        "mode": "preview_reconciliation_no_database_writes",
+        "status": status,
+        "checks": checks,
+        "warnings": warnings,
+    }
+
+
+def build_typed_planner_backfill_package(
+    rows: list[dict[str, Any]],
+    *,
+    include_rows: bool = True,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    generated_at = generated_at or datetime.now(timezone.utc).isoformat()
+    preview = build_typed_planner_preview(rows, include_rows=include_rows)
+    reconciliation = build_typed_planner_reconciliation(preview)
+    backup = {
+        "mode": "raw_user_data_backup",
+        "contains_sensitive_source_data": True,
+        "row_count": len(rows),
+        "rows": copy.deepcopy(rows),
+    }
+    manifest = {
+        "mode": "typed_planner_backfill_package",
+        "generated_at": generated_at,
+        "status": reconciliation["status"],
+        "contains_sensitive_backup": True,
+        "database_writes": False,
+        "files": PACKAGE_FILES,
+        "input_row_count": len(rows),
+        "counts": preview["counts"],
+        "source_counts": preview["source_counts"],
+        "warning_count": len(preview["warnings"]),
+    }
+    return {
+        "backup": backup,
+        "preview": preview,
+        "reconciliation": reconciliation,
+        "manifest": manifest,
+    }
+
+
+def _write_json_file(path: Path, payload: dict[str, Any], *, force: bool) -> None:
+    if path.exists() and not force:
+        raise FileExistsError(f"{path} already exists; pass --force to overwrite")
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_typed_planner_backfill_package(
+    rows: list[dict[str, Any]],
+    package_dir: Path,
+    *,
+    include_rows: bool = True,
+    force: bool = False,
+) -> dict[str, Any]:
+    package = build_typed_planner_backfill_package(rows, include_rows=include_rows)
+    package_dir.mkdir(parents=True, exist_ok=True)
+    if not force:
+        existing_files = [package_dir / filename for filename in PACKAGE_FILES.values() if (package_dir / filename).exists()]
+        if existing_files:
+            existing = ", ".join(str(path) for path in existing_files)
+            raise FileExistsError(f"package files already exist: {existing}; pass --force to overwrite")
+    for key, filename in PACKAGE_FILES.items():
+        _write_json_file(package_dir / filename, package[key], force=force)
+    return package["manifest"]
+
+
 def load_user_data_rows(path: Path) -> list[dict[str, Any]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, list):
@@ -684,17 +820,33 @@ def main() -> None:
     )
     parser.add_argument("input_json", type=Path, help="JSON export containing user_data rows.")
     parser.add_argument("--output", type=Path, help="Write preview JSON to this path instead of stdout.")
+    parser.add_argument("--package-dir", type=Path, help="Write a backup, preview, reconciliation, and manifest package.")
+    parser.add_argument("--force", action="store_true", help="Overwrite files in --package-dir or --output.")
     parser.add_argument("--counts-only", action="store_true", help="Omit row arrays and print only counts/warnings.")
     args = parser.parse_args()
 
+    if args.output and args.package_dir:
+        raise SystemExit("--output cannot be combined with --package-dir")
+
     try:
         rows = load_user_data_rows(args.input_json)
+        if args.package_dir:
+            manifest = write_typed_planner_backfill_package(
+                rows,
+                args.package_dir,
+                include_rows=not args.counts_only,
+                force=args.force,
+            )
+            sys.stdout.write(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            return
         preview = build_typed_planner_preview(rows, include_rows=not args.counts_only)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise SystemExit(f"preview failed: {exc}") from exc
 
     output = json.dumps(preview, ensure_ascii=False, indent=2, sort_keys=True)
     if args.output:
+        if args.output.exists() and not args.force:
+            raise SystemExit(f"preview failed: {args.output} already exists; pass --force to overwrite")
         args.output.write_text(output + "\n", encoding="utf-8")
     else:
         sys.stdout.write(output + "\n")

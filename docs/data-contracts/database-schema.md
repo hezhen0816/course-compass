@@ -164,17 +164,24 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 - 將 `content.semesters`、`requirementSets`、`pendingRequirements`、`historyRecords`、`selectionPlan` 拆成 typed table preview rows。
 - 輸出每張 typed table 的 row count、source count 與 warnings。
 - 保留無法穩定映射的原始欄位到 `metadata.source_payload`，但會遮罩 `settings.school_password`、`passwordCiphertext`、`gpaApi.apiKey`。
+- 可用 `--package-dir` 產生本機 backfill package：
+  - `backup-user-data.json`：完整原始 backup，可能包含敏感資料，只能留在本機安全位置。
+  - `preview.json`：typed table preview，敏感欄位已遮罩。
+  - `reconciliation.json`：source count 與 typed preview count 對帳結果。
+  - `manifest.json`：package 摘要、狀態、檔案清單與是否含敏感 backup。
 
 明確限制：
 - 不連 Supabase。
 - 不寫資料庫。
 - 不產生 production backfill SQL。
-- 不取代 full backup 或 production reconciliation。
+- `backup-user-data.json` 是本機原始備份，不可提交到 repo。
+- `reconciliation.json` 只證明本機 preview count 是否一致，不取代 production reconciliation。
 
 使用方式：
 
 ```bash
 bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --counts-only
+bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --package-dir /tmp/course-planner-backfill-preview
 ```
 
 輸入可為：
