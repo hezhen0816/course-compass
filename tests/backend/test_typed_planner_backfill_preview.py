@@ -7,9 +7,11 @@ import pytest
 
 from backend.services import typed_planner_backfill
 from backend.services.typed_planner_backfill import (
+    APPLY_BATCH_MODE,
     APPLY_PLAN_MODE,
     APPLY_TABLE_ORDER,
     CONTRACT_VERSION,
+    build_typed_planner_apply_batches,
     build_typed_planner_apply_plan,
     build_typed_planner_backfill_package,
     build_typed_planner_preview,
@@ -300,6 +302,37 @@ def test_typed_planner_apply_plan_loads_written_package(tmp_path: Path) -> None:
     assert plan["operations"][0]["row_count"] == 1
 
 
+def test_typed_planner_apply_batches_build_postgrest_payloads_without_database_writes() -> None:
+    rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
+    package = build_typed_planner_backfill_package(rows)
+
+    batches = build_typed_planner_apply_batches(package)
+
+    assert batches["contract_version"] == CONTRACT_VERSION
+    assert batches["mode"] == APPLY_BATCH_MODE
+    assert batches["database_writes"] is False
+    assert batches["status"] == "ready"
+    assert [batch["table"] for batch in batches["batches"]] == APPLY_TABLE_ORDER
+    assert batches["total_row_count"] == sum(package["preview"]["counts"].values())
+
+    profile_batch = batches["batches"][0]
+    assert profile_batch["method"] == "POST"
+    assert profile_batch["path"] == "/rest/v1/planner_profiles?on_conflict=id"
+    assert profile_batch["conflict_target"] == "id"
+    assert profile_batch["headers"] == {"Prefer": "resolution=merge-duplicates,return=minimal"}
+    assert profile_batch["row_count"] == 1
+    assert profile_batch["rows"][0]["settings"]["gpaApi"]["apiKey"] == "[redacted]"
+
+
+def test_typed_planner_apply_batches_rejects_missing_preview_table() -> None:
+    rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
+    package = build_typed_planner_backfill_package(rows)
+    package["preview"]["tables"].pop("planner_profiles")
+
+    with pytest.raises(ValueError, match="preview.tables.planner_profiles"):
+        build_typed_planner_apply_batches(package)
+
+
 def test_typed_planner_apply_plan_rejects_counts_only_package() -> None:
     rows = [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
     package = build_typed_planner_backfill_package(rows, include_rows=False)
@@ -333,11 +366,13 @@ def test_typed_planner_apply_plan_rejects_failed_reconciliation() -> None:
 
 def test_typed_planner_backfill_service_exports_stable_public_api() -> None:
     assert typed_planner_backfill.__all__ == [
+        "APPLY_BATCH_MODE",
         "APPLY_PLAN_MODE",
         "APPLY_TABLE_ORDER",
         "CONTRACT_VERSION",
         "PACKAGE_FILES",
         "TABLE_NAMES",
+        "build_typed_planner_apply_batches",
         "build_typed_planner_apply_plan",
         "build_typed_planner_backfill_package",
         "build_typed_planner_preview",

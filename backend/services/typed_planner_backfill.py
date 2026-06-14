@@ -18,6 +18,7 @@ from typing import Any
 
 CONTRACT_VERSION = "typed-planner-backfill-preview-v1"
 APPLY_PLAN_MODE = "typed_planner_apply_plan_no_database_writes"
+APPLY_BATCH_MODE = "typed_planner_postgrest_upsert_batches_no_database_writes"
 TABLE_NAMES = [
     "planner_profiles",
     "academic_terms",
@@ -50,11 +51,13 @@ PACKAGE_FILES = {
 }
 
 __all__ = [
+    "APPLY_BATCH_MODE",
     "APPLY_PLAN_MODE",
     "APPLY_TABLE_ORDER",
     "CONTRACT_VERSION",
     "PACKAGE_FILES",
     "TABLE_NAMES",
+    "build_typed_planner_apply_batches",
     "build_typed_planner_apply_plan",
     "build_typed_planner_backfill_package",
     "build_typed_planner_preview",
@@ -845,6 +848,44 @@ def build_typed_planner_apply_plan(package: dict[str, Any]) -> dict[str, Any]:
         "source_manifest_status": manifest.get("status"),
         "operations": operations,
         "total_row_count": sum(operation["row_count"] for operation in operations),
+        "warnings": [],
+    }
+
+
+def build_typed_planner_apply_batches(package: dict[str, Any]) -> dict[str, Any]:
+    """Build no-write PostgREST upsert batches from a verified preview package."""
+    _require_package_contract(package)
+
+    preview = _as_dict(package.get("preview"))
+    tables = _as_dict(preview.get("tables"))
+    batches = []
+    for order, table_name in enumerate(APPLY_TABLE_ORDER, start=1):
+        if table_name not in tables or not isinstance(tables[table_name], list):
+            raise ValueError(f"apply batches require preview.tables.{table_name} rows")
+        rows = copy.deepcopy(tables[table_name])
+        batches.append(
+            {
+                "order": order,
+                "table": table_name,
+                "operation": "postgrest_upsert_preview_rows",
+                "method": "POST",
+                "path": f"/rest/v1/{table_name}?on_conflict=id",
+                "conflict_target": "id",
+                "headers": {
+                    "Prefer": "resolution=merge-duplicates,return=minimal",
+                },
+                "row_count": len(rows),
+                "rows": rows,
+            }
+        )
+
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "mode": APPLY_BATCH_MODE,
+        "database_writes": False,
+        "status": "ready",
+        "batches": batches,
+        "total_row_count": sum(batch["row_count"] for batch in batches),
         "warnings": [],
     }
 

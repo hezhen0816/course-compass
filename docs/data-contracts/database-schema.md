@@ -176,12 +176,16 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
   - 檢查 `manifest`、`preview`、`reconciliation` 的 `contract_version`。
   - 要求 `database_writes=false`、`reconciliation.status=passed`，且 package 必須包含完整 preview rows。
   - 輸出 typed table 寫入順序、各表 row count 與總 row count，供下一階段設計真正 apply lane 前審查。
+- `build_typed_planner_apply_batches(package)` 可進一步輸出 no-write PostgREST upsert batches：
+  - 每張 typed table 產生 `POST /rest/v1/{table}?on_conflict=id` 的 row-level payload。
+  - 使用 `Prefer: resolution=merge-duplicates,return=minimal`，讓下一階段 repository 寫入可以沿用同一份 batch contract。
+  - batches 只使用 redacted `preview.json` rows，不讀取 raw backup。
 
 明確限制：
 - 不連 Supabase。
 - 不寫資料庫。
 - 不產生 production backfill SQL。
-- apply plan 仍是 no-write plan，不產生 SQL，也不執行 upsert。
+- apply plan / apply batches 仍是 no-write artifacts，不產生 SQL，也不執行 upsert。
 - `backup-user-data.json` 是本機原始備份，不可提交到 repo。
 - `reconciliation.json` 只證明本機 preview count 是否一致，不取代 production reconciliation。
 
@@ -191,6 +195,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --counts-only
 bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --package-dir /tmp/course-planner-backfill-preview
 bash scripts/python.sh scripts/plan_typed_planner_backfill.py /tmp/course-planner-backfill-preview --output /tmp/course-planner-backfill-preview/apply-plan.json
+bash scripts/python.sh scripts/plan_typed_planner_backfill.py /tmp/course-planner-backfill-preview --format batches --output /tmp/course-planner-backfill-preview/apply-batches.json
 ```
 
 輸入可為：

@@ -9,6 +9,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
 
 from backend.services.typed_planner_backfill import (
+    build_typed_planner_apply_batches,
     build_typed_planner_apply_plan,
     load_typed_planner_backfill_package,
 )
@@ -22,13 +23,14 @@ def main() -> None:
         ),
     )
     parser.add_argument("package_dir", type=Path, help="Directory containing backup, preview, reconciliation, and manifest JSON files.")
+    parser.add_argument("--format", choices=("plan", "batches"), default="plan", help="Output a summary plan or row-level upsert batches.")
     parser.add_argument("--output", type=Path, help="Write apply plan JSON to this path instead of stdout.")
     parser.add_argument("--force", action="store_true", help="Overwrite --output if it already exists.")
     args = parser.parse_args()
 
     try:
         package = load_typed_planner_backfill_package(args.package_dir)
-        plan = build_typed_planner_apply_plan(package)
+        plan = build_typed_planner_apply_batches(package) if args.format == "batches" else build_typed_planner_apply_plan(package)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise SystemExit(f"apply plan failed: {exc}") from exc
 

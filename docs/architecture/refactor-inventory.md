@@ -152,7 +152,7 @@ Typed schema foundation：
 - 輸出 typed table preview rows、row counts、source counts 與 warnings。
 - `metadata.source_payload` 保留原始未知欄位，但遮罩校務密碼、舊 ciphertext 與 GPA API key。
 - `--package-dir` 會產生本機 raw backup、redacted preview、reconciliation 與 manifest；raw backup 可能包含敏感資料，不可提交。
-- `build_typed_planner_apply_plan(package)` 與 `plan_typed_planner_backfill.py` 會驗證 package contract 與對帳狀態，產生 no-write apply plan 的 table order / row counts；目前仍不產生 SQL、不寫資料庫。
+- `build_typed_planner_apply_plan(package)` 與 `plan_typed_planner_backfill.py` 會驗證 package contract 與對帳狀態，產生 no-write apply plan 的 table order / row counts；`--format batches` 可輸出 no-write PostgREST upsert batch payload；目前仍不產生 SQL、不寫資料庫。
 
 ## Validation Gates
 
