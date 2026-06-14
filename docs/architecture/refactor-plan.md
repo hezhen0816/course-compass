@@ -135,6 +135,7 @@ tests/
 3. Split backend responsibilities without changing API behavior.
    - Route handlers are now in `backend/api/*`; keep shrinking `backend/app.py` to setup/wiring only.
    - Parsing/client code is now in `backend/integrations/*`; retire compatibility wrappers after internal imports settle.
+   - Schedule helper regression tests are now isolated in `tests/backend/test_schedule_integration.py`.
    - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, and snapshot row access have started.
    - Core config/time helpers are now in `backend/core/*`; retire compatibility wrappers after scripts and external imports settle.
    - Pydantic API schemas are now split by domain in `backend/schemas/*`; retire compatibility wrappers after scripts and external imports settle.
