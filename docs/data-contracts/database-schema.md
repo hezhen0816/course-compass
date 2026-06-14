@@ -180,6 +180,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
   - 每張 typed table 產生 `POST /rest/v1/{table}?on_conflict=id` 的 row-level payload。
   - 使用 `Prefer: resolution=merge-duplicates,return=minimal`，讓下一階段 repository 寫入可以沿用同一份 batch contract。
   - batches 只使用 redacted `preview.json` rows，不讀取 raw backup。
+  - `backend/repositories/typed_planner.py` 的執行 helper 會跳過 `rows=[]` 的空 batch，避免對 PostgREST 發空 upsert。
 
 明確限制：
 - 不連 Supabase。
