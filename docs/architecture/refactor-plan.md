@@ -1,7 +1,7 @@
 # Course Compass Refactor Plan
 
 狀態：進行中
-更新：2026-06-13
+更新：2026-06-14
 
 本文件是目前仍有效的重構執行計畫。舊版產品定位與 UX audit 已移到 `docs/archive/2026-refactor/`，只作為歷史脈絡。
 
@@ -32,6 +32,8 @@
 - 雙主修 PDF 需求解析已移到 `backend/services/planner_pdf.py`，舊 `backend/planner_pdf.py` 暫時保留相容 wrapper。
 - 課表、歷史、Moodle snapshot domain flow 已移到 `backend/services/snapshots.py`，舊 `backend/snapshots.py` 暫時保留相容 wrapper。
 - Production Railway backend 與 Vercel web 已可部署並驗證 official selection capability。
+- 已建立 `docs/architecture/refactor-inventory.md` 作為重構盤點基準。
+- 已建立 typed schema foundation migration：`supabase/migrations/20260614211338_add_typed_planner_schema_foundation.sql`。
 
 ## 目前架構
 
@@ -139,7 +141,8 @@ tests/
    - School session and credential domain flows are now in `backend/services/*`; continue shrinking compatibility wrappers.
    - Keep compatibility imports while tests are being migrated.
 4. Add typed table migrations behind a backup-first cutover.
-   - Create full `user_data_refactor_backup` before any destructive change.
+   - Typed table foundation is additive only; production read/write remains on the current compatibility layer until dual-write and reconciliation are ready.
+   - Create full `user_data_refactor_backup` before any destructive change or backfill write.
    - Preserve unknown JSON fields in metadata columns.
    - Produce a row-count reconciliation report before production cutover.
 5. Move Web/iOS reads and writes to typed APIs.

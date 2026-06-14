@@ -1,7 +1,7 @@
 # Database Schema Contract
 
-狀態：current + planned contract
-更新：2026-06-13
+狀態：current + typed schema foundation
+更新：2026-06-14
 
 本文件記錄資料庫責任邊界。`current production` 是已上線或已存在的資料來源；`planned typed schema` 是重構目標，尚未完成前不得把它當作 production truth。
 
@@ -61,9 +61,23 @@
 
 這些表屬於 current compatibility layer，未來會被 `sync_runs` 與 typed domain rows 取代。
 
+## Typed Schema Foundation
+
+Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typed tables 的第一階段基礎建設。
+
+這個 migration 只做 additive schema：
+
+- 建立 typed tables、indexes、updated_at triggers、RLS 與 service-role grants。
+- 不搬移 `public.user_data.content`。
+- 不刪除 snapshot tables。
+- 不改 Web/iOS 讀寫路徑。
+- 不保存校務密碼、official session cookie 或 GPA API token。
+
+目前 typed tables 是重構目標的 landing zone，尚未接上 production read/write。
+
 ## Planned Typed Schema
 
-下列資料表是重構目標，需先在 clone/local 驗證 migration、對帳與 rollback 方案，再切 production。
+下列資料表是重構目標。基礎表已建立後，仍需先在 clone/local 驗證 backfill、對帳與 rollback 方案，再切 production read/write。
 
 ### Planner
 
