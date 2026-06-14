@@ -350,6 +350,7 @@ export function PlanningWorkspace({
   const showSelectionListWithoutSchedule = Boolean(officialSelection && officialSelectionListCount > 0 && !officialScheduleHasData);
   const totalPlanningItems = officialRegisteredCount + officialAvailableCount + virtualCourses.length;
   const syncedAtLabel = officialSelection ? formatSyncTime(officialSelection.synced_at) : '尚未同步';
+  const [showWeekend, setShowWeekend] = useState(false);
   const modeOptions: Array<{ value: PlanningMode; label: string }> = [
     { value: 'lottery', label: '初選志願' },
     { value: 'addDrop', label: '加退選' },
@@ -494,7 +495,13 @@ export function PlanningWorkspace({
                   </p>
                 ) : null}
               </div>
-              <p className="text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <WeekendToggleButton
+                  showWeekend={showWeekend}
+                  onToggle={() => setShowWeekend((current) => !current)}
+                />
+                <p className="text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
+              </div>
             </div>
           </div>
           <PlanningScheduleGrid
@@ -502,6 +509,7 @@ export function PlanningWorkspace({
             officialRegisteredCourses={officialSelection?.registered_courses || []}
             officialRequiredPresetCourses={officialRequiredPresetCourses}
             virtualCourses={virtualCourses}
+            showWeekend={showWeekend}
             mode={planningMode}
             data={data}
             onDeleteCourse={onDeleteCourse}
@@ -808,11 +816,42 @@ function formatSyncTime(value: string): string {
   return date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
 }
 
+function WeekendToggleButton({
+  showWeekend,
+  onToggle,
+}: {
+  showWeekend: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={showWeekend}
+      className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+        showWeekend
+          ? 'border-blue-200 bg-blue-50 text-blue-700'
+          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+      }`}
+    >
+      <span className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${
+        showWeekend ? 'bg-blue-600' : 'bg-slate-300'
+      }`}>
+        <span className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
+          showWeekend ? 'translate-x-3' : ''
+        }`} />
+      </span>
+      顯示週末
+    </button>
+  );
+}
+
 function PlanningScheduleGrid({
   officialScheduleRows,
   officialRegisteredCourses,
   officialRequiredPresetCourses,
   virtualCourses,
+  showWeekend,
   mode,
   data,
   onDeleteCourse,
@@ -821,11 +860,11 @@ function PlanningScheduleGrid({
   officialRegisteredCourses: OfficialSelectionRegisteredCourse[];
   officialRequiredPresetCourses: OfficialSelectionRequiredPresetCourse[];
   virtualCourses: Course[];
+  showWeekend: boolean;
   mode: PlanningMode;
   data: AppData;
   onDeleteCourse: (courseId: string) => void;
 }) {
-  const [showWeekend, setShowWeekend] = useState(false);
   return (
     <OfficialScheduleTable
       rows={officialScheduleRows}
@@ -835,7 +874,6 @@ function PlanningScheduleGrid({
       showWeekend={showWeekend}
       mode={mode}
       data={data}
-      onToggleWeekend={() => setShowWeekend((current) => !current)}
       onDeleteVirtualCourse={onDeleteCourse}
     />
   );
@@ -849,7 +887,6 @@ function OfficialScheduleTable({
   showWeekend,
   mode,
   data,
-  onToggleWeekend,
   onDeleteVirtualCourse,
 }: {
   rows: Record<string, string>[];
@@ -859,7 +896,6 @@ function OfficialScheduleTable({
   showWeekend: boolean;
   mode: PlanningMode;
   data: AppData;
-  onToggleWeekend: () => void;
   onDeleteVirtualCourse: (courseId: string) => void;
 }) {
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
@@ -873,27 +909,6 @@ function OfficialScheduleTable({
   const gridTemplateRows = `42px repeat(${displayRows.length}, 64px)`;
   return (
     <div className="p-4">
-      <div className="mb-3 flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onToggleWeekend}
-          aria-pressed={showWeekend}
-          className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
-            showWeekend
-              ? 'border-blue-200 bg-blue-50 text-blue-700'
-              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <span className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${
-            showWeekend ? 'bg-blue-600' : 'bg-slate-300'
-          }`}>
-            <span className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
-              showWeekend ? 'translate-x-3' : ''
-            }`} />
-          </span>
-          顯示週末
-        </button>
-      </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <div
           className="relative min-w-[780px] text-sm"
