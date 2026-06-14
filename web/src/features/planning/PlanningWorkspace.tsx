@@ -41,7 +41,6 @@ function ScheduleLegend() {
     { label: '雙主修', className: 'border-emerald-200 bg-emerald-50' },
     { label: '輔系', className: 'border-cyan-200 bg-cyan-50' },
     { label: '待加簽', className: 'border-amber-300 bg-amber-50' },
-    { label: '衝堂', className: 'border-red-300 bg-red-100' },
   ];
 
   return (
@@ -339,6 +338,11 @@ export function PlanningWorkspace({
   const competitionCount = planningMode === 'lottery' ? slotGroups.length + nameGroups.length : 0;
   const officialRegisteredCount = officialSelection?.registered_count || 0;
   const officialAvailableCount = officialSelection?.available_count || 0;
+  const officialRegisteredCredits = (officialSelection?.registered_courses || []).reduce(
+    (sum, course) => sum + (course.credits || 0),
+    0,
+  );
+  const currentPlanningCredits = officialRegisteredCredits + virtualCredits;
   const officialRequiredPresetCourses = officialSelection ? requiredPresetCoursesForDisplay(officialSelection) : [];
   const officialRequiredPresetCount = officialRequiredPresetCourses.length;
   const officialSelectionListCount = officialSelection?.selection_list_rows.length || 0;
@@ -511,7 +515,7 @@ export function PlanningWorkspace({
           <div className="mt-4 grid grid-cols-2 gap-3">
             <MetricBox label="已登記志願" value={String(officialRegisteredCount)} tone="emerald" />
             <MetricBox label="待加入清單" value={String(officialAvailableCount)} tone="blue" />
-            <MetricBox label={planningMode === 'lottery' ? '競爭組' : '真衝堂'} value={String(planningMode === 'lottery' ? competitionCount : trueConflictCount)} tone={planningMode === 'lottery' ? 'amber' : trueConflictCount > 0 ? 'red' : 'emerald'} />
+            <MetricBox label="目前學分" value={`${formatCredits(currentPlanningCredits)} 學分`} tone="amber" />
             <MetricBox label="待加簽" value={`${virtualCourses.length} 門`} tone="slate" />
           </div>
 
