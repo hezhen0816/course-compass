@@ -3,7 +3,7 @@
 狀態：進行中
 更新：2026-06-14
 
-本文件是目前仍有效的重構執行計畫。舊版產品定位與 UX audit 已移到 `docs/archive/2026-refactor/`，只作為歷史脈絡。
+本文件是目前仍有效的重構執行計畫。過時的產品定位、UX audit、reference images 與舊設計 QA 已從 repo 移除。
 
 ## 目標
 
@@ -42,6 +42,7 @@
 - Snapshot repository/service regression tests 已從大型 backend pure test 拆到 `tests/backend/test_snapshots_service.py`。
 - TR room parser/API regression tests 已從大型 backend pure test 拆到 `tests/backend/test_tr_rooms_api.py`。
 - Moodle assignment 與 history parser regression tests 已從大型 backend pure test 拆到 `tests/backend/test_ntust_content_parsers.py`。
+- 過時的 `docs/archive/2026-refactor/` 與 `docs/design/web_planning_workspace_qa.md` 已刪除，避免 repo 保留不再代表現況的文件與參考圖片。
 
 ## 目前架構
 
@@ -118,7 +119,6 @@ ios/App/App/
 docs/
   architecture/
   data-contracts/
-  archive/2026-refactor/
 tests/
   backend/
   fixtures/
@@ -129,7 +129,7 @@ tests/
 1. Keep the current production lane green.
    - Verify: `npm run check`, production backend verifier, Railway/Vercel commit checks.
 2. Finish low-risk structure cleanup.
-   - Move historical docs and reference images into `docs/archive/2026-refactor/`.
+   - Remove historical docs, reference images, and obsolete QA notes that no longer represent the current app.
    - Move long-lived test fixtures into `tests/fixtures/`.
 3. Split backend responsibilities without changing API behavior.
    - Route handlers are now in `backend/api/*`; keep shrinking `backend/app.py` to setup/wiring only.

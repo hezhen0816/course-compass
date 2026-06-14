@@ -20,7 +20,7 @@
 - `backend/`：FastAPI backend，已部分拆成 `api/`、`core/`、`integrations/`、`repositories/`、`services/`、`schemas/`。
 - `ios/`：native iOS app，仍相容 current shared payload。
 - `supabase/`：production migration history。
-- `docs/`：現行架構、資料契約、設計 QA 與 archive。
+- `docs/`：現行架構與資料契約。
 - `tests/`：backend tests 與可回查 fixtures。
 - `scripts/`：本機啟動、Python runtime wrapper、production verifier 與 migration helper。
 
@@ -63,19 +63,19 @@
 - `docs/architecture/refactor-plan.md`
 - `docs/architecture/refactor-inventory.md`
 - `docs/data-contracts/database-schema.md`
-- `docs/design/web_planning_workspace_qa.md`
 - `docs/README.md`
 
-Archive：
+已刪除的過時文件與資料：
 
 - `docs/archive/2026-refactor/product_redefinition.md`
 - `docs/archive/2026-refactor/web_ux_low_risk_audit.md`
 - `docs/archive/2026-refactor/reference-images/`
+- `docs/design/web_planning_workspace_qa.md`
 
 後續規則：
 
-- 現行規格只放 `architecture/`、`data-contracts/`、`design/`。
-- 舊產品定位、舊 UX audit、參考截圖放 `archive/2026-refactor/`。
+- 現行規格只放 `architecture/`、`data-contracts/`。
+- 舊產品定位、舊 UX audit、參考截圖與過期 QA 記錄不再保留在 repo。
 - 不把臨時截圖、build output、本機 debug dump 放進 `docs/`。
 
 ## Database Refactor Baseline

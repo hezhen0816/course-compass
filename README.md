@@ -6,7 +6,7 @@
 - `ios/`：SwiftUI 原生 iPhone App
 - `backend/`：Python 同步服務
 - `supabase/`：migration 與資料庫結構
-- `docs/`：現行 architecture/data contract、設計 QA 與歷史歸檔
+- `docs/`：現行 architecture 與 data contract
 - `tests/`：測試與可重跑 fixture
 
 `backend/`、`supabase/`、`docs/`、`tests/` 都維持在根目錄，方便兩端共用。根目錄只放 workspace 總控設定與跨端文件，不放 build output 或臨時截圖。
@@ -59,9 +59,8 @@
 ### Docs
 
 - `docs/architecture/refactor-plan.md`：目前有效的全專案重構計畫、執行順序與驗證 gate
+- `docs/architecture/refactor-inventory.md`：重構盤點基準與清理紀錄
 - `docs/data-contracts/database-schema.md`：current production schema 與 planned typed schema 的資料責任邊界
-- `docs/design/`：設計 QA 記錄
-- `docs/archive/2026-refactor/`：歷史產品定義、UX audit 與 reference images
 
 ## 開發指令
 
