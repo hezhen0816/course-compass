@@ -107,7 +107,7 @@ Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `Course
 重構期間的測試原則：
 
 - 官方選課 parser/client/API、credential/session、database migration 與 sync API tests 屬於必留安全網。
-- Fixture 抓取腳本與代表性輸出屬於保守保留；後續若移除，需先確認沒有測試、文件或 parser 回歸流程引用。
+- Fixture outputs 屬於保守保留；手動抓取腳本在 `scripts/research/`，後續若移除，需先確認沒有文件或 parser 回歸流程引用。
 - 不提交本機 cache；`.gitignore` 已排除 `.DS_Store`、`__pycache__`、`.pytest_cache` 與 `*.pyc`。
 
 ## Database Refactor Baseline

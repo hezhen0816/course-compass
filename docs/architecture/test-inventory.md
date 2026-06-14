@@ -59,7 +59,7 @@
 
 ## Next Review Checkpoint
 
-完成 typed database backfill preview 後再重新評估：
+進入 typed database dual-write 設計前再重新評估：
 
 1. `test_health_and_production_verifier.py` 是否應拆成 health test 與 deployment verifier test。
 2. Moodle fixture 是否仍需留在 repo。

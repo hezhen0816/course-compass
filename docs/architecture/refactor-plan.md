@@ -160,8 +160,8 @@ tests/
    - Remove historical docs, reference images, and obsolete QA notes that no longer represent the current app.
    - Move long-lived test fixture outputs into `tests/fixtures/`; keep manual capture scripts in `scripts/research/`.
 3. Split backend responsibilities without changing API behavior.
-   - Route handlers are now in `backend/api/*`; keep shrinking `backend/app.py` to setup/wiring only.
-   - Parsing/client code is now in `backend/integrations/*`; retire compatibility wrappers after internal imports settle.
+   - Route handlers are now in `backend/api/*`; `backend/app.py` is setup/wiring only.
+   - Parsing/client code is now in `backend/integrations/*`; pure backend top-level compatibility wrappers have been removed.
    - Official selection parser regression tests are now isolated in `tests/backend/test_official_selection_parser.py`.
    - Official selection client regression tests are now isolated in `tests/backend/test_official_selection_client.py`.
    - Official selection API route regression tests are now isolated in `tests/backend/test_official_selection_api.py`.
@@ -172,11 +172,12 @@ tests/
    - Legacy credential migration regression tests are now isolated in `tests/backend/test_legacy_credential_migration.py`.
    - School credentials API regression test is now isolated in `tests/backend/test_school_credentials_api.py`, and the historical `test_backend_pure.py` file has been removed.
    - School session store/repository regression tests are now isolated in `tests/backend/test_school_session_store.py`.
-   - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, and snapshot row access have started.
-   - Core config/time helpers are now in `backend/core/*`; retire compatibility wrappers after scripts and external imports settle.
-   - Pydantic API schemas are now split by domain in `backend/schemas/*`; retire compatibility wrappers after scripts and external imports settle.
-   - School session and credential domain flows are now in `backend/services/*`; continue shrinking compatibility wrappers.
-   - Keep compatibility imports while tests are being migrated.
+   - Typed planner regression tests are grouped under `tests/backend/typed_planner/`.
+   - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, snapshot, and typed planner row access boundaries are established.
+   - Core config/time helpers are now in `backend/core/*`.
+   - Pydantic API schemas are now split by domain in `backend/schemas/*`.
+   - School session and credential domain flows are now in `backend/services/*`.
+   - No pure backend top-level compatibility wrapper remains; future moves should update direct imports and tests in the same phase.
 4. Add typed table migrations behind a backup-first cutover.
    - Typed table foundation is additive only; production read/write remains on the current compatibility layer until dual-write and reconciliation are ready.
    - Preview/backfill tool 已可先離線產生 typed table rows、raw backup package、對帳 counts 與 no-write apply plan；下一步才是設計真正 apply lane。
