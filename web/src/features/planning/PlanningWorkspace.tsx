@@ -153,6 +153,22 @@ function badgeToneClass(tone: CourseTone, conflicting = false): string {
   return toneClasses[tone];
 }
 
+function groupedItemToneClass(tone: CourseTone): string {
+  const toneClasses: Record<CourseTone, string> = {
+    required: 'border-rose-100 bg-rose-50',
+    elective: 'border-blue-100 bg-blue-50',
+    general: 'border-violet-100 bg-violet-50',
+    pe: 'border-lime-100 bg-lime-50',
+    doubleMajor: 'border-teal-100 bg-teal-50',
+    minor: 'border-fuchsia-100 bg-fuchsia-50',
+    virtual: 'border-amber-100 bg-amber-50',
+    group: 'border-amber-100 bg-amber-50',
+    conflict: 'border-red-100 bg-red-50',
+    other: 'border-slate-100 bg-white',
+  };
+  return toneClasses[tone];
+}
+
 function gpaBadgeLabel(gpa?: number | null, status?: GpaStatus): string {
   if (typeof gpa === 'number' && Number.isFinite(gpa)) return `GPA ${gpa.toFixed(2)}`;
   if (status === 'no_data') return '查無 GPA';
@@ -1005,7 +1021,7 @@ function GroupedScheduleEventContent({ event }: { event: ScheduleEvent }) {
       </div>
       <div className="space-y-0.5">
         {visibleEvents.map((item) => (
-          <div key={item.id} className="flex min-w-0 items-start gap-1 rounded bg-white/50 px-1 py-0.5">
+          <div key={item.id} className={`flex min-w-0 items-start gap-1 rounded border px-1 py-0.5 ${groupedItemToneClass(item.tone)}`}>
             {item.rank ? (
               <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${badgeToneClass(item.tone)}`}>
                 {item.rank}
