@@ -43,6 +43,7 @@
 - TR room parser/API regression tests 已從大型 backend pure test 拆到 `tests/backend/test_tr_rooms_api.py`。
 - Moodle assignment 與 history parser regression tests 已從大型 backend pure test 拆到 `tests/backend/test_ntust_content_parsers.py`。
 - 過時的 `docs/archive/2026-refactor/` 與 `docs/design/web_planning_workspace_qa.md` 已刪除，避免 repo 保留不再代表現況的文件與參考圖片。
+- Health check 與 production backend verifier regression tests 已從大型 backend pure test 拆到 `tests/backend/test_health_and_production_verifier.py`。
 
 ## 目前架構
 

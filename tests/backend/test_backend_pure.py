@@ -14,7 +14,6 @@ from backend.repositories import school_sessions as school_session_repository
 from backend.services import credential_store as credentials
 from backend.services import school_session_store as school_sessions
 from scripts import migrate_legacy_school_credentials as legacy_credential_migration
-from scripts import verify_production_backend
 
 
 class FakeJSONResponse:
@@ -90,66 +89,6 @@ def test_group_schedule_entries_orders_slots_and_preserves_metadata() -> None:
             "accent": "compulsory",
         }
     ]
-
-
-def test_healthcheck_reports_official_selection_capabilities() -> None:
-    client = TestClient(backend_app.app)
-
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["ok"] is True
-    assert payload["version"] == backend_app.API_VERSION
-    assert payload["capabilities"]["school_credentials"] is True
-    assert payload["capabilities"]["school_sessions"] is True
-    assert payload["capabilities"]["official_selection"] is True
-    assert set(payload["capabilities"]["official_selection_actions"]) == {
-        "sync",
-        "keep_alive",
-        "join",
-        "add_to_waitlist",
-        "remove",
-        "reorder",
-    }
-
-
-def test_production_backend_verifier_accepts_required_capabilities(monkeypatch) -> None:
-    def fake_fetch_json(url: str) -> dict[str, object]:
-        if url.endswith("/health"):
-            return {
-                "ok": True,
-                "capabilities": {
-                    "school_credentials": True,
-                    "school_sessions": True,
-                    "official_selection": True,
-                },
-            }
-        return {
-            "paths": {
-                path: {}
-                for path in verify_production_backend.REQUIRED_OPENAPI_PATHS
-            }
-        }
-
-    monkeypatch.setattr(verify_production_backend, "_fetch_json", fake_fetch_json)
-
-    assert verify_production_backend.verify_backend("https://backend.example.test") == []
-
-
-def test_production_backend_verifier_reports_missing_official_selection(monkeypatch) -> None:
-    def fake_fetch_json(url: str) -> dict[str, object]:
-        if url.endswith("/health"):
-            return {"ok": True}
-        return {"paths": {"/api/courses/search": {}}}
-
-    monkeypatch.setattr(verify_production_backend, "_fetch_json", fake_fetch_json)
-
-    issues = verify_production_backend.verify_backend("https://backend.example.test")
-
-    assert "/health missing capabilities object" in issues
-    assert "/openapi.json missing /api/official-selection/a02/sync" in issues
-    assert "/openapi.json missing /api/school-credentials" in issues
 
 
 def test_find_latest_course_list_url_prefers_highest_semester_list() -> None:
