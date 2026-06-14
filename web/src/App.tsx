@@ -39,7 +39,7 @@ import {
   resolveSemesterById,
   semesterIdForAcademicTerm,
   semesterNameForId,
-} from './domain/planner';
+} from './shared/domain/planner';
 
 const SELECTION_PLAN_SEMESTER_ID = '__selection_plan__';
 const DOUBLE_MAJOR_TODO_SET_ID = 'manual-double-major-todo';

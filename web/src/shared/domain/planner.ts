@@ -13,8 +13,8 @@ import type {
   ScheduleSyncResponse,
   ScheduledOffering,
   SyncedCourseRow,
-} from '../shared/types';
-import { searchCourses } from '../shared/api';
+} from '../types';
+import { searchCourses } from '../api';
 
 export const DAY_COLUMNS = [
   { code: 'M', label: '一' },

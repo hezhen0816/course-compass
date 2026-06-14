@@ -4,7 +4,7 @@ import {
   categoryFromHistoryRecord,
   isFailedImportedHistoryCourse,
   normalizeName,
-} from '../../domain/planner';
+} from '../../shared/domain/planner';
 
 export function usePlannerStats(data: AppData): PlannerStats {
   return useMemo<PlannerStats>(() => {

@@ -7,7 +7,7 @@ import {
   formatCredits,
   isFailedImportedHistoryCourse,
   isHistoryImportedCourse,
-} from '../../domain/planner';
+} from '../../shared/domain/planner';
 
 type CourseTimelinePageProps = {
   data: AppData;

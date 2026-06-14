@@ -1,7 +1,7 @@
 import { ListChecks, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { AppData, Course, CourseSearchResult, CourseSemesterInfo, PendingRequirement } from '../../shared/types';
-import { listCourseDepartments, parseCourseDepartment } from '../../domain/courseDepartments';
+import { listCourseDepartments, parseCourseDepartment } from '../../shared/domain/courseDepartments';
 import {
   type CapacityFilter,
   type ManualSearchSummary,
@@ -15,7 +15,7 @@ import {
   formatCredits,
   parseNodeSlots,
   requirementLabel,
-} from '../../domain/planner';
+} from '../../shared/domain/planner';
 
 type CourseSearchCenterProps = {
   data: AppData;

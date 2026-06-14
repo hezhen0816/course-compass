@@ -16,7 +16,7 @@ import {
   mergeHistoryRecordsIntoSemesters,
   retakeRequirementsFromHistory,
   semesterForStudentTerm,
-} from '../../domain/planner';
+} from '../../shared/domain/planner';
 
 type UseSchoolSyncOptions = {
   data: AppData;

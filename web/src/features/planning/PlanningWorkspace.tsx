@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Loader2, Trash2 } from 'lucide-react';
 import type { AppData, Course, GpaStatus, OfficialSelectionRegisteredCourse, OfficialSelectionRequiredPresetCourse, OfficialSelectionSyncResponse, PendingRequirement, PlannerStats } from '../../shared/types';
-import { parseCourseDepartment } from '../../domain/courseDepartments';
+import { parseCourseDepartment } from '../../shared/domain/courseDepartments';
 import {
   DAY_COLUMNS,
   PERIODS,
@@ -14,7 +14,7 @@ import {
   normalizeName,
   parseNodeSlots,
   requirementCourseCode,
-} from '../../domain/planner';
+} from '../../shared/domain/planner';
 
 const PERIOD_TIME_LABELS: Record<string, { start: string; end: string }> = {
   '1': { start: '08:10', end: '09:00' },

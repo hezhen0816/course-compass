@@ -9,7 +9,7 @@ import {
   formatCredits,
   parseNodeSlots,
   requirementCourseCode,
-} from '../../domain/planner';
+} from '../../shared/domain/planner';
 
 export function OfferingModal({
   requirement,

@@ -1,5 +1,5 @@
 import type { AppData, Course, CourseSearchResult, PendingRequirement } from '../shared/types';
-import type { ApiImportPreview, PlanningMode } from '../domain/planner';
+import type { ApiImportPreview, PlanningMode } from '../shared/domain/planner';
 import { CourseDetailModal } from '../features/history/CourseDetailModal';
 import { OnboardingModal } from './OnboardingModal';
 import { OfferingModal } from '../features/planning/OfferingModal';

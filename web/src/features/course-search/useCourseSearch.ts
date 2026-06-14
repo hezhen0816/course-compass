@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchCourseSemesters, searchCourses } from '../../shared/api';
 import type { CourseSearchResult, CourseSemesterInfo, GpaApiSettings } from '../../shared/types';
-import { parseCourseDepartment } from '../../domain/courseDepartments';
+import { parseCourseDepartment } from '../../shared/domain/courseDepartments';
 import {
   type CapacityFilter,
   type ManualSearchSummary,
@@ -12,7 +12,7 @@ import {
   displaySlots,
   formatCredits,
   parseNodeSlots,
-} from '../../domain/planner';
+} from '../../shared/domain/planner';
 
 function formatGpa(offering: CourseSearchResult): string {
   if (typeof offering.gpa === 'number' && Number.isFinite(offering.gpa)) return offering.gpa.toFixed(2);

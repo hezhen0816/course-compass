@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, RefreshCw, Settings, ShieldCheck } from 'lucide-react';
 import type { AppData, GpaApiSettings, ProgramDepartmentSettings } from '../../shared/types';
-import { listCourseDepartments } from '../../domain/courseDepartments';
+import { listCourseDepartments } from '../../shared/domain/courseDepartments';
 
 const EMPTY_GPA_API_SETTINGS: GpaApiSettings = {
   enabled: false,
