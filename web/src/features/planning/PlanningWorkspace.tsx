@@ -53,7 +53,7 @@ function ScheduleLegend() {
   );
 }
 
-type CourseTone = 'required' | 'elective' | 'general' | 'pe' | 'doubleMajor' | 'minor' | 'virtual' | 'conflict' | 'other';
+type CourseTone = 'required' | 'elective' | 'general' | 'pe' | 'doubleMajor' | 'minor' | 'virtual' | 'group' | 'conflict' | 'other';
 
 type CourseClassification = {
   label: string;
@@ -112,6 +112,7 @@ function scheduleToneClass(tone: CourseTone, conflicting = false): string {
     doubleMajor: 'border-emerald-200 bg-emerald-50 text-emerald-950',
     minor: 'border-cyan-200 bg-cyan-50 text-cyan-950',
     virtual: 'border-amber-300 bg-amber-50 text-amber-950',
+    group: 'border-amber-300 bg-amber-50 text-amber-950',
     conflict: 'border-red-300 bg-red-50 text-red-950',
     other: 'border-blue-100 bg-white text-slate-900',
   };
@@ -128,6 +129,7 @@ function scheduleAccentClass(tone: CourseTone, conflicting = false): string {
     doubleMajor: 'bg-emerald-400',
     minor: 'bg-cyan-400',
     virtual: 'bg-amber-400',
+    group: 'bg-amber-400',
     conflict: 'bg-red-400',
     other: 'bg-blue-500',
   };
@@ -144,6 +146,7 @@ function badgeToneClass(tone: CourseTone, conflicting = false): string {
     doubleMajor: 'bg-emerald-100 text-emerald-700',
     minor: 'bg-cyan-100 text-cyan-700',
     virtual: 'bg-amber-100 text-amber-700',
+    group: 'bg-amber-100 text-amber-700',
     conflict: 'bg-red-500 text-white',
     other: 'bg-blue-100 text-blue-700',
   };
@@ -1258,7 +1261,7 @@ function groupSameSlotEvents(events: RawScheduleEvent[]): RawScheduleEvent[] {
       span: first.span,
       title: `${sorted.length} 門同時段`,
       meta: sorted.map(formatGroupedEventLabel).join(' / '),
-      tone: sorted.some((event) => event.kind === 'virtual') ? 'virtual' : first.tone,
+      tone: 'group',
       classificationLabel: '同時段',
       groupedEvents: sorted,
     }];
