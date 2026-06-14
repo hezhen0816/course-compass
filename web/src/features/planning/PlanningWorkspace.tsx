@@ -175,6 +175,80 @@ function GpaBadge({ gpa, status }: { gpa?: number | null; status?: GpaStatus }) 
   );
 }
 
+type SelectionChanceEstimate = {
+  selectedCount: number;
+  capacity: number;
+  pressureRatio: number;
+  probabilityPercent: number;
+};
+
+function estimateSelectionChance(
+  selectedCount?: number | null,
+  capacity?: number | null,
+): SelectionChanceEstimate | null {
+  if (
+    selectedCount === null
+    || selectedCount === undefined
+    || capacity === null
+    || capacity === undefined
+    || !Number.isFinite(selectedCount)
+    || !Number.isFinite(capacity)
+    || capacity <= 0
+  ) {
+    return null;
+  }
+  const pressureRatio = selectedCount / capacity;
+  const probabilityPercent = pressureRatio > 0 ? Math.min(100, 100 / pressureRatio) : 100;
+  return {
+    selectedCount,
+    capacity,
+    pressureRatio,
+    probabilityPercent,
+  };
+}
+
+function formatProbabilityPercent(value: number): string {
+  if (value >= 99.95) return '100%';
+  return `${value.toFixed(1)}%`;
+}
+
+function SelectionChanceBadge({
+  selectedCount,
+  capacity,
+}: {
+  selectedCount?: number | null;
+  capacity?: number | null;
+}) {
+  const estimate = estimateSelectionChance(selectedCount, capacity);
+  if (!estimate) {
+    return (
+      <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
+        機率未公告
+      </span>
+    );
+  }
+
+  const isOverCapacity = estimate.selectedCount > estimate.capacity;
+  const toneClass = isOverCapacity
+    ? 'bg-red-50 text-red-700 ring-red-100'
+    : 'bg-emerald-50 text-emerald-700 ring-emerald-100';
+  return (
+    <>
+      <span
+        className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium ring-1 ${toneClass}`}
+        title={`估算方式：人數 ${estimate.selectedCount} / 名額 ${estimate.capacity} = ${estimate.pressureRatio.toFixed(2)} 倍，選上估 ${formatProbabilityPercent(estimate.probabilityPercent)}`}
+      >
+        選上估 {formatProbabilityPercent(estimate.probabilityPercent)}
+      </span>
+      {isOverCapacity && (
+        <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-100">
+          建議前排
+        </span>
+      )}
+    </>
+  );
+}
+
 function planningModeLabel(mode: PlanningMode): string {
   if (mode === 'lottery') return '初選志願';
   if (mode === 'addDrop') return '加退選';
@@ -519,6 +593,9 @@ function OfficialRegisteredList({
 
   return (
     <div className="space-y-2">
+      <p className="rounded-md bg-slate-50 px-2.5 py-2 text-xs text-slate-500">
+        選上機率依目前選課人數與名額估算，僅供志願序排序參考。
+      </p>
       {isDirty && (
         <div className="flex gap-2">
           <button
@@ -566,7 +643,13 @@ function OfficialRegisteredList({
                   ].filter(Boolean).join('・')}
                 </span>
                 <GpaBadge gpa={course.gpa} status={course.gpa_status} />
+                <SelectionChanceBadge selectedCount={course.selected_count} capacity={course.capacity} />
               </div>
+              {course.selected_count != null && course.capacity != null && (
+                <p className="mt-1 text-xs text-slate-500">
+                  目前 {course.selected_count} / {course.capacity} 人
+                </p>
+              )}
             </div>
             <div className="flex shrink-0 flex-col gap-1">
               <button
@@ -1259,6 +1342,10 @@ function PlanningListCourse({
               {course.scheduledOffering?.teacher ? `・${course.scheduledOffering.teacher}` : ''}
             </span>
             <GpaBadge gpa={course.scheduledOffering?.gpa} status={course.scheduledOffering?.gpaStatus} />
+            <SelectionChanceBadge
+              selectedCount={course.scheduledOffering?.selectedCount}
+              capacity={course.scheduledOffering?.capacity}
+            />
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">
             {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}

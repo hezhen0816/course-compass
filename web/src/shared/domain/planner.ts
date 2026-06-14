@@ -143,6 +143,8 @@ export function toScheduledOffering(offering: CourseSearchResult): ScheduledOffe
     contents: offering.contents,
     gpa: offering.gpa,
     gpaStatus: offering.gpa_status,
+    selectedCount: offering.selected_count,
+    capacity: offering.capacity,
   };
 }
 

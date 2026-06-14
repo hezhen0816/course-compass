@@ -44,6 +44,8 @@ export interface ScheduledOffering {
   contents: string;
   gpa?: number | null;
   gpaStatus?: GpaStatus;
+  selectedCount?: number | null;
+  capacity?: number | null;
 }
 
 export interface Course {
