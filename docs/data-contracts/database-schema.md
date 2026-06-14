@@ -157,7 +157,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 
 ## Backfill Preview Tool
 
-`scripts/preview_typed_planner_backfill.py` 是 typed schema 切換前的離線預覽工具。
+`backend/services/typed_planner_backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py` 是本機 CLI wrapper。
 
 用途：
 - 讀取本機 JSON 匯出的 `public.user_data` rows。

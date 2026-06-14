@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.preview_typed_planner_backfill import (
+from backend.services.typed_planner_backfill import (
     build_typed_planner_preview,
     build_typed_planner_reconciliation,
     write_typed_planner_backfill_package,
