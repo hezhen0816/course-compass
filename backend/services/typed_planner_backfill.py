@@ -1,3 +1,10 @@
+"""Offline typed planner backfill preview and reconciliation helpers.
+
+This module intentionally has no Supabase client, no network calls, and no
+database writes. It only transforms exported ``public.user_data`` rows into
+typed-table preview rows, reconciliation reports, and local backup packages.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -9,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 
+CONTRACT_VERSION = "typed-planner-backfill-preview-v1"
 TABLE_NAMES = [
     "planner_profiles",
     "academic_terms",
@@ -38,6 +46,17 @@ PACKAGE_FILES = {
     "reconciliation": "reconciliation.json",
     "manifest": "manifest.json",
 }
+
+__all__ = [
+    "CONTRACT_VERSION",
+    "PACKAGE_FILES",
+    "TABLE_NAMES",
+    "build_typed_planner_backfill_package",
+    "build_typed_planner_preview",
+    "build_typed_planner_reconciliation",
+    "load_user_data_rows",
+    "write_typed_planner_backfill_package",
+]
 
 
 def _stable_uuid(*parts: object) -> str:
@@ -659,6 +678,7 @@ def build_typed_planner_preview(rows: list[dict[str, Any]], *, include_rows: boo
 
     counts = {table_name: len(rows_for_table) for table_name, rows_for_table in tables.items()}
     preview: dict[str, Any] = {
+        "contract_version": CONTRACT_VERSION,
         "mode": "preview_only_no_database_writes",
         "counts": counts,
         "source_counts": source_counts,
@@ -731,6 +751,7 @@ def build_typed_planner_reconciliation(preview: dict[str, Any]) -> dict[str, Any
     has_mismatch = any(check["status"] != "passed" for check in checks)
     status = "failed" if has_mismatch else "review_required" if warnings else "passed"
     return {
+        "contract_version": CONTRACT_VERSION,
         "mode": "preview_reconciliation_no_database_writes",
         "status": status,
         "checks": checks,
@@ -748,12 +769,14 @@ def build_typed_planner_backfill_package(
     preview = build_typed_planner_preview(rows, include_rows=include_rows)
     reconciliation = build_typed_planner_reconciliation(preview)
     backup = {
+        "contract_version": CONTRACT_VERSION,
         "mode": "raw_user_data_backup",
         "contains_sensitive_source_data": True,
         "row_count": len(rows),
         "rows": copy.deepcopy(rows),
     }
     manifest = {
+        "contract_version": CONTRACT_VERSION,
         "mode": "typed_planner_backfill_package",
         "generated_at": generated_at,
         "status": reconciliation["status"],
@@ -807,4 +830,3 @@ def load_user_data_rows(path: Path) -> list[dict[str, Any]]:
         if isinstance(rows, list):
             return rows
     raise ValueError("input JSON must be a list of user_data rows or an object with a rows list")
-

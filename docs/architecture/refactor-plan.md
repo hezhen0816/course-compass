@@ -91,6 +91,7 @@ backend/
     school_sessions.py   # official session domain flow, encryption payload, TTL helpers
     session_context.py   # backend-owned credential/session context helpers
     snapshots.py         # schedule/history/Moodle snapshot domain flow
+    typed_planner_backfill.py # offline typed planner preview/reconciliation service
   core/
     config.py            # backend settings, constants, NTUST/Supabase URLs
     errors.py            # shared backend exception types

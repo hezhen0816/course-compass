@@ -159,10 +159,13 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 
 `backend/services/typed_planner_backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py` 是本機 CLI wrapper。
 
+目前 preview contract version：`typed-planner-backfill-preview-v1`。
+
 用途：
 - 讀取本機 JSON 匯出的 `public.user_data` rows。
 - 將 `content.semesters`、`requirementSets`、`pendingRequirements`、`historyRecords`、`selectionPlan` 拆成 typed table preview rows。
 - 輸出每張 typed table 的 row count、source count 與 warnings。
+- 在 `preview.json`、`reconciliation.json`、`manifest.json` 與 `backup-user-data.json` 寫入 `contract_version`，供後續 apply lane 驗證。
 - 保留無法穩定映射的原始欄位到 `metadata.source_payload`，但會遮罩 `settings.school_password`、`passwordCiphertext`、`gpaApi.apiKey`。
 - 可用 `--package-dir` 產生本機 backfill package：
   - `backup-user-data.json`：完整原始 backup，可能包含敏感資料，只能留在本機安全位置。

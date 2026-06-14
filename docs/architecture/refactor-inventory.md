@@ -146,6 +146,7 @@ Typed schema foundation：
 - `backend/services/typed_planner_backfill.py`
 - `scripts/preview_typed_planner_backfill.py`
 - service 保留 preview/package/reconciliation 核心邏輯，script 只做 CLI 包裝。
+- preview/package/reconciliation 目前使用 contract version：`typed-planner-backfill-preview-v1`。
 - 只讀本機 JSON，不連 Supabase、不寫 DB。
 - 輸出 typed table preview rows、row counts、source counts 與 warnings。
 - `metadata.source_payload` 保留原始未知欄位，但遮罩校務密碼、舊 ciphertext 與 GPA API key。

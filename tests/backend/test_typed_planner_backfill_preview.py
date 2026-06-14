@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from backend.services import typed_planner_backfill
 from backend.services.typed_planner_backfill import (
+    CONTRACT_VERSION,
     build_typed_planner_preview,
     build_typed_planner_reconciliation,
     write_typed_planner_backfill_package,
@@ -120,6 +122,7 @@ def test_typed_planner_backfill_preview_counts_core_rows() -> None:
         [{"user_id": "11111111-1111-1111-1111-111111111111", "content": _sample_content()}]
     )
 
+    assert preview["contract_version"] == CONTRACT_VERSION
     assert preview["mode"] == "preview_only_no_database_writes"
     assert preview["warnings"] == []
     assert preview["source_counts"] == {
@@ -207,6 +210,7 @@ def test_typed_planner_reconciliation_reports_mismatch_when_source_cannot_map() 
 
     reconciliation = build_typed_planner_reconciliation(preview)
 
+    assert reconciliation["contract_version"] == CONTRACT_VERSION
     assert reconciliation["status"] == "failed"
     failed_check = next(
         check for check in reconciliation["checks"] if check["name"] == "pending_requirements_to_requirements"
@@ -231,6 +235,7 @@ def test_typed_planner_package_writes_backup_preview_reconciliation_and_manifest
     )
 
     assert manifest["mode"] == "typed_planner_backfill_package"
+    assert manifest["contract_version"] == CONTRACT_VERSION
     assert manifest["status"] == "passed"
     assert manifest["database_writes"] is False
     assert manifest["contains_sensitive_backup"] is True
@@ -242,8 +247,24 @@ def test_typed_planner_package_writes_backup_preview_reconciliation_and_manifest
     written_manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
 
     assert backup["mode"] == "raw_user_data_backup"
+    assert backup["contract_version"] == CONTRACT_VERSION
     assert backup["contains_sensitive_source_data"] is True
     assert backup["rows"][0]["content"]["settings"]["gpaApi"]["apiKey"] == "secret-token"
     assert preview["tables"]["planner_profiles"][0]["settings"]["gpaApi"]["apiKey"] == "[redacted]"
+    assert preview["contract_version"] == CONTRACT_VERSION
     assert reconciliation["status"] == "passed"
+    assert reconciliation["contract_version"] == CONTRACT_VERSION
     assert written_manifest["status"] == "passed"
+
+
+def test_typed_planner_backfill_service_exports_stable_public_api() -> None:
+    assert typed_planner_backfill.__all__ == [
+        "CONTRACT_VERSION",
+        "PACKAGE_FILES",
+        "TABLE_NAMES",
+        "build_typed_planner_backfill_package",
+        "build_typed_planner_preview",
+        "build_typed_planner_reconciliation",
+        "load_user_data_rows",
+        "write_typed_planner_backfill_package",
+    ]
