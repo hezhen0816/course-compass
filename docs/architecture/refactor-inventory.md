@@ -90,6 +90,14 @@
 
 Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `CourseDetailModal` 已移到 `web/src/features/history/`。`web/src/components/` 目前沒有仍需保留的檔案。
 
+共用 frontend infrastructure 已集中到 `web/src/shared/`：
+
+- `shared/api.ts`
+- `shared/supabase.ts`
+- `shared/constants.ts`
+
+舊 `web/src/utils/parseCourselist.ts` 與 Vite 預設 `web/src/assets/react.svg` 沒有 current import，已移除。
+
 ## Database Refactor Baseline
 
 Current production truth：

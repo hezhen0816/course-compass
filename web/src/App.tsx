@@ -7,7 +7,7 @@ import {
   removeOfficialInitialSelectionCourse,
   reorderOfficialInitialSelectionCourses,
   syncOfficialInitialSelection,
-} from './api';
+} from './shared/api';
 import { useAuth } from './hooks/useAuth';
 import { useCourseData } from './hooks/useCourseData';
 import { AuthPage } from './app/AuthPage';

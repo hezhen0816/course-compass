@@ -1,6 +1,6 @@
 import { Info } from 'lucide-react';
 import type { AppData, Course } from '../../types';
-import { CATEGORY_LABELS, PROGRAM_LABELS } from '../../constants';
+import { CATEGORY_LABELS, PROGRAM_LABELS } from '../../shared/constants';
 import {
   displayClassroom,
   displaySlots,

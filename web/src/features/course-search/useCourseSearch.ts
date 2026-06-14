@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchCourseSemesters, searchCourses } from '../../api';
+import { fetchCourseSemesters, searchCourses } from '../../shared/api';
 import type { CourseSearchResult, CourseSemesterInfo, GpaApiSettings } from '../../types';
 import { parseCourseDepartment } from '../../domain/courseDepartments';
 import {

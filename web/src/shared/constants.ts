@@ -1,4 +1,4 @@
-import type { Semester, CourseCategory, GenEdDimension, CourseProgram, AppTargets } from './types';
+import type { Semester, CourseCategory, GenEdDimension, CourseProgram, AppTargets } from '../types';
 
 export const INITIAL_SEMESTERS: Semester[] = [
   { id: '1-1', name: '大一上', courses: [] },

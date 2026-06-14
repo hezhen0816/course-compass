@@ -54,6 +54,7 @@
 - School credentials API regression test 已從大型 backend pure test 改名整理到 `tests/backend/test_school_credentials_api.py`，舊 `test_backend_pure.py` 已移除。
 - Web 舊版 planner/sidebar/settings UI 元件已移除：`CourseModal`、`SettingsModal`、`SemesterGrid`、`Sidebar`、`ProgressBar`。
 - Web app shell 元件已搬到 `web/src/app/`，修課軌跡課程詳情 modal 已搬到 `web/src/features/history/`。
+- Web 共用 API client、Supabase client 與 planner constants 已搬到 `web/src/shared/`，未引用的舊 `parseCourselist.ts` 與 Vite 預設 `react.svg` 已移除。
 
 ## 目前架構
 

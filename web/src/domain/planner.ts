@@ -14,7 +14,7 @@ import type {
   ScheduledOffering,
   SyncedCourseRow,
 } from '../types';
-import { searchCourses } from '../api';
+import { searchCourses } from '../shared/api';
 
 export const DAY_COLUMNS = [
   { code: 'M', label: '一' },

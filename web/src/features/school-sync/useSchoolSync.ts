@@ -5,8 +5,8 @@ import {
   importAcademicHistory,
   saveSchoolCredentials,
   syncSchoolSchedule,
-} from '../../api';
-import { supabase } from '../../supabase';
+} from '../../shared/api';
+import { supabase } from '../../shared/supabase';
 import type { AppData, RequirementSet } from '../../types';
 import {
   RETAKE_SET_ID,

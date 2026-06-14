@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GraduationCap, AlertCircle, User, ShieldCheck } from 'lucide-react';
-import { supabase } from '../supabase';
+import { supabase } from '../shared/supabase';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 
 interface AuthPageProps {

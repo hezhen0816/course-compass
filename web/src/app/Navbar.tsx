@@ -1,6 +1,6 @@
 import React from 'react';
 import { GraduationCap, LogOut, CircleHelp, BookOpen } from 'lucide-react';
-import { supabase } from '../supabase';
+import { supabase } from '../shared/supabase';
 
 export type AppPage = 'course-search' | 'planning' | 'graduation' | 'history' | 'settings';
 
