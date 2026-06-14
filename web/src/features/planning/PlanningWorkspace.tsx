@@ -922,30 +922,15 @@ function OfficialScheduleTable({
             if (dayIndex < 0) return null;
             const isVirtual = event.kind === 'virtual';
             const isGroup = event.kind === 'group';
-            const isRail = event.laneCount > 1 && event.lane > 0;
-            const isNarrow = event.laneCount > 1 && !isRail;
+            const isNarrow = event.laneCount > 1;
             const competing = isVirtual && mode === 'lottery' && event.laneCount > 1;
             const conflicting = isVirtual && mode !== 'lottery' && event.laneCount > 1;
             const showMeta = !isGroup && Boolean(event.meta) && (!isNarrow || event.span > 1);
-            const railSpace = event.lane === 0 && event.overlapCount > 1
-              ? Math.min(event.overlapCount - 1, 3) * 16
-              : 0;
-            const eventWidth = `calc(100% - ${6 + railSpace}px)`;
-            const eventMarginLeft = 3 + railSpace;
+            const stackOffset = isNarrow ? Math.min(event.lane, 4) : 0;
+            const stackWidth = isNarrow ? 'calc(100% - 22px)' : 'calc(100% - 6px)';
             const titleText = isGroup && event.groupedEvents
               ? event.groupedEvents.map(formatGroupedEventLabel).join('\n')
               : event.rank ? `${event.rank}. ${event.title}` : event.title;
-            if (isRail) {
-              return (
-                <ScheduleOverlapRail
-                  key={event.id}
-                  event={event}
-                  dayIndex={dayIndex}
-                  conflicting={conflicting}
-                  titleText={titleText}
-                />
-              );
-            }
             return (
               <div
                 key={event.id}
@@ -955,9 +940,9 @@ function OfficialScheduleTable({
                 style={{
                   gridColumn: dayIndex + 2,
                   gridRow: `${event.startIndex + 2} / span ${event.span}`,
-                  width: eventWidth,
-                  marginLeft: `${eventMarginLeft}px`,
-                  marginTop: '4px',
+                  width: stackWidth,
+                  marginLeft: `${3 + stackOffset * 7}px`,
+                  marginTop: `${4 + stackOffset * 7}px`,
                   zIndex: 10 + event.lane,
                 }}
                 title={titleText}
@@ -974,11 +959,6 @@ function OfficialScheduleTable({
                         </span>
                       ) : null}
                       <p className="min-w-0 flex-1 truncate text-xs font-semibold leading-5">{event.title}</p>
-                      {event.overlapCount > 1 ? (
-                        <span className="shrink-0 rounded-full bg-white/75 px-1.5 text-[10px] font-medium text-slate-600">
-                          +{event.overlapCount - 1}
-                        </span>
-                      ) : null}
                       {event.course ? (
                         <button
                           type="button"
@@ -1011,41 +991,6 @@ function OfficialScheduleTable({
           })}
         </div>
       </div>
-    </div>
-  );
-}
-
-function ScheduleOverlapRail({
-  event,
-  dayIndex,
-  conflicting,
-  titleText,
-}: {
-  event: ScheduleEvent;
-  dayIndex: number;
-  conflicting: boolean;
-  titleText: string;
-}) {
-  const railIndex = Math.min(event.lane - 1, 3);
-  return (
-    <div
-      className={`group/event relative my-1 flex min-h-0 items-start justify-center overflow-hidden rounded-full border shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md ${
-        scheduleToneClass(event.tone, conflicting)
-      }`}
-      style={{
-        gridColumn: dayIndex + 2,
-        gridRow: `${event.startIndex + 2} / span ${event.span}`,
-        width: '14px',
-        marginLeft: `${4 + railIndex * 16}px`,
-        marginTop: '4px',
-        zIndex: 30 + event.lane,
-      }}
-      title={titleText}
-    >
-      <span className={`absolute inset-y-0 left-0 w-1 ${scheduleAccentClass(event.tone, conflicting)}`} />
-      <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${badgeToneClass(event.tone, conflicting)}`}>
-        {event.rank ?? ''}
-      </span>
     </div>
   );
 }
@@ -1136,11 +1081,10 @@ type ScheduleEvent = {
   groupedEvents?: RawScheduleEvent[];
   lane: number;
   laneCount: number;
-  overlapCount: number;
   overlapsOfficial: boolean;
 };
 
-type RawScheduleEvent = Omit<ScheduleEvent, 'lane' | 'laneCount' | 'overlapCount' | 'overlapsOfficial'>;
+type RawScheduleEvent = Omit<ScheduleEvent, 'lane' | 'laneCount' | 'overlapsOfficial'>;
 
 function buildOfficialScheduleEvents(
   weekdays: typeof OFFICIAL_WEEKDAYS,
@@ -1293,7 +1237,6 @@ function layoutScheduleEvents(events: RawScheduleEvent[]): ScheduleEvent[] {
       laidOut.push({
         ...event,
         laneCount: Math.max(1, ...overlapping.map((candidate) => candidate.lane + 1)),
-        overlapCount: overlapping.length,
         overlapsOfficial: event.kind === 'virtual' && overlapping.some((candidate) => candidate.kind === 'official'),
       });
     });
