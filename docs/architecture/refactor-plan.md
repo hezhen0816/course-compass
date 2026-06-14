@@ -48,6 +48,7 @@
 - Credential repository regression tests 已從大型 backend pure test 拆到 `tests/backend/test_credentials_repository.py`。
 - School session store/repository regression tests 已從大型 backend pure test 拆到 `tests/backend/test_school_session_store.py`。
 - Official selection client regression tests 已從大型 backend pure test 拆到 `tests/backend/test_official_selection_client.py`。
+- Official selection API route regression tests 已從大型 backend pure test 拆到 `tests/backend/test_official_selection_api.py`。
 
 ## 目前架構
 
@@ -141,6 +142,7 @@ tests/
    - Parsing/client code is now in `backend/integrations/*`; retire compatibility wrappers after internal imports settle.
    - Official selection parser regression tests are now isolated in `tests/backend/test_official_selection_parser.py`.
    - Official selection client regression tests are now isolated in `tests/backend/test_official_selection_client.py`.
+   - Official selection API route regression tests are now isolated in `tests/backend/test_official_selection_api.py`.
    - Schedule helper regression tests are now isolated in `tests/backend/test_schedule_integration.py`.
    - Schedule/history/Moodle sync API regression tests are now isolated in `tests/backend/test_sync_api.py`.
    - Credential repository regression tests are now isolated in `tests/backend/test_credentials_repository.py`.
