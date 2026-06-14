@@ -47,6 +47,14 @@ const MINOR_TODO_SET_ID = 'manual-minor-todo';
 
 type PendingCourseGroup = 'double_major' | 'minor';
 
+function splitPendingCourseNames(courseName: string): string[] {
+  const names = courseName
+    .split(/[／/、,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return names.length > 0 ? names : [courseName.trim()].filter(Boolean);
+}
+
 function officialSelectionContainsCourse(payload: OfficialSelectionSyncResponse, courseNo: string): boolean {
   const normalizedCourseNo = courseNo.trim().toUpperCase();
   if (!normalizedCourseNo) return false;
@@ -73,6 +81,7 @@ export default function CoursePlannerWebApp() {
     currentCourseSemesterLabel,
     manualMode,
     manualQuery,
+    exactCourseNameSearch,
     manualStatus,
     manualError,
     manualSearchSummary,
@@ -85,6 +94,7 @@ export default function CoursePlannerWebApp() {
     capacityFilter,
     canRunManualSearch,
     setManualQuery,
+    setExactCourseNameSearch,
     setTeacherFilter,
     setCreditFilter,
     setRequireOptionFilter,
@@ -369,9 +379,11 @@ export default function CoursePlannerWebApp() {
   };
 
   const searchPendingCourseName = (courseName: string) => {
-    setManualMode('name');
-    setManualQuery(courseName);
-    void runManualSearch({ query: courseName, mode: 'name' });
+    const courseNames = splitPendingCourseNames(courseName);
+    const displayQuery = courseNames.join(' / ');
+    handleManualModeChange('name');
+    setManualQuery(displayQuery);
+    void runManualSearch({ query: displayQuery, queries: courseNames, mode: 'name' });
   };
 
   const deleteSelectionCourse = (courseId: string) => {
@@ -695,6 +707,7 @@ export default function CoursePlannerWebApp() {
             currentCourseSemesterLabel={currentCourseSemesterLabel}
             manualMode={manualMode}
             manualQuery={manualQuery}
+            exactCourseNameSearch={exactCourseNameSearch}
             manualStatus={manualStatus}
             manualError={manualError}
             manualSearchSummary={manualSearchSummary}
@@ -711,6 +724,7 @@ export default function CoursePlannerWebApp() {
             onQuerySemesterChange={handleQuerySemesterChange}
             onManualModeChange={handleManualModeChange}
             onManualQueryChange={setManualQuery}
+            onExactCourseNameSearchChange={setExactCourseNameSearch}
             onTeacherFilterChange={setTeacherFilter}
             onCreditFilterChange={setCreditFilter}
             onRequireOptionFilterChange={setRequireOptionFilter}

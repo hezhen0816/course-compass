@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchCourseSemesters, searchCourses } from '../../api';
 import type { CourseSearchResult, CourseSemesterInfo, GpaApiSettings } from '../../types';
+import { parseCourseDepartment } from '../../domain/courseDepartments';
 import {
   type CapacityFilter,
   type ManualSearchSummary,
@@ -20,11 +21,26 @@ function formatGpa(offering: CourseSearchResult): string {
   return '未啟用';
 }
 
+function normalizeCourseName(name: string): string {
+  return name
+    .replace(/[（）]/g, (match) => (match === '（' ? '(' : ')'))
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+function splitCourseNameQueries(query: string): string[] {
+  return query
+    .split(/[／/、,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export function useCourseSearch(gpaApiSettings?: GpaApiSettings) {
   const [querySemester, setQuerySemester] = useState('1142');
   const [courseSemesters, setCourseSemesters] = useState<CourseSemesterInfo[]>([]);
   const [manualQuery, setManualQuery] = useState('');
   const [manualMode, setManualMode] = useState<SearchMode>('name');
+  const [exactCourseNameSearch, setExactCourseNameSearch] = useState(false);
   const [manualResults, setManualResults] = useState<CourseSearchResult[]>([]);
   const [manualStatus, setManualStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [manualError, setManualError] = useState('');
@@ -83,18 +99,47 @@ export function useCourseSearch(gpaApiSettings?: GpaApiSettings) {
 
   const handleManualModeChange = (mode: SearchMode) => {
     setManualMode(mode);
+    if (mode === 'code') setExactCourseNameSearch(false);
     resetCourseSearchResults();
   };
 
-  const runManualSearch = async (override?: { query?: string; mode?: SearchMode }) => {
-    const query = (override?.query ?? manualQuery).trim();
+  const runManualSearch = async (override?: { query?: string; queries?: string[]; mode?: SearchMode }) => {
+    const overrideQueries = override?.queries
+      ?.map((item) => item.trim())
+      .filter(Boolean);
+    const rawQuery = (override?.query ?? manualQuery).trim();
     const mode = override?.mode ?? manualMode;
+    const queries = overrideQueries && overrideQueries.length > 0
+      ? overrideQueries
+      : mode === 'name' && exactCourseNameSearch
+        ? splitCourseNameQueries(rawQuery)
+        : undefined;
+    const query = (queries && queries.length > 0 ? queries.join(' / ') : rawQuery).trim();
     if (!query) return;
     setManualStatus('loading');
     setManualError('');
     try {
       const gpaApiKey = gpaApiSettings?.enabled ? gpaApiSettings.apiKey.trim() : '';
-      const results = await searchCourses(querySemester, query, mode, gpaApiKey || undefined);
+      const searchQueries = queries && queries.length > 0 ? queries : [query];
+      const resultGroups = await Promise.all(
+        searchQueries.map((searchQuery) => searchCourses(querySemester, searchQuery, mode, gpaApiKey || undefined)),
+      );
+      const seen = new Set<string>();
+      const exactNames = mode === 'name' && exactCourseNameSearch
+        ? new Set(searchQueries.map(normalizeCourseName))
+        : null;
+      const results = resultGroups.flat().filter((offering) => {
+        if (exactNames && !exactNames.has(normalizeCourseName(offering.course_name))) return false;
+        const key = [
+          offering.course_no.trim().toUpperCase(),
+          offering.course_name.trim(),
+          offering.teacher.trim(),
+          offering.node.trim(),
+        ].join('|');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
       setManualResults(results);
       setManualSearchSummary({
         query,
@@ -111,6 +156,7 @@ export function useCourseSearch(gpaApiSettings?: GpaApiSettings) {
 
   const resetCourseSearchFilters = () => {
     setManualQuery('');
+    setExactCourseNameSearch(false);
     setTeacherFilter('');
     setCreditFilter('all');
     setRequireOptionFilter('all');
@@ -124,10 +170,11 @@ export function useCourseSearch(gpaApiSettings?: GpaApiSettings) {
 
   const exportCourseResults = () => {
     if (filteredManualResults.length === 0) return;
-    const headers = ['課碼', '課名', '教師', '學分', 'GPA', '節次', '教室', '名額', '備註'];
+    const headers = ['課碼', '開課系所', '課名', '教師', '學分', 'GPA', '節次', '教室', '名額', '備註'];
     const escapeCell = (value: string | number | null | undefined) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = filteredManualResults.map((offering) => [
       offering.course_no,
+      parseCourseDepartment(offering.course_no)?.name || '',
       offering.course_name,
       offering.teacher,
       formatCredits(offering.credits),
@@ -153,6 +200,7 @@ export function useCourseSearch(gpaApiSettings?: GpaApiSettings) {
     currentCourseSemesterLabel,
     manualMode,
     manualQuery,
+    exactCourseNameSearch,
     manualStatus,
     manualError,
     manualSearchSummary,
@@ -165,6 +213,7 @@ export function useCourseSearch(gpaApiSettings?: GpaApiSettings) {
     capacityFilter,
     canRunManualSearch,
     setManualQuery,
+    setExactCourseNameSearch,
     setTeacherFilter,
     setCreditFilter,
     setRequireOptionFilter,
