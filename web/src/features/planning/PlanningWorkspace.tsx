@@ -3,7 +3,6 @@ import { ArrowDown, ArrowUp, CheckCircle2, Clock, Loader2, Trash2 } from 'lucide
 import type { AppData, Course, GpaStatus, OfficialSelectionRegisteredCourse, OfficialSelectionRequiredPresetCourse, OfficialSelectionSyncResponse, PendingRequirement, PlannerStats } from '../../shared/types';
 import { parseCourseDepartment } from '../../shared/domain/courseDepartments';
 import {
-  DAY_COLUMNS,
   PERIODS,
   type PlanningMode,
   type RequirementStatus,
@@ -11,7 +10,6 @@ import {
   displaySlots,
   formatCredits,
   isHistoryImportedCourse,
-  normalizeName,
   parseNodeSlots,
   requirementCourseCode,
 } from '../../shared/domain/planner';
@@ -279,28 +277,6 @@ function scheduledCredits(courses: Course[]): number {
   return courses.reduce((sum, course) => sum + (course.category === 'pe' ? 0 : course.credits), 0);
 }
 
-function getSlotGroups(courses: Course[]) {
-  return DAY_COLUMNS.flatMap((day) => PERIODS.map((period) => {
-    const slot = `${day.code}${period}`;
-    const slotCourses = courses.filter((course) => course.scheduledOffering?.slots.includes(slot));
-    return {
-      slot,
-      label: `星期${day.label} ${period}`,
-      courses: slotCourses,
-    };
-  })).filter((group) => group.courses.length > 1);
-}
-
-function getNameGroups(courses: Course[]) {
-  const groups = new Map<string, Course[]>();
-  courses.forEach((course) => {
-    const key = normalizeName(course.name);
-    if (!key) return;
-    groups.set(key, [...(groups.get(key) || []), course]);
-  });
-  return Array.from(groups.values()).filter((coursesInGroup) => coursesInGroup.length > 1);
-}
-
 export function PlanningWorkspace({
   data,
   stats,
@@ -332,10 +308,6 @@ export function PlanningWorkspace({
 }) {
   const virtualCourses = activeSemester?.courses.filter((course) => !isHistoryImportedCourse(course)) || [];
   const virtualCredits = scheduledCredits(virtualCourses);
-  const slotGroups = getSlotGroups(virtualCourses);
-  const nameGroups = getNameGroups(virtualCourses);
-  const trueConflictCount = planningMode === 'lottery' ? 0 : slotGroups.length;
-  const competitionCount = planningMode === 'lottery' ? slotGroups.length + nameGroups.length : 0;
   const officialRegisteredCount = officialSelection?.registered_count || 0;
   const officialAvailableCount = officialSelection?.available_count || 0;
   const officialRegisteredCredits = (officialSelection?.registered_courses || []).reduce(
@@ -525,40 +497,6 @@ export function PlanningWorkspace({
             <MetricBox label="待加入清單" value={String(officialAvailableCount)} tone="blue" />
             <MetricBox label="目前學分" value={`${formatCredits(currentPlanningCredits)} 學分`} tone="amber" />
             <MetricBox label="待加簽" value={`${virtualCourses.length} 門`} tone="slate" />
-          </div>
-
-          <div className="mt-4 rounded-lg border border-slate-200 p-3">
-            <h4 className="text-sm font-semibold text-slate-800">
-              {planningMode === 'lottery'
-                ? `競爭組與互斥提醒（${competitionCount}）`
-                : `衝堂清單（${trueConflictCount}）`}
-            </h4>
-            <div className="mt-3 space-y-2">
-              {slotGroups.length === 0 && nameGroups.length === 0 ? (
-                <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  目前沒有偵測到同時段或同課名重疊。
-                </p>
-              ) : (
-                <>
-                  {slotGroups.slice(0, 4).map((group) => (
-                    <ConflictGroupRow
-                      key={group.slot}
-                      label={group.label}
-                      courses={group.courses}
-                      mode={planningMode}
-                    />
-                  ))}
-                  {nameGroups.slice(0, 3).map((group) => (
-                    <ConflictGroupRow
-                      key={`name-${normalizeName(group[0].name)}`}
-                      label="同課名互斥"
-                      courses={group}
-                      mode={planningMode}
-                    />
-                  ))}
-                </>
-              )}
-            </div>
           </div>
 
           <div className="mt-4 rounded-lg border border-slate-200 p-3">
@@ -1441,32 +1379,6 @@ function MetricBox({
     <div className={`rounded-lg border p-3 ${toneClass}`}>
       <p className="text-xs font-medium opacity-80">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
-    </div>
-  );
-}
-
-function ConflictGroupRow({
-  label,
-  courses,
-  mode,
-}: {
-  label: string;
-  courses: Course[];
-  mode: PlanningMode;
-}) {
-  return (
-    <div className={`rounded-md border px-3 py-2 text-sm ${
-      mode === 'lottery' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-red-200 bg-red-50 text-red-900'
-    }`}>
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-semibold">{label}</span>
-        <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium">
-          {mode === 'lottery' ? '競爭' : '衝堂'}
-        </span>
-      </div>
-      <p className="mt-1 text-xs opacity-80">
-        {courses.map((course) => course.name).join('、')}
-      </p>
     </div>
   );
 }
