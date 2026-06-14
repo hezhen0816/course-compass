@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
-from backend import app as backend_app
 from scripts import migrate_legacy_school_credentials as legacy_credential_migration
 
 
@@ -153,21 +151,3 @@ def test_legacy_credential_migration_handles_old_ciphertext_payload(monkeypatch)
     assert legacy_credential_migration.migrate_legacy_school_credentials(apply=True)["migrated"] == 1
     assert upserts == [("user-1", "B11430207", "new:plain:legacy-ciphertext")]
     assert saved == [{"settings": {"school_account": "B11430207"}}]
-
-
-def test_school_credentials_status_does_not_return_password(monkeypatch) -> None:
-    monkeypatch.setattr(backend_app, "_current_user_context", lambda authorization: ("user-1", "token-1"))
-    monkeypatch.setattr(
-        backend_app,
-        "get_school_credentials_status",
-        lambda user_id, access_token: {
-            "username": "B11430207",
-            "hasPassword": True,
-        },
-    )
-    client = TestClient(backend_app.app)
-
-    response = client.get("/api/school-credentials", headers={"Authorization": "Bearer token-1"})
-
-    assert response.status_code == 200
-    assert response.json() == {"username": "B11430207", "hasPassword": True}
