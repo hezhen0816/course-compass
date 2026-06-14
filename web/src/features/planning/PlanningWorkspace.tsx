@@ -642,8 +642,30 @@ function OfficialRegisteredList({
           isDirty ? 'border-blue-200 bg-blue-50' : scheduleToneClass(classification.tone)
         }`}>
           <div className="flex items-start gap-2">
-            <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${badgeToneClass(classification.tone)}`}>
-              {index + 1}
+            <div className="mt-0.5 flex w-6 shrink-0 flex-col items-center gap-0.5">
+              <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold ${badgeToneClass(classification.tone)}`}>
+                {index + 1}
+              </div>
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => moveDraftCourse(index, -1)}
+                  disabled={index === 0 || isOrderSaving}
+                  className="rounded p-0.5 text-slate-400 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label="提高官方志願序"
+                >
+                  <ArrowUp className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveDraftCourse(index, 1)}
+                  disabled={index === draftCourses.length - 1 || isOrderSaving}
+                  className="rounded p-0.5 text-slate-400 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label="降低官方志願序"
+                >
+                  <ArrowDown className="h-3 w-3" />
+                </button>
+              </div>
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-slate-900">{course.course_name}</p>
@@ -668,26 +690,6 @@ function OfficialRegisteredList({
                 <SelectionChanceBadge selectedCount={course.selected_count} capacity={course.capacity} />
                 <EnrollmentCountBadge selectedCount={course.selected_count} capacity={course.capacity} />
               </div>
-            </div>
-            <div className="flex shrink-0 flex-col gap-1">
-              <button
-                type="button"
-                onClick={() => moveDraftCourse(index, -1)}
-                disabled={index === 0 || isOrderSaving}
-                className="rounded p-1 text-slate-400 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
-                aria-label="提高官方志願序"
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => moveDraftCourse(index, 1)}
-                disabled={index === draftCourses.length - 1 || isOrderSaving}
-                className="rounded p-1 text-slate-400 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
-                aria-label="降低官方志願序"
-              >
-                <ArrowDown className="h-3.5 w-3.5" />
-              </button>
             </div>
             <button
               type="button"
