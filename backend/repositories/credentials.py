@@ -26,6 +26,10 @@ def user_data_content_url(supabase_url: str, user_id: str) -> str:
     )
 
 
+def user_data_content_list_url(supabase_url: str) -> str:
+    return f"{supabase_url}/rest/v1/user_data?select=user_id,content"
+
+
 def user_data_upsert_url(supabase_url: str) -> str:
     return f"{supabase_url}/rest/v1/user_data?on_conflict=user_id"
 
@@ -69,6 +73,19 @@ def load_user_content(
     return content if isinstance(content, dict) else {"schemaVersion": 2, "settings": {}}
 
 
+def list_user_data_content_rows(
+    *,
+    supabase_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    get: GetRequest,
+) -> list[dict[str, Any]]:
+    response = get(user_data_content_list_url(supabase_url), headers=headers, timeout=timeout)
+    response.raise_for_status()
+    rows = response.json()
+    return rows if isinstance(rows, list) else []
+
+
 def save_user_content(
     user_id: str,
     content: dict[str, Any],
@@ -78,12 +95,13 @@ def save_user_content(
     timeout: int,
     updated_at: str,
     post: PostRequest,
+    last_writer: str = "backend",
 ) -> None:
     body = {
         "user_id": user_id,
         "content": content,
         "content_version": 2,
-        "last_writer": "backend",
+        "last_writer": last_writer,
         "updated_at": updated_at,
     }
     response = post(user_data_upsert_url(supabase_url), headers=headers, json=body, timeout=timeout)

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from backend.credentials import CredentialStoreError
+from backend.core.errors import CredentialStoreError
 from backend.services import school_sessions as school_session_service
 
 

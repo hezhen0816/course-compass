@@ -24,7 +24,7 @@
 - NTUST、Moodle、官方選課、課表與 TR 查詢 client/parser 已拆到 `backend/integrations/*`，對應純 re-export wrapper 已移除。
 - 官方選課 session 的 Supabase RPC row 存取已開始集中到 `backend/repositories/school_sessions.py`，加解密與 TTL 仍保留在 `backend/school_sessions.py`。
 - 課表、歷史、Moodle snapshot 的 Supabase REST row 存取已集中到 `backend/repositories/snapshots.py`，domain flow 已在 `backend/services/snapshots.py`，舊 `backend/snapshots.py` 已移除。
-- 校務帳密 private RPC、Supabase Auth 與 `public.user_data` REST row 存取已開始集中到 `backend/repositories/credentials.py`，加解密、config guard 與 legacy promotion wiring 還保留在 `backend/credentials.py`。
+- 校務帳密 private RPC、Supabase Auth 與 `public.user_data` REST row 存取已開始集中到 `backend/repositories/credentials.py`，加解密與 Supabase header/config guard 已抽到 `backend/core/security.py`，legacy promotion wiring 還保留在 `backend/credentials.py`。
 - 共用設定與台北時間 helper 已移到 `backend/core/config.py` 與 `backend/core/time_utils.py`，舊 `backend/config.py`、`backend/time_utils.py` 已移除。
 - 共用錯誤型別已移到 `backend/core/errors.py`，避免 service/API 反向依賴 credentials 過渡層。
 - Pydantic request/response schemas 已移到 `backend/schemas/*` 並按 domain 拆分，舊 `backend/models.py` 與 `backend/schemas/models.py` 已移除。
@@ -66,6 +66,7 @@ backend/
   core/
     config.py            # backend settings, constants, NTUST/Supabase URLs
     errors.py            # shared backend exception types
+    security.py          # secret validation, encryption, and Supabase header helpers
     time_utils.py        # timezone-aware clock helper
   schemas/
     courses.py           # course search schemas

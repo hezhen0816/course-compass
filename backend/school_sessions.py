@@ -6,26 +6,40 @@ from typing import Any
 import requests
 
 try:
-    from .core.config import DEFAULT_TIMEOUT, SUPABASE_URL
-    from .credentials import (
-        decrypt_sensitive_value,
-        encrypt_sensitive_value,
-        _service_role_headers,
+    from .core.config import (
+        DEFAULT_TIMEOUT,
+        SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
+        SUPABASE_SERVICE_ROLE_KEY,
+        SUPABASE_URL,
     )
+    from .core import security
     from .repositories import school_sessions as school_session_repository
     from .services import school_sessions as school_session_service
 except ImportError:  # pragma: no cover
-    from core.config import DEFAULT_TIMEOUT, SUPABASE_URL
-    from credentials import (
-        decrypt_sensitive_value,
-        encrypt_sensitive_value,
-        _service_role_headers,
+    from core.config import (
+        DEFAULT_TIMEOUT,
+        SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
+        SUPABASE_SERVICE_ROLE_KEY,
+        SUPABASE_URL,
     )
+    from core import security
     from repositories import school_sessions as school_session_repository
     from services import school_sessions as school_session_service
 
 
 OFFICIAL_SESSION_TTL_SECONDS = 25 * 60
+
+
+def encrypt_sensitive_value(value: str) -> str:
+    return security.encrypt_sensitive_value(value, SCHOOL_CREDENTIALS_ENCRYPTION_SECRET)
+
+
+def decrypt_sensitive_value(token: str) -> str:
+    return security.decrypt_sensitive_value(token, SCHOOL_CREDENTIALS_ENCRYPTION_SECRET)
+
+
+def _service_role_headers(*, json_body: bool = False) -> dict[str, str]:
+    return security.service_role_headers(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, json_body=json_body)
 
 
 def official_session_expires_at() -> datetime:

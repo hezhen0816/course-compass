@@ -53,6 +53,7 @@
 下列檔案仍屬於過渡層。刪除前必須先確認安全邊界、依賴注入與 tests/scripts 都已改到目標 module：
 
 - `backend/credentials.py` error type -> `backend/core/errors.py`
+- `backend/credentials.py` security helpers -> `backend/core/security.py`
 - `backend/credentials.py` -> `backend/services/credentials.py` + `backend/repositories/credentials.py`
 - `backend/school_sessions.py` -> `backend/services/school_sessions.py` + `backend/repositories/school_sessions.py`
 

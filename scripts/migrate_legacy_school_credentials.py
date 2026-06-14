@@ -15,36 +15,50 @@ load_dotenv(ROOT_DIR / ".env")
 sys.path.insert(0, str(ROOT_DIR))
 
 from backend import credentials  # noqa: E402
+from backend.core import security  # noqa: E402
+from backend.core.config import DEFAULT_TIMEOUT, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL  # noqa: E402
+from backend.core.errors import CredentialStoreError  # noqa: E402
+from backend.repositories import credentials as credential_repository  # noqa: E402
+
+
+def _service_role_headers(*, json_body: bool = False) -> dict[str, str]:
+    return security.service_role_headers(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, json_body=json_body)
 
 
 def _fetch_user_data_rows() -> list[dict[str, Any]]:
-    credentials._require_service_supabase_config()
-    endpoint = f"{credentials.SUPABASE_URL}/rest/v1/user_data?select=user_id,content"
-    response = requests.get(
-        endpoint,
-        headers=credentials._service_role_headers(),
-        timeout=credentials.DEFAULT_TIMEOUT,
+    return credential_repository.list_user_data_content_rows(
+        supabase_url=SUPABASE_URL,
+        headers=_service_role_headers(),
+        timeout=DEFAULT_TIMEOUT,
+        get=requests.get,
     )
-    response.raise_for_status()
-    rows = response.json()
-    return rows if isinstance(rows, list) else []
 
 
 def _save_user_content(user_id: str, content: dict[str, Any]) -> None:
-    body = {
-        "user_id": user_id,
-        "content": content,
-        "content_version": 2,
-        "last_writer": "backend-maintenance",
-        "updated_at": datetime.utcnow().isoformat() + "Z",
-    }
-    response = requests.post(
-        f"{credentials.SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id",
-        headers=credentials._service_role_headers(json_body=True),
-        json=body,
-        timeout=credentials.DEFAULT_TIMEOUT,
+    credential_repository.save_user_content(
+        user_id,
+        content,
+        supabase_url=SUPABASE_URL,
+        headers=_service_role_headers(json_body=True),
+        timeout=DEFAULT_TIMEOUT,
+        updated_at=datetime.utcnow().isoformat() + "Z",
+        post=requests.post,
+        last_writer="backend-maintenance",
     )
-    response.raise_for_status()
+
+
+def _upsert_school_credentials_row(user_id: str, username: str, password_ciphertext: str) -> None:
+    credential_repository.upsert_school_credentials_row(
+        user_id,
+        username,
+        password_ciphertext,
+        key_version=1,
+        last_verified_at=datetime.utcnow().isoformat() + "Z",
+        supabase_url=SUPABASE_URL,
+        timeout=DEFAULT_TIMEOUT,
+        service_role_headers=_service_role_headers,
+        post=requests.post,
+    )
 
 
 def _settings(content: dict[str, Any]) -> dict[str, Any]:
@@ -111,7 +125,7 @@ def migrate_legacy_school_credentials(*, apply: bool) -> dict[str, int]:
             continue
 
         password_ciphertext = credentials.encrypt_school_password(legacy_password)
-        credentials._upsert_school_credentials_row(user_id, username, password_ciphertext)
+        _upsert_school_credentials_row(user_id, username, password_ciphertext)
         settings["school_account"] = username
         settings.pop("schoolCredentials", None)
         settings.pop("school_password", None)
@@ -130,7 +144,7 @@ def main() -> None:
 
     try:
         stats = migrate_legacy_school_credentials(apply=args.apply)
-    except credentials.CredentialStoreError as exc:
+    except CredentialStoreError as exc:
         raise SystemExit(f"configuration error: {exc}") from exc
     except requests.RequestException as exc:
         raise SystemExit(f"supabase request failed: {exc}") from exc

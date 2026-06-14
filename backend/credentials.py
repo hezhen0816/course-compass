@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
 import requests
-from cryptography.fernet import Fernet, InvalidToken
 
 try:
-    from .core.errors import CredentialStoreError
     from .core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
@@ -17,10 +13,11 @@ try:
         SUPABASE_SERVICE_ROLE_KEY,
         SUPABASE_URL,
     )
+    from .core import security
+    from .core.errors import CredentialStoreError
     from .repositories import credentials as credential_repository
     from .services import credentials as credential_service
 except ImportError:  # pragma: no cover
-    from core.errors import CredentialStoreError
     from core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
@@ -28,53 +25,33 @@ except ImportError:  # pragma: no cover
         SUPABASE_SERVICE_ROLE_KEY,
         SUPABASE_URL,
     )
+    from core import security
+    from core.errors import CredentialStoreError
     from repositories import credentials as credential_repository
     from services import credentials as credential_service
 
 
-PLACEHOLDER_VALUES = {
-    "replace-with-a-long-random-secret",
-    "replace-with-openssl-rand-hex-32",
-    "your-anon-key",
-    "your-publishable-or-anon-key",
-    "your-service-role-key",
-}
+PLACEHOLDER_VALUES = security.PLACEHOLDER_VALUES
 
 
 def _is_placeholder(value: str) -> bool:
-    normalized = value.strip().lower()
-    return not normalized or normalized in PLACEHOLDER_VALUES
+    return security.is_placeholder(value)
 
 
 def _require_public_supabase_config() -> None:
-    if not SUPABASE_URL or _is_placeholder(SUPABASE_ANON_KEY):
-        raise CredentialStoreError("後端尚未設定 Supabase publishable/anon key，無法保存校務帳密。")
+    security.require_public_supabase_config(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 
 def _require_service_supabase_config() -> None:
-    if not SUPABASE_URL or _is_placeholder(SUPABASE_SERVICE_ROLE_KEY):
-        raise CredentialStoreError("後端尚未設定 Supabase service role key，無法保存校務帳密。")
-
-
-def _fernet() -> Fernet:
-    secret = SCHOOL_CREDENTIALS_ENCRYPTION_SECRET.strip()
-    if _is_placeholder(secret):
-        raise CredentialStoreError("後端尚未設定校務帳密加密金鑰。")
-    if len(secret) < 32:
-        raise CredentialStoreError("校務帳密加密金鑰長度不足，請設定至少 32 字元的隨機字串。")
-    digest = hashlib.sha256(secret.encode("utf-8")).digest()
-    return Fernet(base64.urlsafe_b64encode(digest))
+    security.require_service_supabase_config(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
 def encrypt_sensitive_value(value: str) -> str:
-    return _fernet().encrypt(value.encode("utf-8")).decode("utf-8")
+    return security.encrypt_sensitive_value(value, SCHOOL_CREDENTIALS_ENCRYPTION_SECRET)
 
 
 def decrypt_sensitive_value(token: str) -> str:
-    try:
-        return _fernet().decrypt(token.encode("utf-8")).decode("utf-8")
-    except InvalidToken as exc:
-        raise CredentialStoreError("已保存的敏感資料無法解密，請重新保存。") from exc
+    return security.decrypt_sensitive_value(token, SCHOOL_CREDENTIALS_ENCRYPTION_SECRET)
 
 
 def encrypt_school_password(password: str) -> str:
@@ -89,31 +66,16 @@ def decrypt_school_password(token: str) -> str:
 
 
 def _supabase_headers(*, json_body: bool = False, bearer_token: str | None = None) -> dict[str, str]:
-    api_key = SUPABASE_ANON_KEY if bearer_token else SUPABASE_SERVICE_ROLE_KEY
-    if _is_placeholder(api_key):
-        api_key = SUPABASE_ANON_KEY if not _is_placeholder(SUPABASE_ANON_KEY) else SUPABASE_SERVICE_ROLE_KEY
-    headers = {
-        "apikey": api_key,
-        "Authorization": f"Bearer {bearer_token or SUPABASE_SERVICE_ROLE_KEY}",
-        "Accept": "application/json",
-    }
-    if json_body:
-        headers["Content-Type"] = "application/json"
-        headers["Prefer"] = "return=representation,resolution=merge-duplicates"
-    return headers
+    return security.supabase_headers(
+        SUPABASE_ANON_KEY,
+        SUPABASE_SERVICE_ROLE_KEY,
+        json_body=json_body,
+        bearer_token=bearer_token,
+    )
 
 
 def _service_role_headers(*, json_body: bool = False) -> dict[str, str]:
-    _require_service_supabase_config()
-    headers = {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "Accept": "application/json",
-    }
-    if json_body:
-        headers["Content-Type"] = "application/json"
-        headers["Prefer"] = "return=representation,resolution=merge-duplicates"
-    return headers
+    return security.service_role_headers(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, json_body=json_body)
 
 
 def resolve_user_id(access_token: str) -> str:

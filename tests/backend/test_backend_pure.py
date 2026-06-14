@@ -1203,6 +1203,37 @@ def test_credential_repository_saves_user_content() -> None:
     ]
 
 
+def test_credential_repository_lists_user_content_rows() -> None:
+    calls: list[tuple[str, dict[str, str], int]] = []
+
+    class FakeUserDataResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> object:
+            return [{"user_id": "user-1", "content": {"settings": {}}}]
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> FakeUserDataResponse:
+        calls.append((url, headers, timeout))
+        return FakeUserDataResponse()
+
+    rows = credential_repository.list_user_data_content_rows(
+        supabase_url="https://example.supabase.co",
+        headers={"Authorization": "Bearer service"},
+        timeout=12,
+        get=fake_get,
+    )
+
+    assert calls == [
+        (
+            "https://example.supabase.co/rest/v1/user_data?select=user_id,content",
+            {"Authorization": "Bearer service"},
+            12,
+        )
+    ]
+    assert rows == [{"user_id": "user-1", "content": {"settings": {}}}]
+
+
 def test_resolve_user_id_rejects_invalid_supabase_auth_token(monkeypatch) -> None:
     monkeypatch.setattr(credentials, "SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setattr(credentials, "SUPABASE_ANON_KEY", "anon-key")
@@ -1450,7 +1481,7 @@ def test_legacy_credential_migration_dry_run_counts_without_writing(monkeypatch)
         ],
     )
     monkeypatch.setattr(
-        legacy_credential_migration.credentials,
+        legacy_credential_migration,
         "_upsert_school_credentials_row",
         lambda *_args: pytest.fail("dry-run must not upsert credentials"),
     )
@@ -1490,7 +1521,7 @@ def test_legacy_credential_migration_apply_encrypts_and_removes_plaintext(monkey
         lambda password: f"encrypted:{password}",
     )
     monkeypatch.setattr(
-        legacy_credential_migration.credentials,
+        legacy_credential_migration,
         "_upsert_school_credentials_row",
         lambda user_id, username, password_ciphertext: upserts.append(
             (user_id, username, password_ciphertext)
@@ -1548,7 +1579,7 @@ def test_legacy_credential_migration_handles_old_ciphertext_payload(monkeypatch)
         lambda password: f"new:{password}",
     )
     monkeypatch.setattr(
-        legacy_credential_migration.credentials,
+        legacy_credential_migration,
         "_upsert_school_credentials_row",
         lambda user_id, username, password_ciphertext: upserts.append(
             (user_id, username, password_ciphertext)
