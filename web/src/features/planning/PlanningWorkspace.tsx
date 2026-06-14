@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Loader2, Trash2 } from 'lucide-react';
 import type { AppData, Course, GpaStatus, OfficialSelectionRegisteredCourse, OfficialSelectionRequiredPresetCourse, OfficialSelectionSyncResponse, PendingRequirement, PlannerStats } from '../../shared/types';
 import { parseCourseDepartment } from '../../shared/domain/courseDepartments';
@@ -928,23 +928,28 @@ function OfficialScheduleTable({
             const showMeta = !isGroup && Boolean(event.meta) && (!isNarrow || event.span > 1);
             const stackOffset = isNarrow ? Math.min(event.lane, 4) : 0;
             const stackWidth = isNarrow ? 'calc(100% - 22px)' : 'calc(100% - 6px)';
+            const overlapHoverClass = isNarrow
+              ? 'hover:w-[calc(100%-6px)] hover:-translate-x-[var(--overlap-shift)] hover:scale-[1.02] hover:z-50 hover:overflow-visible'
+              : '';
             const titleText = isGroup && event.groupedEvents
               ? event.groupedEvents.map(formatGroupedEventLabel).join('\n')
               : event.rank ? `${event.rank}. ${event.title}` : event.title;
+            const eventStyle: CSSProperties & { '--overlap-shift'?: string } = {
+              gridColumn: dayIndex + 2,
+              gridRow: `${event.startIndex + 2} / span ${event.span}`,
+              width: stackWidth,
+              marginLeft: `${3 + stackOffset * 7}px`,
+              marginTop: `${4 + stackOffset * 7}px`,
+              zIndex: 10 + event.lane,
+              '--overlap-shift': `${stackOffset * 7}px`,
+            };
             return (
               <div
                 key={event.id}
-                className={`group/event my-1 flex min-h-0 overflow-hidden rounded-md border shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md ${
+                className={`group/event my-1 flex min-h-0 overflow-hidden rounded-md border shadow-sm transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg ${overlapHoverClass} ${
                   scheduleToneClass(event.tone, conflicting)
                 }`}
-                style={{
-                  gridColumn: dayIndex + 2,
-                  gridRow: `${event.startIndex + 2} / span ${event.span}`,
-                  width: stackWidth,
-                  marginLeft: `${3 + stackOffset * 7}px`,
-                  marginTop: `${4 + stackOffset * 7}px`,
-                  zIndex: 10 + event.lane,
-                }}
+                style={eventStyle}
                 title={titleText}
               >
                 <span className={`w-1 shrink-0 ${scheduleAccentClass(event.tone, conflicting)}`} />
@@ -958,7 +963,9 @@ function OfficialScheduleTable({
                           {event.rank}
                         </span>
                       ) : null}
-                      <p className="min-w-0 flex-1 truncate text-xs font-semibold leading-5">{event.title}</p>
+                      <p className="min-w-0 flex-1 truncate text-xs font-semibold leading-5 group-hover/event:whitespace-normal group-hover/event:break-words">
+                        {event.title}
+                      </p>
                       {event.course ? (
                         <button
                           type="button"
@@ -971,8 +978,8 @@ function OfficialScheduleTable({
                       ) : null}
                     </div>
                   )}
-                  {showMeta ? (
-                    <p className={`mt-0.5 truncate text-[11px] ${
+                  {(showMeta || (isNarrow && event.meta)) ? (
+                    <p className={`mt-0.5 truncate text-[11px] group-hover/event:whitespace-normal group-hover/event:break-words ${
                       conflicting ? 'text-red-700' : 'text-slate-600'
                     }`}>
                       {event.meta}
