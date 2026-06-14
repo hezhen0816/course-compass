@@ -49,6 +49,7 @@
 - School session store/repository regression tests 已從大型 backend pure test 拆到 `tests/backend/test_school_session_store.py`。
 - Official selection client regression tests 已從大型 backend pure test 拆到 `tests/backend/test_official_selection_client.py`。
 - Official selection API route regression tests 已從大型 backend pure test 拆到 `tests/backend/test_official_selection_api.py`。
+- Credential store runtime regression tests 已從大型 backend pure test 拆到 `tests/backend/test_credential_store.py`。
 
 ## 目前架構
 
@@ -146,6 +147,7 @@ tests/
    - Schedule helper regression tests are now isolated in `tests/backend/test_schedule_integration.py`.
    - Schedule/history/Moodle sync API regression tests are now isolated in `tests/backend/test_sync_api.py`.
    - Credential repository regression tests are now isolated in `tests/backend/test_credentials_repository.py`.
+   - Credential store runtime regression tests are now isolated in `tests/backend/test_credential_store.py`.
    - School session store/repository regression tests are now isolated in `tests/backend/test_school_session_store.py`.
    - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, and snapshot row access have started.
    - Core config/time helpers are now in `backend/core/*`; retire compatibility wrappers after scripts and external imports settle.
