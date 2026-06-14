@@ -41,6 +41,7 @@
 - PDF requirement parser regression tests 已從大型 backend pure test 拆到 `tests/backend/test_planner_pdf_service.py`。
 - Snapshot repository/service regression tests 已從大型 backend pure test 拆到 `tests/backend/test_snapshots_service.py`。
 - TR room parser/API regression tests 已從大型 backend pure test 拆到 `tests/backend/test_tr_rooms_api.py`。
+- Moodle assignment 與 history parser regression tests 已從大型 backend pure test 拆到 `tests/backend/test_ntust_content_parsers.py`。
 
 ## 目前架構
 
