@@ -95,6 +95,7 @@ Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `Course
 - `shared/api.ts`
 - `shared/supabase.ts`
 - `shared/constants.ts`
+- `shared/types.ts`
 - `shared/hooks/useAuth.ts`
 - `shared/hooks/useCourseData.ts`
 

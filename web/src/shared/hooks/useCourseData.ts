@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
-import type { AcademicHistoryRecord, AppData, Course, PendingRequirement, RequirementSet, SelectionPlan } from '../../types';
+import type { AcademicHistoryRecord, AppData, Course, PendingRequirement, RequirementSet, SelectionPlan } from '../types';
 import { INITIAL_SEMESTERS, DEFAULT_TARGETS } from '../constants';
 
 function normalizeCourse(course: Course): Course {

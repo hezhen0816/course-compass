@@ -3,7 +3,7 @@ import {
   X, User, Calculator, Award, Trash2, Plus, FileText, Save, 
   Mail, MapPin, Clock, Link as LinkIcon, Copy, ChevronUp, ChevronDown, MoreHorizontal
 } from 'lucide-react';
-import type { Course, CourseDetails, GradingItem, CourseCategory } from '../../types';
+import type { Course, CourseDetails, GradingItem, CourseCategory } from '../../shared/types';
 
 interface CourseDetailModalProps {
   isOpen: boolean;

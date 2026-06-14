@@ -1,6 +1,6 @@
 import { ListChecks, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import type { AppData, Course, CourseSearchResult, CourseSemesterInfo, PendingRequirement } from '../../types';
+import type { AppData, Course, CourseSearchResult, CourseSemesterInfo, PendingRequirement } from '../../shared/types';
 import { listCourseDepartments, parseCourseDepartment } from '../../domain/courseDepartments';
 import {
   type CapacityFilter,

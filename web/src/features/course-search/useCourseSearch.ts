@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchCourseSemesters, searchCourses } from '../../shared/api';
-import type { CourseSearchResult, CourseSemesterInfo, GpaApiSettings } from '../../types';
+import type { CourseSearchResult, CourseSemesterInfo, GpaApiSettings } from '../../shared/types';
 import { parseCourseDepartment } from '../../domain/courseDepartments';
 import {
   type CapacityFilter,

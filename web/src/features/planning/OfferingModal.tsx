@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import type { AppData, CourseSearchResult, PendingRequirement } from '../../types';
+import type { AppData, CourseSearchResult, PendingRequirement } from '../../shared/types';
 import {
   type PlanningMode,
   displayClassroom,

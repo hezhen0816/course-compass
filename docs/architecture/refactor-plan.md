@@ -56,6 +56,7 @@
 - Web app shell 元件已搬到 `web/src/app/`，修課軌跡課程詳情 modal 已搬到 `web/src/features/history/`。
 - Web 共用 API client、Supabase client 與 planner constants 已搬到 `web/src/shared/`，未引用的舊 `parseCourselist.ts` 與 Vite 預設 `react.svg` 已移除。
 - Web 跨頁 hooks `useAuth`、`useCourseData` 已搬到 `web/src/shared/hooks/`。
+- Web shared types 已從 `web/src/types/index.ts` 搬到 `web/src/shared/types.ts`。
 
 ## 目前架構
 

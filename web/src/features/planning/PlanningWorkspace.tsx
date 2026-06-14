@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Loader2, Trash2 } from 'lucide-react';
-import type { AppData, Course, GpaStatus, OfficialSelectionRegisteredCourse, OfficialSelectionRequiredPresetCourse, OfficialSelectionSyncResponse, PendingRequirement, PlannerStats } from '../../types';
+import type { AppData, Course, GpaStatus, OfficialSelectionRegisteredCourse, OfficialSelectionRequiredPresetCourse, OfficialSelectionSyncResponse, PendingRequirement, PlannerStats } from '../../shared/types';
 import { parseCourseDepartment } from '../../domain/courseDepartments';
 import {
   DAY_COLUMNS,

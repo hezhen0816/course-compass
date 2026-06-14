@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Course, CourseSearchResult, OfficialSelectionSyncResponse, PendingRequirement } from './types';
+import type { Course, CourseSearchResult, OfficialSelectionSyncResponse, PendingRequirement } from './shared/types';
 import {
   addOfficialInitialSelectionWaitlistCourse,
   joinOfficialInitialSelectionCourse,

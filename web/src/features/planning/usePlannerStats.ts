@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { AppData, PlannerStats } from '../../types';
+import type { AppData, PlannerStats } from '../../shared/types';
 import {
   categoryFromHistoryRecord,
   isFailedImportedHistoryCourse,

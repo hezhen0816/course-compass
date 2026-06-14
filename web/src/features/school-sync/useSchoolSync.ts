@@ -7,7 +7,7 @@ import {
   syncSchoolSchedule,
 } from '../../shared/api';
 import { supabase } from '../../shared/supabase';
-import type { AppData, RequirementSet } from '../../types';
+import type { AppData, RequirementSet } from '../../shared/types';
 import {
   RETAKE_SET_ID,
   coursesFromScheduleSync,
