@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from backend.repositories import typed_planner as typed_planner_repository
-from backend.services.typed_planner_backfill import build_typed_planner_apply_batches, build_typed_planner_backfill_package
+from backend.services.typed_planner.backfill import build_typed_planner_apply_batches, build_typed_planner_backfill_package
 
 
 def _batches_payload() -> dict[str, object]:

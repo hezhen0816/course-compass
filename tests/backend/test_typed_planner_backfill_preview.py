@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from backend.services import typed_planner_backfill
-from backend.services.typed_planner_backfill import (
+from backend.services.typed_planner import backfill as typed_planner_backfill
+from backend.services.typed_planner.backfill import (
     APPLY_BATCH_MODE,
     APPLY_PLAN_MODE,
     APPLY_TABLE_ORDER,

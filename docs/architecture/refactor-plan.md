@@ -36,7 +36,7 @@
 - 已建立 `docs/architecture/refactor-inventory.md` 作為重構盤點基準。
 - 已建立 typed schema foundation migration：`supabase/migrations/20260614211338_add_typed_planner_schema_foundation.sql`。
 - Supabase Auth 與 `public.user_data` REST 存取已開始移到 `backend/repositories/credentials.py`，credential runtime wiring 已移到 `backend/services/credential_store.py`。
-- Typed planner apply 已有 service/repository 邊界：`backend/services/typed_planner_apply.py` 與 `backend/repositories/typed_planner.py` 可 dry-run 驗證 package、batch URL/header/body、row counts 與 apply readiness checks；受保護 execute 入口要求 `allow_writes=True` 與固定確認字串，目前尚未接 CLI/API/production flow。
+- Typed planner apply 已有 service/repository 邊界：`backend/services/typed_planner/apply.py` 與 `backend/repositories/typed_planner.py` 可 dry-run 驗證 package、batch URL/header/body、row counts 與 apply readiness checks；受保護 execute 入口要求 `allow_writes=True` 與固定確認字串，目前尚未接 CLI/API/production flow。
 - 資料庫 migration regression tests 已從大型 backend pure test 拆到 `tests/backend/test_database_migrations.py`，並補上 typed schema foundation additive gate。
 - 課程查詢 endpoint regression tests 已從大型 backend pure test 拆到 `tests/backend/test_course_search_api.py`。
 - PDF requirement parser regression tests 已從大型 backend pure test 拆到 `tests/backend/test_planner_pdf_service.py`。
@@ -62,7 +62,7 @@
 - Web app implementation 已搬到 `web/src/app/CoursePlannerWebApp.tsx`，根層 `App.tsx` 只保留入口 re-export。
 - Web global stylesheet 已從 `web/src/index.css` 搬到 `web/src/app/global.css`。
 - 已建立 `docs/architecture/test-inventory.md`，把 backend tests 與 fixtures 分成必留、保守保留與可評估瘦身，避免在重構中誤刪 parser/API/DB 安全網。
-- 已建立 typed planner backfill preview/package service `backend/services/typed_planner_backfill.py` 與 CLI wrapper `scripts/preview_typed_planner_backfill.py`，可離線拆解 `public.user_data.content`、輸出 typed table 對帳 counts，並產生本機 raw backup package；不連線、不寫 DB、不把敏感 token 放入 preview。
+- 已建立 typed planner backfill preview/package service `backend/services/typed_planner/backfill.py` 與 CLI wrapper `scripts/preview_typed_planner_backfill.py`，可離線拆解 `public.user_data.content`、輸出 typed table 對帳 counts，並產生本機 raw backup package；不連線、不寫 DB、不把敏感 token 放入 preview。
 - 已建立 no-write typed planner apply plan builder，可從通過 contract/reconciliation 的 package 產生 table order 與 row count 計畫；仍不產生 SQL、不寫 DB。
 
 ## 目前架構
@@ -93,8 +93,9 @@ backend/
     school_sessions.py   # official session domain flow, encryption payload, TTL helpers
     session_context.py   # backend-owned credential/session context helpers
     snapshots.py         # schedule/history/Moodle snapshot domain flow
-    typed_planner_apply.py # typed planner backfill apply dry-run service
-    typed_planner_backfill.py # offline typed planner preview/reconciliation service
+    typed_planner/
+      apply.py           # typed planner backfill apply dry-run service
+      backfill.py        # offline typed planner preview/reconciliation service
   core/
     config.py            # backend settings, constants, NTUST/Supabase URLs
     errors.py            # shared backend exception types

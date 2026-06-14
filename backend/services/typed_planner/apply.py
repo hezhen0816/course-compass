@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.repositories import typed_planner as typed_planner_repository
-from backend.services.typed_planner_backfill import build_typed_planner_apply_batches, load_typed_planner_backfill_package
+from backend.services.typed_planner.backfill import build_typed_planner_apply_batches, load_typed_planner_backfill_package
 
 
 DRY_RUN_MODE = "typed_planner_backfill_apply_dry_run"

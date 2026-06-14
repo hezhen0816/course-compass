@@ -157,7 +157,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 
 ## Backfill Preview Tool
 
-`backend/services/typed_planner_backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py`、`scripts/plan_typed_planner_backfill.py` 與 `scripts/dry_run_typed_planner_backfill_apply.py` 是本機 CLI wrappers。
+`backend/services/typed_planner/backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py`、`scripts/plan_typed_planner_backfill.py` 與 `scripts/dry_run_typed_planner_backfill_apply.py` 是本機 CLI wrappers。
 
 目前 preview contract version：`typed-planner-backfill-preview-v1`。
 
@@ -192,7 +192,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
     - `batches_are_no_write`
     - `repository_dry_run_is_no_write`
     - `non_empty_batches_present`
-- `backend/services/typed_planner_apply.py` 內部已有受保護 execute 入口，但目前沒有 CLI/API 會呼叫：
+- `backend/services/typed_planner/apply.py` 內部已有受保護 execute 入口，但目前沒有 CLI/API 會呼叫：
   - 必須同時提供 `allow_writes=True` 與確認字串 `APPLY_TYPED_PLANNER_BACKFILL`。
   - 會先跑同一份 readiness checks；不是 `ready` 就不呼叫 repository。
   - 這只是下一階段正式 apply wiring 的保護層，本階段沒有執行任何資料庫寫入。

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.services import typed_planner_apply
-from backend.services.typed_planner_backfill import write_typed_planner_backfill_package
+from backend.services.typed_planner import apply as typed_planner_apply
+from backend.services.typed_planner.backfill import write_typed_planner_backfill_package
 
 
 def _write_sample_package(package_dir: Path) -> None:

@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
 
-from backend.services.typed_planner_backfill import (
+from backend.services.typed_planner.backfill import (
     build_typed_planner_preview,
     load_user_data_rows,
     write_typed_planner_backfill_package,
