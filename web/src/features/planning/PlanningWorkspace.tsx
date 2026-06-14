@@ -836,6 +836,7 @@ function OfficialScheduleTable({
   onToggleWeekend: () => void;
   onDeleteVirtualCourse: (courseId: string) => void;
 }) {
+  const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
   const visibleWeekdays = showWeekend ? OFFICIAL_WEEKDAYS : OFFICIAL_WEEKDAYS.slice(0, 5);
   const displayRows = officialRowsForDisplay(rows);
   const events = layoutScheduleEvents([
@@ -920,6 +921,7 @@ function OfficialScheduleTable({
           {events.map((event) => {
             const dayIndex = visibleWeekdays.findIndex((weekday) => weekday.label === event.weekdayLabel);
             if (dayIndex < 0) return null;
+            const isHovered = hoveredEventId === event.id;
             const isVirtual = event.kind === 'virtual';
             const isGroup = event.kind === 'group';
             const isNarrow = event.laneCount > 1;
@@ -929,7 +931,7 @@ function OfficialScheduleTable({
             const stackOffset = isNarrow ? Math.min(event.lane, 4) : 0;
             const stackWidth = isNarrow ? 'calc(100% - 22px)' : 'calc(100% - 6px)';
             const overlapHoverClass = isNarrow
-              ? 'hover:w-[calc(100%-6px)] hover:-translate-x-[var(--overlap-shift)] hover:scale-[1.02] hover:z-50 hover:overflow-visible'
+              ? 'hover:w-[calc(100%-6px)] hover:-translate-x-[var(--overlap-shift)] hover:scale-[1.02] hover:overflow-visible'
               : '';
             const titleText = isGroup && event.groupedEvents
               ? event.groupedEvents.map(formatGroupedEventLabel).join('\n')
@@ -940,7 +942,7 @@ function OfficialScheduleTable({
               width: stackWidth,
               marginLeft: `${3 + stackOffset * 7}px`,
               marginTop: `${4 + stackOffset * 7}px`,
-              zIndex: 10 + event.lane,
+              zIndex: isHovered ? 100 : 10 + event.lane,
               '--overlap-shift': `${stackOffset * 7}px`,
             };
             return (
@@ -951,6 +953,10 @@ function OfficialScheduleTable({
                 }`}
                 style={eventStyle}
                 title={titleText}
+                onMouseEnter={() => setHoveredEventId(event.id)}
+                onMouseLeave={() => setHoveredEventId((current) => (current === event.id ? null : current))}
+                onFocus={() => setHoveredEventId(event.id)}
+                onBlur={() => setHoveredEventId((current) => (current === event.id ? null : current))}
               >
                 <span className={`w-1 shrink-0 ${scheduleAccentClass(event.tone, conflicting)}`} />
                 <div className="flex min-w-0 flex-1 flex-col px-1.5 py-1">
