@@ -60,6 +60,7 @@
 - Web 共用 domain helper 已從 `web/src/domain/` 搬到 `web/src/shared/domain/`。
 - Web app implementation 已搬到 `web/src/app/CoursePlannerWebApp.tsx`，根層 `App.tsx` 只保留入口 re-export。
 - Web global stylesheet 已從 `web/src/index.css` 搬到 `web/src/app/global.css`。
+- 已建立 `docs/architecture/test-inventory.md`，把 backend tests 與 fixtures 分成必留、保守保留與可評估瘦身，避免在重構中誤刪 parser/API/DB 安全網。
 
 ## 目前架構
 
@@ -140,6 +141,7 @@ docs/
 tests/
   backend/
   fixtures/
+  # 詳見 docs/architecture/test-inventory.md
 ```
 
 ## Execution Order

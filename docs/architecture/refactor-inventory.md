@@ -62,6 +62,7 @@
 
 - `docs/architecture/refactor-plan.md`
 - `docs/architecture/refactor-inventory.md`
+- `docs/architecture/test-inventory.md`
 - `docs/data-contracts/database-schema.md`
 - `docs/README.md`
 
@@ -103,6 +104,16 @@ Current app shell 元件已移到 `web/src/app/`，修課軌跡使用的 `Course
 - `shared/domain/courseDepartments.ts`
 
 舊 `web/src/utils/parseCourselist.ts` 與 Vite 預設 `web/src/assets/react.svg` 沒有 current import，已移除。
+
+## Tests
+
+目前 backend regression tests 已按 domain 拆分到 `tests/backend/`，不再集中於歷史大型 pure test。測試保留等級與 fixture cleanup 邊界記錄在 `docs/architecture/test-inventory.md`。
+
+重構期間的測試原則：
+
+- 官方選課 parser/client/API、credential/session、database migration 與 sync API tests 屬於必留安全網。
+- Fixture 抓取腳本與代表性輸出屬於保守保留；後續若移除，需先確認沒有測試、文件或 parser 回歸流程引用。
+- 不提交本機 cache；`.gitignore` 已排除 `.DS_Store`、`__pycache__`、`.pytest_cache` 與 `*.pyc`。
 
 ## Database Refactor Baseline
 
