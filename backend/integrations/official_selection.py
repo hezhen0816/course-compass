@@ -366,11 +366,14 @@ class OfficialSelectionClient:
 
     def _workspace_payload(self, page_response: requests.Response, verify_ssl: bool) -> dict[str, Any]:
         payload = parse_a02_workspace(page_response.text)
-        if not _schedule_rows_have_weekday_data(payload["schedule_rows"]):
-            fallback_rows = self._fetch_course_list_schedule_rows(verify_ssl)
-            if fallback_rows:
-                payload["schedule_rows"] = fallback_rows
-                payload["notices"].append("官方功課表由選課清單頁補齊。")
+        course_list_rows = self._fetch_course_list_schedule_rows(verify_ssl)
+        has_workspace_schedule = _schedule_rows_have_weekday_data(payload["schedule_rows"])
+        if course_list_rows and not has_workspace_schedule:
+            payload["schedule_rows"] = course_list_rows
+            payload["notices"].append("官方功課表由選課清單頁補齊。")
+        elif course_list_rows and course_list_rows != payload["schedule_rows"]:
+            payload["schedule_rows"] = course_list_rows
+            payload["notices"].append("官方功課表由正式課程清單校正。")
         return {
             **payload,
             "source_url": page_response.url,

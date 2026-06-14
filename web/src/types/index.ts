@@ -94,6 +94,17 @@ export interface AppTargets {
   minor: number;
 }
 
+export interface GpaApiSettings {
+  enabled: boolean;
+  apiKey: string;
+  updatedAt?: string;
+}
+
+export interface AppSettings {
+  gpaApi?: GpaApiSettings;
+  [key: string]: unknown;
+}
+
 export interface RequirementOption {
   name: string;
   credits?: number | null;
@@ -141,7 +152,7 @@ export interface AppData {
   schemaVersion: number;
   semesters: Semester[];
   targets: AppTargets;
-  settings?: Record<string, unknown>;
+  settings?: AppSettings;
   selectionPlan?: SelectionPlan;
   requirementSets: RequirementSet[];
   pendingRequirements: PendingRequirement[];
@@ -173,6 +184,8 @@ export interface CourseSearchResult {
   classroom: string;
   node: string;
   contents: string;
+  gpa?: number | null;
+  gpa_status?: 'not_enabled' | 'found' | 'no_data' | 'error';
   selected_count?: number | null;
   capacity?: number | null;
 }

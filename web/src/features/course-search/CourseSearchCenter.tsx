@@ -1,5 +1,6 @@
-import { FileText, Loader2, Upload } from 'lucide-react';
-import type { AppData, Course, CourseSearchResult, CourseSemesterInfo } from '../../types';
+import { ListChecks, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import type { AppData, Course, CourseSearchResult, CourseSemesterInfo, PendingRequirement } from '../../types';
 import {
   type CapacityFilter,
   type ManualSearchSummary,
@@ -32,8 +33,6 @@ type CourseSearchCenterProps = {
   requireOptionFilter: string;
   timeFilter: string;
   capacityFilter: CapacityFilter;
-  importStatus: 'idle' | 'loading' | 'error';
-  importError: string;
   canRunManualSearch: boolean;
   virtualCourseCredits: number;
   activeSemesterId: string;
@@ -47,13 +46,22 @@ type CourseSearchCenterProps = {
   onCapacityFilterChange: (capacity: CapacityFilter) => void;
   onRunManualSearch: () => void | Promise<void>;
   onResetFilters: () => void;
-  onPdfUpload: (file: File | undefined) => void | Promise<void>;
   onExportResults: () => void;
+  onAddPendingCourse: (group: PendingCourseGroup, courseName: string) => void;
+  onDeletePendingCourse: (requirementId: string) => void;
+  onSearchPendingCourse: (courseName: string) => void;
   officialActionCourseNo: string | null;
   onAddSelectionCourse: (offering: CourseSearchResult) => void;
   onDeleteVirtualCourse: (courseId: string) => void;
   onOpenPlanning: () => void;
 };
+
+type PendingCourseGroup = 'double_major' | 'minor';
+
+const PENDING_COURSE_GROUPS: Array<{ value: PendingCourseGroup; label: string; setId: string }> = [
+  { value: 'double_major', label: '雙主修', setId: 'manual-double-major-todo' },
+  { value: 'minor', label: '輔系', setId: 'manual-minor-todo' },
+];
 
 export function CourseSearchCenter({
   data,
@@ -72,8 +80,6 @@ export function CourseSearchCenter({
   requireOptionFilter,
   timeFilter,
   capacityFilter,
-  importStatus,
-  importError,
   canRunManualSearch,
   virtualCourseCredits,
   activeSemesterId,
@@ -87,167 +93,28 @@ export function CourseSearchCenter({
   onCapacityFilterChange,
   onRunManualSearch,
   onResetFilters,
-  onPdfUpload,
   onExportResults,
+  onAddPendingCourse,
+  onDeletePendingCourse,
+  onSearchPendingCourse,
   officialActionCourseNo,
   onAddSelectionCourse,
   onDeleteVirtualCourse,
   onOpenPlanning,
 }: CourseSearchCenterProps) {
   const virtualCourses = data.selectionPlan?.courses || [];
+  const [activePendingGroup, setActivePendingGroup] = useState<PendingCourseGroup>('double_major');
+  const [pendingCourseName, setPendingCourseName] = useState('');
+  const activePendingSetId = PENDING_COURSE_GROUPS.find((group) => group.value === activePendingGroup)?.setId || '';
+  const pendingCourses = data.pendingRequirements.filter((requirement) => requirement.setId === activePendingSetId);
+  const addPendingCourse = () => {
+    const courseName = pendingCourseName.trim();
+    if (!courseName) return;
+    onAddPendingCourse(activePendingGroup, courseName);
+    setPendingCourseName('');
+  };
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_300px]">
-      <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 p-4">
-          <h2 className="text-base font-semibold text-slate-900">篩選條件</h2>
-          <button onClick={onResetFilters} className="text-sm font-medium text-blue-600 hover:text-blue-700">
-            清除全部
-          </button>
-        </div>
-        <div className="space-y-4 p-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-500">學期</label>
-            <select
-              value={querySemester}
-              onChange={(event) => onQuerySemesterChange(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              {courseSemesters.length === 0 && <option value={querySemester}>{querySemester}</option>}
-              {courseSemesters.map((semester) => (
-                <option key={semester.semester} value={semester.semester}>
-                  {semester.semester}{semester.english_label ? `・${semester.english_label}` : ''}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-500">目前查詢：{currentCourseSemesterLabel}</p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-500">課名 / 課碼</label>
-            <div className="mt-1 grid grid-cols-[82px_minmax(0,1fr)] gap-2">
-              <select
-                value={manualMode}
-                onChange={(event) => onManualModeChange(event.target.value as SearchMode)}
-                className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
-              >
-                <option value="name">課名</option>
-                <option value="code">課碼</option>
-              </select>
-              <input
-                value={manualQuery}
-                onChange={(event) => onManualQueryChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && canRunManualSearch) void onRunManualSearch();
-                }}
-                placeholder="資料結構"
-                className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-500">教師</label>
-            <input
-              value={teacherFilter}
-              onChange={(event) => onTeacherFilterChange(event.target.value)}
-              placeholder="輸入教師姓名"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-500">必選修</label>
-            <select
-              value={requireOptionFilter}
-              onChange={(event) => onRequireOptionFilterChange(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-            >
-              <option value="all">全部</option>
-              <option value="R">必修</option>
-              <option value="E">選修</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-500">學分</label>
-            <select
-              value={creditFilter}
-              onChange={(event) => onCreditFilterChange(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-            >
-              <option value="all">不限</option>
-              <option value="0">0 學分</option>
-              <option value="1">1 學分</option>
-              <option value="2">2 學分</option>
-              <option value="3">3 學分</option>
-              <option value="4">4 學分</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-500">節次</label>
-            <input
-              value={timeFilter}
-              onChange={(event) => onTimeFilterChange(event.target.value)}
-              placeholder="例如 M3 或 W4"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-500">名額狀態</label>
-            <select
-              value={capacityFilter}
-              onChange={(event) => onCapacityFilterChange(event.target.value as CapacityFilter)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-            >
-              <option value="all">全部</option>
-              <option value="available">尚有名額</option>
-              <option value="full">額滿</option>
-              <option value="unknown">未公告</option>
-            </select>
-          </div>
-
-          <button
-            onClick={() => void onRunManualSearch()}
-            disabled={!canRunManualSearch}
-            className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            搜尋課程
-          </button>
-          <button
-            onClick={onResetFilters}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            重設條件
-          </button>
-
-          <div className="border-t border-slate-100 pt-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <Upload className="h-4 w-4 text-blue-600" />
-                需求匯入
-              </h3>
-              {importStatus === 'loading' && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-            </div>
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700">
-              <FileText className="h-4 w-4" />
-              上傳雙主修 PDF
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                className="hidden"
-                onChange={(event) => {
-                  void onPdfUpload(event.target.files?.[0]);
-                  event.currentTarget.value = '';
-                }}
-              />
-            </label>
-            {importError && <p className="mt-2 text-sm text-red-600">{importError}</p>}
-          </div>
-        </div>
-      </aside>
-
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
       <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -270,6 +137,147 @@ export function CourseSearchCenter({
           </div>
         </div>
 
+        <div className="border-b border-slate-100 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-base font-semibold text-slate-900">篩選條件</h3>
+            <button onClick={onResetFilters} className="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700">
+              清除全部
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
+            <div>
+              <label className="block text-xs font-medium text-slate-500">學期</label>
+              <select
+                value={querySemester}
+                onChange={(event) => onQuerySemesterChange(event.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                {courseSemesters.length === 0 && <option value={querySemester}>{querySemester}</option>}
+                {courseSemesters.map((semester) => (
+                  <option key={semester.semester} value={semester.semester}>
+                    {semester.semester}{semester.english_label ? `・${semester.english_label}` : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">目前查詢：{currentCourseSemesterLabel}</p>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-2">
+              <label className="block text-xs font-medium text-slate-500">課名 / 課碼</label>
+              <div className="mt-1 grid grid-cols-[82px_minmax(0,1fr)] gap-2">
+                <select
+                  value={manualMode}
+                  onChange={(event) => onManualModeChange(event.target.value as SearchMode)}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
+                >
+                  <option value="name">課名</option>
+                  <option value="code">課碼</option>
+                </select>
+                <input
+                  value={manualQuery}
+                  onChange={(event) => onManualQueryChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canRunManualSearch) void onRunManualSearch();
+                  }}
+                  placeholder="資料結構"
+                  className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500">教師</label>
+              <input
+                value={teacherFilter}
+                onChange={(event) => onTeacherFilterChange(event.target.value)}
+                placeholder="輸入教師姓名"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500">必選修</label>
+              <select
+                value={requireOptionFilter}
+                onChange={(event) => onRequireOptionFilterChange(event.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="all">全部</option>
+                <option value="R">必修</option>
+                <option value="E">選修</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500">學分</label>
+              <select
+                value={creditFilter}
+                onChange={(event) => onCreditFilterChange(event.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="all">不限</option>
+                <option value="0">0 學分</option>
+                <option value="1">1 學分</option>
+                <option value="2">2 學分</option>
+                <option value="3">3 學分</option>
+                <option value="4">4 學分</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500">節次</label>
+              <input
+                value={timeFilter}
+                onChange={(event) => onTimeFilterChange(event.target.value)}
+                placeholder="例如 M3 或 W4"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500">名額狀態</label>
+              <select
+                value={capacityFilter}
+                onChange={(event) => onCapacityFilterChange(event.target.value as CapacityFilter)}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="all">全部</option>
+                <option value="available">尚有名額</option>
+                <option value="full">額滿</option>
+                <option value="unknown">未公告</option>
+              </select>
+            </div>
+
+            <div className="flex items-end gap-2">
+              <button
+                onClick={() => void onRunManualSearch()}
+                disabled={!canRunManualSearch}
+                className="min-h-10 flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                搜尋課程
+              </button>
+              <button
+                onClick={onResetFilters}
+                className="min-h-10 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                重設
+              </button>
+            </div>
+
+            <PendingCoursePanel
+              activeGroup={activePendingGroup}
+              courseName={pendingCourseName}
+              courses={pendingCourses}
+              onAdd={addPendingCourse}
+              onCourseNameChange={setPendingCourseName}
+              onDelete={onDeletePendingCourse}
+              onGroupChange={setActivePendingGroup}
+              onSearch={onSearchPendingCourse}
+            />
+          </div>
+        </div>
+
         {manualStatus === 'loading' && <p className="p-5 text-sm text-slate-500">查詢中...</p>}
         {manualError && <p className="m-5 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{manualError}</p>}
         {manualStatus === 'idle' && manualSearchSummary && manualResults.length === 0 && (
@@ -284,13 +292,14 @@ export function CourseSearchCenter({
         )}
 
         <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full border-separate border-spacing-0 text-sm">
+          <table className="min-w-[1040px] w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
                 <th className="border-b border-slate-200 px-3 py-3">課碼</th>
                 <th className="border-b border-slate-200 px-3 py-3">課名</th>
                 <th className="border-b border-slate-200 px-3 py-3">教師</th>
                 <th className="border-b border-slate-200 px-3 py-3">學分</th>
+                <th className="border-b border-slate-200 px-3 py-3">GPA</th>
                 <th className="border-b border-slate-200 px-3 py-3">節次</th>
                 <th className="border-b border-slate-200 px-3 py-3">教室</th>
                 <th className="border-b border-slate-200 px-3 py-3">名額</th>
@@ -301,8 +310,8 @@ export function CourseSearchCenter({
             <tbody>
               {filteredManualResults.length === 0 && !manualSearchSummary && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">
-                    先在左側輸入課名或課碼搜尋官方開課資料。
+                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-500">
+                    先在上方輸入課名或課碼搜尋官方開課資料。
                   </td>
                 </tr>
               )}
@@ -369,6 +378,107 @@ export function CourseSearchCenter({
   );
 }
 
+function PendingCoursePanel({
+  activeGroup,
+  courseName,
+  courses,
+  onAdd,
+  onCourseNameChange,
+  onDelete,
+  onGroupChange,
+  onSearch,
+}: {
+  activeGroup: PendingCourseGroup;
+  courseName: string;
+  courses: PendingRequirement[];
+  onAdd: () => void;
+  onCourseNameChange: (courseName: string) => void;
+  onDelete: (requirementId: string) => void;
+  onGroupChange: (group: PendingCourseGroup) => void;
+  onSearch: (courseName: string) => void;
+}) {
+  return (
+    <div className="md:col-span-2 xl:col-span-4 2xl:col-span-6">
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <ListChecks className="h-4 w-4 text-blue-600" />
+              待修課程清單
+            </div>
+            <p className="mt-1 text-xs text-slate-500">手動登記雙主修與輔系待修課名，之後可直接點查課。</p>
+          </div>
+          <div className="inline-flex w-fit rounded-md border border-slate-200 bg-white p-1">
+            {PENDING_COURSE_GROUPS.map((group) => (
+              <button
+                key={group.value}
+                type="button"
+                onClick={() => onGroupChange(group.value)}
+                className={`rounded px-3 py-1.5 text-xs font-medium ${
+                  activeGroup === group.value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {group.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <input
+            value={courseName}
+            onChange={(event) => onCourseNameChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onAdd();
+            }}
+            placeholder="輸入待修課名，例如 資料結構"
+            className="min-h-10 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={!courseName.trim()}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <Plus className="h-4 w-4" />
+            新增
+          </button>
+        </div>
+
+        {courses.length === 0 ? (
+          <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-sm text-slate-500">
+            目前沒有待修課程。
+          </div>
+        ) : (
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {courses.map((course) => (
+              <div key={course.id} className="flex min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{course.title}</span>
+                <button
+                  type="button"
+                  onClick={() => onSearch(course.title)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-blue-200 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                >
+                  <Search className="h-3.5 w-3.5" />
+                  查課
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(course.id)}
+                  className="inline-flex shrink-0 items-center rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                  title="刪除待修課程"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CourseResultRow({
   offering,
   conflicts,
@@ -385,6 +495,20 @@ function CourseResultRow({
   const slots = parseNodeSlots(offering.node);
   const status = capacityStatus(offering);
   const isOfficialActionLoading = officialActionCourseNo === offering.course_no.trim().toUpperCase();
+  const gpaLabel = typeof offering.gpa === 'number' && Number.isFinite(offering.gpa)
+    ? offering.gpa.toFixed(2)
+    : offering.gpa_status === 'no_data'
+      ? '查無資料'
+      : offering.gpa_status === 'error'
+        ? '錯誤'
+        : '未啟用';
+  const gpaTone = typeof offering.gpa === 'number' && Number.isFinite(offering.gpa)
+    ? 'bg-indigo-50 text-indigo-700'
+    : offering.gpa_status === 'error'
+      ? 'bg-red-50 text-red-700'
+      : offering.gpa_status === 'no_data'
+        ? 'bg-amber-50 text-amber-700'
+        : 'bg-slate-100 text-slate-500';
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50">
       <td className="border-b border-slate-100 px-3 py-3 font-medium text-blue-600">{offering.course_no || '未列'}</td>
@@ -398,6 +522,11 @@ function CourseResultRow({
       </td>
       <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{offering.teacher || '未列教師'}</td>
       <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{formatCredits(offering.credits)}</td>
+      <td className="border-b border-slate-100 px-3 py-3">
+        <span className={`rounded-full px-2 py-1 text-xs font-medium ${gpaTone}`}>
+          {gpaLabel}
+        </span>
+      </td>
       <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{displaySlots(slots)}</td>
       <td className="border-b border-slate-100 px-3 py-3 text-slate-700">{displayClassroom(offering.classroom)}</td>
       <td className="border-b border-slate-100 px-3 py-3">

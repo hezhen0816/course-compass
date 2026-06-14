@@ -44,9 +44,16 @@ export function fetchCourseSemesters(): Promise<CourseSemesterInfo[]> {
   return apiRequest<CourseSemesterInfo[]>('/api/courses/semesters');
 }
 
-export function searchCourses(semester: string, query: string, mode: 'name' | 'code'): Promise<CourseSearchResult[]> {
+export function searchCourses(
+  semester: string,
+  query: string,
+  mode: 'name' | 'code',
+  gpaApiKey?: string,
+): Promise<CourseSearchResult[]> {
   const params = new URLSearchParams({ semester, q: query, mode });
-  return apiRequest<CourseSearchResult[]>(`/api/courses/search?${params.toString()}`);
+  return apiRequest<CourseSearchResult[]>(`/api/courses/search?${params.toString()}`, {
+    headers: gpaApiKey ? { 'X-GPA-API-Key': gpaApiKey } : undefined,
+  });
 }
 
 export function importRequirementsPdf(file: File): Promise<RequirementPdfImportResponse> {

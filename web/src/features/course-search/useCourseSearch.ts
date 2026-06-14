@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchCourseSemesters, searchCourses } from '../../api';
-import type { CourseSearchResult, CourseSemesterInfo } from '../../types';
+import type { CourseSearchResult, CourseSemesterInfo, GpaApiSettings } from '../../types';
 import {
   type CapacityFilter,
   type ManualSearchSummary,
@@ -13,7 +13,14 @@ import {
   parseNodeSlots,
 } from '../../domain/planner';
 
-export function useCourseSearch() {
+function formatGpa(offering: CourseSearchResult): string {
+  if (typeof offering.gpa === 'number' && Number.isFinite(offering.gpa)) return offering.gpa.toFixed(2);
+  if (offering.gpa_status === 'no_data') return '查無資料';
+  if (offering.gpa_status === 'error') return '錯誤';
+  return '未啟用';
+}
+
+export function useCourseSearch(gpaApiSettings?: GpaApiSettings) {
   const [querySemester, setQuerySemester] = useState('1142');
   const [courseSemesters, setCourseSemesters] = useState<CourseSemesterInfo[]>([]);
   const [manualQuery, setManualQuery] = useState('');
@@ -79,17 +86,19 @@ export function useCourseSearch() {
     resetCourseSearchResults();
   };
 
-  const runManualSearch = async () => {
-    const query = manualQuery.trim();
+  const runManualSearch = async (override?: { query?: string; mode?: SearchMode }) => {
+    const query = (override?.query ?? manualQuery).trim();
+    const mode = override?.mode ?? manualMode;
     if (!query) return;
     setManualStatus('loading');
     setManualError('');
     try {
-      const results = await searchCourses(querySemester, query, manualMode);
+      const gpaApiKey = gpaApiSettings?.enabled ? gpaApiSettings.apiKey.trim() : '';
+      const results = await searchCourses(querySemester, query, mode, gpaApiKey || undefined);
       setManualResults(results);
       setManualSearchSummary({
         query,
-        mode: manualMode,
+        mode,
         semester: querySemester,
         resultCount: results.length,
       });
@@ -115,13 +124,14 @@ export function useCourseSearch() {
 
   const exportCourseResults = () => {
     if (filteredManualResults.length === 0) return;
-    const headers = ['課碼', '課名', '教師', '學分', '節次', '教室', '名額', '備註'];
+    const headers = ['課碼', '課名', '教師', '學分', 'GPA', '節次', '教室', '名額', '備註'];
     const escapeCell = (value: string | number | null | undefined) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = filteredManualResults.map((offering) => [
       offering.course_no,
       offering.course_name,
       offering.teacher,
       formatCredits(offering.credits),
+      formatGpa(offering),
       displaySlots(parseNodeSlots(offering.node)),
       displayClassroom(offering.classroom),
       capacityLabel(offering),

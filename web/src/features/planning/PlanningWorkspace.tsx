@@ -144,7 +144,7 @@ export function PlanningWorkspace({
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">選課工作台</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">官方選課清單、志願排序與功課表</h2>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950">官方選課狀態</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-500">
               {planningModeDescription(planningMode)}
             </p>
@@ -177,12 +177,9 @@ export function PlanningWorkspace({
             {plannerMessage}
           </div>
         )}
-        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-          官方功課表為準；加入、取消或儲存志願序時才會送出一次官方請求。被官方拒絕或需要加簽追蹤的課程會以「虛擬加入」標示在課表上。
-        </div>
         <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-4">
-          <OfficialSelectionMetric label="官方已登記" value={`${officialRegisteredCount} 門`} />
-          <OfficialSelectionMetric label="官方待加入" value={`${officialAvailableCount} 門`} />
+          <OfficialSelectionMetric label="已登記志願" value={`${officialRegisteredCount} 門`} />
+          <OfficialSelectionMetric label="待加入清單" value={`${officialAvailableCount} 門`} />
           <OfficialSelectionMetric label="虛擬加入" value={`${virtualCourses.length} 門`} />
           <OfficialSelectionMetric label="同步時間" value={syncedAtLabel} />
         </div>
@@ -192,7 +189,7 @@ export function PlanningWorkspace({
         <aside className="border-b border-slate-200 p-4 xl:border-b-0 xl:border-r">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="text-base font-semibold text-slate-900">官方清單與虛擬加入</h3>
+              <h3 className="text-base font-semibold text-slate-900">官方狀態與虛擬加入</h3>
               <p className="mt-1 text-xs text-slate-500">{planningModeLabel(planningMode)}模式 · 官方資料優先</p>
             </div>
             <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
@@ -204,7 +201,7 @@ export function PlanningWorkspace({
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <h4 className="text-sm font-semibold text-slate-700">
-                  官方登記志願清單
+                  已登記志願
                 </h4>
                 <span className="text-xs text-slate-500">
                   {officialRegisteredCount} 門
@@ -220,14 +217,14 @@ export function PlanningWorkspace({
                 />
               ) : (
                 <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-                  先同步官方初選資料，才能顯示官方登記志願。
+                  先同步官方選課狀態，才能顯示已登記志願。
                 </div>
               )}
             </div>
 
             <div className="border-t border-slate-100 pt-4">
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-700">官方待選清單</h4>
+                <h4 className="text-sm font-semibold text-slate-700">待加入清單</h4>
                 <span className="text-xs text-slate-500">
                   {officialAvailableCount} 門
                 </span>
@@ -240,7 +237,7 @@ export function PlanningWorkspace({
                 />
               ) : (
                 <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-                  先同步官方初選資料，才能顯示官方待選清單。
+                  先同步官方選課狀態，才能顯示待加入清單。
                 </div>
               )}
             </div>
@@ -281,7 +278,7 @@ export function PlanningWorkspace({
               <div>
                 <h3 className="text-base font-semibold text-slate-900">官方功課表</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  官方同步 · {officialSelection?.schedule_rows.length || 0} 節次列 · 虛擬 {virtualCourses.length} 門
+                  官方選課狀態 · {officialSelection?.schedule_rows.length || 0} 節次列 · 虛擬 {virtualCourses.length} 門
                 </p>
               </div>
               <p className="text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>
@@ -301,8 +298,8 @@ export function PlanningWorkspace({
           <p className="mt-1 text-xs text-slate-500">依目前選課階段解讀衝堂、互斥與學分限制。</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <MetricBox label="官方已登記" value={String(officialRegisteredCount)} tone="emerald" />
-            <MetricBox label="官方待加入" value={String(officialAvailableCount)} tone="blue" />
+            <MetricBox label="已登記志願" value={String(officialRegisteredCount)} tone="emerald" />
+            <MetricBox label="待加入清單" value={String(officialAvailableCount)} tone="blue" />
             <MetricBox label={planningMode === 'lottery' ? '競爭組' : '真衝堂'} value={String(planningMode === 'lottery' ? competitionCount : trueConflictCount)} tone={planningMode === 'lottery' ? 'amber' : trueConflictCount > 0 ? 'red' : 'emerald'} />
             <MetricBox label="虛擬加入" value={`${virtualCourses.length} 門`} tone="slate" />
           </div>
@@ -337,32 +334,6 @@ export function PlanningWorkspace({
                 </>
               )}
             </div>
-          </div>
-
-          <div className="mt-4 rounded-lg border border-slate-200 p-3">
-            <h4 className="text-sm font-semibold text-slate-800">送出前重點</h4>
-            <ul className="mt-2 space-y-2 text-sm text-slate-600">
-              {planningMode === 'lottery' ? (
-                <>
-                  <li>官方登記志願與待選清單都以同步結果為準。</li>
-                  <li>虛擬加入只表示需要追蹤，不代表已完成官方登記。</li>
-                  <li>正式送出前會重新同步官方資料與名額狀態。</li>
-                  <li>體育、國文、熱門通識若被拒絕，可先用虛擬加入保留加簽備案。</li>
-                </>
-              ) : planningMode === 'addDrop' ? (
-                <>
-                  <li>加入、取消與志願序儲存都只送出一次，不做自動搶課。</li>
-                  <li>官方拒絕的課程會改成虛擬加入並保留拒絕原因。</li>
-                  <li>同時段課程應先確認是否為可接受的加簽備案。</li>
-                </>
-              ) : (
-                <>
-                  <li>記錄教授 Email、第一次上課時間與加簽備註。</li>
-                  <li>授權碼僅追蹤狀態，不應自動代填或轉讓。</li>
-                  <li>加簽課仍需回官方系統完成流程。</li>
-                </>
-              )}
-            </ul>
           </div>
 
           <div className="mt-4 rounded-lg border border-slate-200 p-3">
@@ -431,11 +402,8 @@ function OfficialRegisteredList({
 
   return (
     <div className="space-y-2">
-      <div className="rounded-md border border-blue-100 bg-blue-50 p-2">
-        <p className="text-xs text-blue-700">
-          先在這裡調整排序，按「儲存志願序」才會送到官方系統。
-        </p>
-        <div className="mt-2 flex gap-2">
+      {isDirty && (
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={() => onSaveOfficialOrder(draftCourses.map((course) => course.course_no))}
@@ -454,7 +422,7 @@ function OfficialRegisteredList({
             還原
           </button>
         </div>
-      </div>
+      )}
 
       {draftCourses.map((course, index) => {
         const normalizedCourseNo = course.course_no.trim().toUpperCase();
@@ -612,6 +580,12 @@ function OfficialScheduleTable({
 }) {
   const visibleWeekdays = showWeekend ? OFFICIAL_WEEKDAYS : OFFICIAL_WEEKDAYS.slice(0, 5);
   const displayRows = officialRowsForDisplay(rows);
+  const events = layoutScheduleEvents([
+    ...buildOfficialScheduleEvents(displayRows, visibleWeekdays),
+    ...buildVirtualScheduleEvents(virtualCourses, visibleWeekdays, courseRanks),
+  ]);
+  const gridTemplateColumns = `72px repeat(${visibleWeekdays.length}, minmax(132px, 1fr))`;
+  const gridTemplateRows = `42px repeat(${displayRows.length}, 64px)`;
   return (
     <div className="p-4">
       <div className="mb-3 flex items-center justify-end">
@@ -635,89 +609,127 @@ function OfficialScheduleTable({
           顯示週末
         </button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-[760px] w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="w-[72px] border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">
-                節次 / 時間
-              </th>
-              {visibleWeekdays.map((weekday) => (
-                <th key={weekday.label} className="border border-slate-200 bg-slate-50 px-2 py-2 text-center font-semibold text-slate-700">
-                  {weekday.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {displayRows.map((row, index) => (
-              <tr key={`${getOfficialScheduleCell(row, '節次') || index}-${getOfficialScheduleCell(row, '時間') || index}`}>
-                <td className="border border-slate-200 bg-slate-50 px-2 py-2 text-center">
-                  <div className="text-sm font-semibold text-slate-800">
-                    {getOfficialScheduleCell(row, '節次') || index + 1}
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div
+          className="relative min-w-[780px] text-sm"
+          style={{ display: 'grid', gridTemplateColumns, gridTemplateRows }}
+        >
+          <div className="sticky left-0 z-20 flex items-center justify-center border-b border-r border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
+            時間
+          </div>
+          {visibleWeekdays.map((weekday, index) => (
+            <div
+              key={weekday.label}
+              className="flex items-center justify-center border-b border-r border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700"
+              style={{ gridColumn: index + 2, gridRow: 1 }}
+            >
+              {weekday.label.replace('星期', '週')}
+            </div>
+          ))}
+          {displayRows.map((row, rowIndex) => {
+            const period = getOfficialScheduleCell(row, '節次') || PERIODS[rowIndex] || String(rowIndex + 1);
+            return (
+              <div
+                key={`time-${period}`}
+                className="sticky left-0 z-10 flex flex-col items-center justify-center border-b border-r border-slate-200 bg-slate-50 text-center"
+                style={{ gridColumn: 1, gridRow: rowIndex + 2 }}
+              >
+                <span className="text-sm font-semibold text-slate-800">{period}</span>
+                <span className="mt-1 whitespace-pre-line text-[10px] leading-tight text-slate-500">
+                  {formatOfficialTime(getOfficialScheduleCell(row, '時間'))}
+                </span>
+              </div>
+            );
+          })}
+          {displayRows.flatMap((row, rowIndex) => (
+            visibleWeekdays.map((weekday, dayIndex) => {
+              const hasEvent = events.some((event) => (
+                event.weekdayLabel === weekday.label
+                && rowIndex >= event.startIndex
+                && rowIndex < event.startIndex + event.span
+              ));
+              return (
+                <div
+                  key={`bg-${weekday.label}-${getOfficialScheduleCell(row, '節次') || rowIndex}`}
+                  className={`border-b border-r border-slate-200 ${
+                    hasEvent ? 'bg-blue-50/55' : 'bg-white'
+                  }`}
+                  style={{ gridColumn: dayIndex + 2, gridRow: rowIndex + 2 }}
+                />
+              );
+            })
+          ))}
+          {events.map((event) => {
+            const dayIndex = visibleWeekdays.findIndex((weekday) => weekday.label === event.weekdayLabel);
+            if (dayIndex < 0) return null;
+            const isVirtual = event.kind === 'virtual';
+            const laneWidth = 100 / event.laneCount;
+            const leftPct = laneWidth * event.lane;
+            const isNarrow = event.laneCount > 1;
+            const competing = isVirtual && mode === 'lottery' && event.laneCount > 1;
+            const conflicting = isVirtual && mode !== 'lottery' && event.laneCount > 1;
+            const showMeta = Boolean(event.meta) && (!isNarrow || event.span > 1);
+            return (
+              <div
+                key={event.id}
+                className={`group/event z-10 my-1 flex min-h-0 overflow-hidden rounded-md border shadow-sm ${
+                  isVirtual
+                    ? conflicting
+                      ? 'border-red-300 bg-red-50 text-red-950'
+                      : 'border-amber-300 bg-amber-50 text-amber-950'
+                    : 'border-blue-100 bg-white text-slate-900'
+                }`}
+                style={{
+                  gridColumn: dayIndex + 2,
+                  gridRow: `${event.startIndex + 2} / span ${event.span}`,
+                  width: `calc(${laneWidth}% - 6px)`,
+                  marginLeft: `calc(${leftPct}% + 3px)`,
+                }}
+                title={event.rank ? `${event.rank}. ${event.title}` : event.title}
+              >
+                <span className={`w-1 shrink-0 ${
+                  isVirtual ? (conflicting ? 'bg-red-400' : 'bg-amber-400') : 'bg-blue-500'
+                }`} />
+                <div className="flex min-w-0 flex-1 flex-col px-1.5 py-1">
+                  <div className="flex items-start gap-1">
+                    {isVirtual && event.rank ? (
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${
+                        conflicting ? 'bg-red-500' : 'bg-amber-500'
+                      }`}>
+                        {event.rank}
+                      </span>
+                    ) : null}
+                    <p className="min-w-0 flex-1 truncate text-xs font-semibold leading-5">{event.title}</p>
+                    {event.course ? (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteVirtualCourse(event.course!.id)}
+                        className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        title="移除虛擬課程"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    ) : null}
                   </div>
-                  <div className="mt-1 whitespace-pre-line text-[11px] leading-tight text-slate-500">
-                    {formatOfficialTime(getOfficialScheduleCell(row, '時間'))}
-                  </div>
-                </td>
-                {visibleWeekdays.map((weekday) => {
-                  const value = getOfficialScheduleCell(row, weekday.label);
-                  const period = getOfficialScheduleCell(row, '節次') || PERIODS[index] || '';
-                  const virtualCellCourses = virtualCoursesForOfficialCell(virtualCourses, weekday.label, period);
-                  const hasVirtualCourses = virtualCellCourses.length > 0;
-                  const hasCompetition = hasVirtualCourses && virtualCellCourses.length > 1;
-                  return (
-                    <td
-                      key={weekday.label}
-                      className={`h-16 border border-slate-200 px-2 py-2 align-top ${
-                        value || hasVirtualCourses ? 'bg-blue-50 text-slate-900' : 'bg-white text-slate-400'
-                      }`}
-                    >
-                      {value ? (
-                        <div className="rounded-md border border-blue-100 bg-white px-2 py-1.5 text-xs font-medium leading-relaxed text-slate-900 shadow-sm">
-                          {value}
-                        </div>
-                      ) : null}
-                      {virtualCellCourses.map((course) => (
-                        <div
-                          key={course.id}
-                          className={`mt-1.5 rounded-md border px-2 py-1.5 text-xs shadow-sm ${
-                            hasCompetition && mode === 'lottery'
-                              ? 'border-amber-300 bg-amber-50 text-amber-900'
-                              : 'border-amber-200 bg-white text-slate-900'
-                          }`}
-                          title={`虛擬加入：${course.virtualSelection?.reason || '尚未被官方正式接受。'}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1">
-                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">虛擬</span>
-                                <span className="truncate font-semibold text-slate-900">
-                                  {courseRanks.get(course.id) || 0}. {course.name}
-                                </span>
-                              </div>
-                              <p className="mt-1 truncate text-[11px] text-slate-500">
-                                {course.scheduledOffering?.teacher || course.details?.professor || '未列教師'}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => onDeleteVirtualCourse(course.id)}
-                              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              title="移除虛擬課程"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {showMeta ? (
+                    <p className={`mt-0.5 truncate text-[11px] ${
+                      isVirtual ? (conflicting ? 'text-red-700' : 'text-amber-700') : 'text-blue-600'
+                    }`}>
+                      {event.meta}
+                    </p>
+                  ) : null}
+                  {(competing || conflicting) ? (
+                    <span className={`mt-auto inline-flex w-fit items-center rounded-full px-1.5 text-[10px] font-medium ${
+                      conflicting ? 'bg-red-200/70 text-red-800' : 'bg-amber-200/70 text-amber-800'
+                    }`}>
+                      {conflicting ? '衝堂' : '競爭'}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -754,13 +766,154 @@ function officialRowsForDisplay(rows: Record<string, string>[]): Record<string, 
   });
 }
 
-function virtualCoursesForOfficialCell(courses: Course[], weekdayLabel: string, period: string): Course[] {
-  const dayCode = OFFICIAL_DAY_CODE_BY_LABEL[weekdayLabel];
-  const normalizedPeriod = period.trim().toUpperCase();
-  if (!dayCode || !normalizedPeriod) return [];
-  return courses.filter((course) => (
-    course.scheduledOffering?.slots.some((slot) => slot.trim().toUpperCase() === `${dayCode}${normalizedPeriod}`)
-  ));
+type ScheduleEvent = {
+  id: string;
+  kind: 'official' | 'virtual';
+  weekdayLabel: string;
+  startIndex: number;
+  span: number;
+  title: string;
+  meta: string;
+  rank?: number;
+  course?: Course;
+  lane: number;
+  laneCount: number;
+  overlapsOfficial: boolean;
+};
+
+type RawScheduleEvent = Omit<ScheduleEvent, 'lane' | 'laneCount' | 'overlapsOfficial'>;
+
+function buildOfficialScheduleEvents(
+  rows: Record<string, string>[],
+  weekdays: typeof OFFICIAL_WEEKDAYS,
+): RawScheduleEvent[] {
+  const events: RawScheduleEvent[] = [];
+  weekdays.forEach((weekday) => {
+    let rowIndex = 0;
+    while (rowIndex < rows.length) {
+      const value = normalizeScheduleCellValue(getOfficialScheduleCell(rows[rowIndex], weekday.label));
+      if (!value) {
+        rowIndex += 1;
+        continue;
+      }
+
+      let endIndex = rowIndex + 1;
+      while (
+        endIndex < rows.length
+        && normalizeScheduleCellValue(getOfficialScheduleCell(rows[endIndex], weekday.label)) === value
+      ) {
+        endIndex += 1;
+      }
+
+      const rowSpan = endIndex - rowIndex;
+      events.push({
+        id: `official-${weekday.label}-${rowIndex}-${value}`,
+        kind: 'official',
+        weekdayLabel: weekday.label,
+        startIndex: rowIndex,
+        span: rowSpan,
+        title: value,
+        meta: rowSpan > 1 ? `連續 ${rowSpan} 節` : '',
+      });
+      rowIndex = endIndex;
+    }
+  });
+
+  return events;
+}
+
+function buildVirtualScheduleEvents(
+  courses: Course[],
+  weekdays: typeof OFFICIAL_WEEKDAYS,
+  courseRanks: Map<string, number>,
+): RawScheduleEvent[] {
+  const events: RawScheduleEvent[] = [];
+  courses.forEach((course) => {
+    weekdays.forEach((weekday) => {
+      const dayCode = OFFICIAL_DAY_CODE_BY_LABEL[weekday.label];
+      if (!dayCode) return;
+      const slotPeriods = new Set(
+        (course.scheduledOffering?.slots || [])
+          .map((slot) => slot.trim().toUpperCase())
+          .filter((slot) => slot.startsWith(dayCode))
+          .map((slot) => slot.slice(dayCode.length)),
+      );
+      let periodIndex = 0;
+      while (periodIndex < PERIODS.length) {
+        if (!slotPeriods.has(PERIODS[periodIndex])) {
+          periodIndex += 1;
+          continue;
+        }
+        let endIndex = periodIndex + 1;
+        while (endIndex < PERIODS.length && slotPeriods.has(PERIODS[endIndex])) {
+          endIndex += 1;
+        }
+        const span = endIndex - periodIndex;
+        const rank = courseRanks.get(course.id) || 0;
+        const teacher = course.scheduledOffering?.teacher || course.details?.professor || '未列教師';
+        events.push({
+          id: `virtual-${course.id}-${weekday.label}-${periodIndex}`,
+          kind: 'virtual',
+          weekdayLabel: weekday.label,
+          startIndex: periodIndex,
+          span,
+          title: course.name,
+          meta: `${teacher}${span > 1 ? ` · 連續 ${span} 節` : ''}`,
+          rank,
+          course,
+        });
+        periodIndex = endIndex;
+      }
+    });
+  });
+  return events;
+}
+
+function layoutScheduleEvents(events: RawScheduleEvent[]): ScheduleEvent[] {
+  const grouped = new Map<string, RawScheduleEvent[]>();
+  events.forEach((event) => {
+    grouped.set(event.weekdayLabel, [...(grouped.get(event.weekdayLabel) || []), event]);
+  });
+
+  const laidOut: ScheduleEvent[] = [];
+  grouped.forEach((weekdayEvents) => {
+    const sorted = [...weekdayEvents].sort((a, b) => (
+      a.startIndex - b.startIndex
+      || b.span - a.span
+      || (a.kind === 'official' ? -1 : 1)
+    ));
+    const laneEnds: number[] = [];
+    const assigned = sorted.map((event) => {
+      const endIndex = event.startIndex + event.span;
+      let lane = laneEnds.findIndex((laneEnd) => laneEnd <= event.startIndex);
+      if (lane < 0) {
+        lane = laneEnds.length;
+        laneEnds.push(endIndex);
+      } else {
+        laneEnds[lane] = endIndex;
+      }
+      return { ...event, lane, laneCount: 1 };
+    });
+
+    assigned.forEach((event) => {
+      const overlapping = assigned.filter((candidate) => (
+        candidate.weekdayLabel === event.weekdayLabel
+        && candidate.startIndex < event.startIndex + event.span
+        && candidate.startIndex + candidate.span > event.startIndex
+      ));
+      laidOut.push({
+        ...event,
+        laneCount: Math.max(1, ...overlapping.map((candidate) => candidate.lane + 1)),
+        overlapsOfficial: event.kind === 'virtual' && overlapping.some((candidate) => candidate.kind === 'official'),
+      });
+    });
+  });
+
+  return laidOut;
+}
+
+function normalizeScheduleCellValue(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
 }
 
 function compactOfficialKey(value: string): string {

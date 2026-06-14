@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 import requests
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 
 try:
     from ..core.config import DEFAULT_VERIFY_SSL, SEMESTERS_INFO_URL
@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
 
 
 CourseSearchFetcher = Callable[..., list[dict[str, Any]]]
+GPA_GRADE_API_URL = "https://myntust.com/api/v1/grades"
 
 
 def create_courses_router(fetch_courses_filtered: CourseSearchFetcher) -> APIRouter:
@@ -55,6 +56,7 @@ def create_courses_router(fetch_courses_filtered: CourseSearchFetcher) -> APIRou
         mode: str = "name",
         refresh: bool = False,
         verify_ssl: bool = DEFAULT_VERIFY_SSL,
+        gpa_api_key: str | None = Header(default=None, alias="X-GPA-API-Key"),
     ) -> list[CourseSearchResult]:
         try:
             if mode not in {"name", "code"}:
@@ -76,7 +78,10 @@ def create_courses_router(fetch_courses_filtered: CourseSearchFetcher) -> APIRou
                 if mode == "code" and normalized_query not in course_no.lower():
                     continue
                 filtered.append(_course_search_result(course))
-            return _sort_course_search_results(_merge_course_search_results(filtered), q)
+            results = _sort_course_search_results(_merge_course_search_results(filtered), q)
+            if gpa_api_key:
+                _attach_gpa_to_courses(results, gpa_api_key, verify_ssl)
+            return results
         except requests.RequestException as exc:
             raise HTTPException(status_code=502, detail=f"課程查詢系統請求失敗：{exc}") from exc
         except RuntimeError as exc:
@@ -118,6 +123,43 @@ def _course_search_result(course: dict[str, Any]) -> CourseSearchResult:
         selected_count=_as_int(course.get("ChooseStudent")),
         capacity=_as_int(course.get("Restrict2")),
     )
+
+
+def _attach_gpa_to_courses(courses: list[CourseSearchResult], api_key: str, verify_ssl: bool) -> None:
+    for course in courses:
+        if not course.course_no:
+            continue
+        course.gpa, course.gpa_status = _fetch_course_gpa(course.course_no, api_key, verify_ssl)
+
+
+def _fetch_course_gpa(course_no: str, api_key: str, verify_ssl: bool) -> tuple[float | None, str]:
+    try:
+        response = requests.get(
+            f"{GPA_GRADE_API_URL}/{course_no}",
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            timeout=10,
+            verify=verify_ssl,
+        )
+        if response.status_code == 404:
+            return None, "no_data"
+        if response.status_code >= 400:
+            return None, "error"
+        payload = response.json()
+    except (ValueError, requests.RequestException):
+        return None, "error"
+
+    if not isinstance(payload, dict) or payload.get("success") is False:
+        return None, "no_data"
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return None, "no_data"
+    gpa = _as_float(data.get("gpa"))
+    if gpa is None:
+        return None, "no_data"
+    return gpa, "found"
 
 
 def _merge_course_search_results(courses: list[CourseSearchResult]) -> list[CourseSearchResult]:

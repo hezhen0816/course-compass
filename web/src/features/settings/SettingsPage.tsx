@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
-import { KeyRound, RefreshCw, Settings } from 'lucide-react';
-import type { AppData } from '../../types';
+import { KeyRound, RefreshCw, Settings, ShieldCheck } from 'lucide-react';
+import type { AppData, GpaApiSettings } from '../../types';
+
+const EMPTY_GPA_API_SETTINGS: GpaApiSettings = {
+  enabled: false,
+  apiKey: '',
+};
 
 type SettingsPageProps = {
   initialSettings: AppData['targets'];
@@ -11,7 +16,9 @@ type SettingsPageProps = {
   syncMessage: string;
   officialSelectionStatus: 'idle' | 'loading' | 'error' | 'success';
   officialSelectionMessage: string;
+  initialGpaApiSettings?: GpaApiSettings;
   onSaveTargets: (targets: AppData['targets']) => void;
+  onSaveGpaApiSettings: (settings: GpaApiSettings) => void;
   onOpenSchoolSync: () => void;
   onOpenOfficialSelectionSync: () => void;
   onClearSavedSchoolCredentials: () => void;
@@ -26,16 +33,29 @@ export function SettingsPage({
   syncMessage,
   officialSelectionStatus,
   officialSelectionMessage,
+  initialGpaApiSettings,
   onSaveTargets,
+  onSaveGpaApiSettings,
   onOpenSchoolSync,
   onOpenOfficialSelectionSync,
   onClearSavedSchoolCredentials,
 }: SettingsPageProps) {
   const [settingsForm, setSettingsForm] = useState(initialSettings);
+  const [gpaApiForm, setGpaApiForm] = useState<GpaApiSettings>({
+    ...EMPTY_GPA_API_SETTINGS,
+    ...initialGpaApiSettings,
+  });
 
   useEffect(() => {
     setSettingsForm(initialSettings);
   }, [initialSettings]);
+
+  useEffect(() => {
+    setGpaApiForm({
+      ...EMPTY_GPA_API_SETTINGS,
+      ...initialGpaApiSettings,
+    });
+  }, [initialGpaApiSettings]);
 
   return (
     <div className="space-y-4">
@@ -60,7 +80,7 @@ export function SettingsPage({
               className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${officialSelectionStatus === 'loading' ? 'animate-spin' : ''}`} />
-              同步官方初選
+              同步官方選課狀態
             </button>
           </div>
         </div>
@@ -75,7 +95,7 @@ export function SettingsPage({
           <p className={`mt-3 rounded-md px-3 py-2 text-sm ${
             officialSelectionStatus === 'error' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
           }`}>
-            官方初選：{officialSelectionMessage}
+            官方選課狀態：{officialSelectionMessage}
           </p>
         )}
       </section>
@@ -109,7 +129,7 @@ export function SettingsPage({
               </p>
               <p className="mt-1 text-xs text-blue-700">
                 {hasSavedSchoolCredentials
-                  ? '官方 session 過期時，可直接重新同步官方初選，不必再輸入密碼。'
+                  ? '官方 session 過期時，可直接重新同步官方選課狀態，不必再輸入密碼。'
                   : '請在同步視窗勾選保存並成功同步一次，之後官方 session 過期才可直接重新同步。'}
               </p>
             </div>
@@ -123,6 +143,73 @@ export function SettingsPage({
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-blue-600" />
+              <h2 className="text-base font-semibold text-slate-900">GPA API 密鑰</h2>
+            </div>
+            <p className="mt-2 text-sm text-slate-500">
+              預留 GPA API 串接設定；目前只保存設定，不會自動向第三方 GPA API 發送請求。
+            </p>
+          </div>
+          <span className={`w-fit rounded-full px-2 py-1 text-xs font-medium ${
+            gpaApiForm.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {gpaApiForm.enabled ? '已啟用' : '未啟用'}
+          </span>
+        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSaveGpaApiSettings({
+              enabled: gpaApiForm.enabled,
+              apiKey: gpaApiForm.apiKey.trim(),
+              updatedAt: new Date().toISOString(),
+            });
+          }}
+          className="space-y-4 p-5"
+        >
+          <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+            <input
+              type="checkbox"
+              checked={gpaApiForm.enabled}
+              onChange={(event) => setGpaApiForm({ ...gpaApiForm, enabled: event.target.checked })}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>
+              <span className="block text-sm font-medium text-slate-800">啟用 GPA API 串接</span>
+              <span className="mt-1 block text-xs text-slate-500">啟用後，未來 GPA 匯入流程會讀取這組 API 設定。</span>
+            </span>
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <TextField
+              label="API 密鑰"
+              value={gpaApiForm.apiKey}
+              onChange={(value) => setGpaApiForm({ ...gpaApiForm, apiKey: value })}
+              placeholder="貼上 GPA API token"
+              type="password"
+              wide
+            />
+          </div>
+
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            GPA API 密鑰屬於敏感資料；正式串接前建議改由後端加密保存，避免把密鑰暴露在前端或一般資料欄位。
+          </div>
+
+          <div className="flex justify-end border-t border-slate-100 pt-4">
+            <button
+              type="submit"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              儲存 GPA API 設定
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -218,6 +305,35 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-medium text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
     </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: 'text' | 'password';
+  wide?: boolean;
+}) {
+  return (
+    <label className={wide ? 'md:col-span-2' : undefined}>
+      <span className="block text-sm font-medium text-slate-700">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </label>
   );
 }
 

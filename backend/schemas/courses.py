@@ -20,5 +20,7 @@ class CourseSearchResult(BaseModel):
     classroom: str
     node: str
     contents: str
+    gpa: float | None = None
+    gpa_status: str = "not_enabled"
     selected_count: int | None = None
     capacity: int | None = None

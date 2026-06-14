@@ -359,6 +359,52 @@ def test_official_selection_schedule_rows_from_synced_slots() -> None:
     assert rows[6]["星期二"] == "體育(撞球)(上)"
 
 
+def test_official_selection_workspace_prefers_course_list_schedule_when_a02_schedule_differs(monkeypatch) -> None:
+    html = """
+    <html>
+      <body>
+        <div id="loginModal">
+          <table>
+            <tr>
+              <th>節次</th><th>時間</th><th>星期一</th><th>星期二</th><th>星期三</th>
+              <th>星期四</th><th>星期五</th><th>星期六</th><th>星期日</th>
+            </tr>
+            <tr>
+              <td>2</td><td>9:10～10:00</td><td></td><td>數位系統設計</td><td>數位系統設計</td>
+              <td></td><td></td><td></td><td></td>
+            </tr>
+          </table>
+        </div>
+      </body>
+    </html>
+    """
+    course_list_rows = official_selection._schedule_rows_from_slots(
+        [
+            {
+                "weekday_label": "星期四",
+                "period": "6",
+                "course_name": "數位系統設計",
+            },
+            {
+                "weekday_label": "星期四",
+                "period": "7",
+                "course_name": "數位系統設計",
+            },
+        ]
+    )
+
+    client = official_selection.OfficialSelectionClient()
+    monkeypatch.setattr(client, "_fetch_course_list_schedule_rows", lambda verify_ssl: course_list_rows)
+
+    payload = client._workspace_payload(FakeHTTPResponse(text=html), verify_ssl=False)
+
+    assert payload["schedule_rows"][1]["星期二"] == ""
+    assert payload["schedule_rows"][1]["星期三"] == ""
+    assert payload["schedule_rows"][5]["星期四"] == "數位系統設計"
+    assert payload["schedule_rows"][6]["星期四"] == "數位系統設計"
+    assert "官方功課表由正式課程清單校正。" in payload["notices"]
+
+
 def test_official_selection_arraydata_form_rows_matches_saveidx_shape() -> None:
     rows = official_selection._arraydata_form_rows(
         [
@@ -439,6 +485,7 @@ def test_official_selection_join_refreshes_workspace_before_and_after_post(monke
         return FakeHTTPResponse(text=workspace_html)
 
     monkeypatch.setattr(client, "_get_workspace_page", fake_get_workspace_page)
+    monkeypatch.setattr(client, "_fetch_course_list_schedule_rows", lambda verify_ssl: [])
 
     payload = client.join_course(" cs2002302 ", verify_ssl=False)
 
