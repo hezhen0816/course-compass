@@ -141,6 +141,13 @@ Typed schema foundation：
 5. Web/iOS 確認只透過 API，不直接依賴 `user_data.content` shape。
 6. 至少一個 release 後才停止 whole-payload upsert。
 
+已建立離線 preview 工具：
+
+- `scripts/preview_typed_planner_backfill.py`
+- 只讀本機 JSON，不連 Supabase、不寫 DB。
+- 輸出 typed table preview rows、row counts、source counts 與 warnings。
+- `metadata.source_payload` 保留原始未知欄位，但遮罩校務密碼、舊 ciphertext 與 GPA API key。
+
 ## Validation Gates
 
 每個階段至少跑：

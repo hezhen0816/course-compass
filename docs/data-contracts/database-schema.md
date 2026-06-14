@@ -143,6 +143,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 
 - 先建立完整 backup，再拆 JSON。
 - 不丟棄未知欄位；無法映射的 payload 存入對應 row 的 `metadata jsonb`。
+- Preview/backfill 報告不可保存校務密碼、official session cookie 或 GPA API token；若 source payload 含敏感欄位，必須在 metadata 中遮罩。
 - 切換前後至少對帳：
   - 使用者數
   - 學期數
@@ -153,3 +154,39 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
   - selection candidate 數
 - 舊 `public.user_data.content` 至少保留一個 release。
 - Web/iOS 兩端都改到 typed API 並驗證後，才允許移除 whole-payload upsert。
+
+## Backfill Preview Tool
+
+`scripts/preview_typed_planner_backfill.py` 是 typed schema 切換前的離線預覽工具。
+
+用途：
+- 讀取本機 JSON 匯出的 `public.user_data` rows。
+- 將 `content.semesters`、`requirementSets`、`pendingRequirements`、`historyRecords`、`selectionPlan` 拆成 typed table preview rows。
+- 輸出每張 typed table 的 row count、source count 與 warnings。
+- 保留無法穩定映射的原始欄位到 `metadata.source_payload`，但會遮罩 `settings.school_password`、`passwordCiphertext`、`gpaApi.apiKey`。
+
+明確限制：
+- 不連 Supabase。
+- 不寫資料庫。
+- 不產生 production backfill SQL。
+- 不取代 full backup 或 production reconciliation。
+
+使用方式：
+
+```bash
+bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --counts-only
+```
+
+輸入可為：
+
+```json
+[
+  {"user_id": "...", "content": {"semesters": []}}
+]
+```
+
+或：
+
+```json
+{"rows": [{"user_id": "...", "content": {"semesters": []}}]}
+```

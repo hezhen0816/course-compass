@@ -61,6 +61,7 @@
 - Web app implementation 已搬到 `web/src/app/CoursePlannerWebApp.tsx`，根層 `App.tsx` 只保留入口 re-export。
 - Web global stylesheet 已從 `web/src/index.css` 搬到 `web/src/app/global.css`。
 - 已建立 `docs/architecture/test-inventory.md`，把 backend tests 與 fixtures 分成必留、保守保留與可評估瘦身，避免在重構中誤刪 parser/API/DB 安全網。
+- 已建立 typed planner backfill preview 工具 `scripts/preview_typed_planner_backfill.py`，可離線拆解 `public.user_data.content` 並輸出 typed table 對帳 counts，不連線、不寫 DB、不保存敏感 token。
 
 ## 目前架構
 
@@ -171,6 +172,7 @@ tests/
    - Keep compatibility imports while tests are being migrated.
 4. Add typed table migrations behind a backup-first cutover.
    - Typed table foundation is additive only; production read/write remains on the current compatibility layer until dual-write and reconciliation are ready.
+   - Preview/backfill tool 已可先離線產生 typed table rows 與對帳 counts；下一步才是設計 backup + apply lane。
    - Create full `user_data_refactor_backup` before any destructive change or backfill write.
    - Preserve unknown JSON fields in metadata columns.
    - Produce a row-count reconciliation report before production cutover.
