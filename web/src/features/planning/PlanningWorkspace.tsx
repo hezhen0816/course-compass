@@ -951,7 +951,6 @@ function OfficialScheduleTable({
             const isVirtual = event.kind === 'virtual';
             const isGroup = event.kind === 'group';
             const isNarrow = event.laneCount > 1;
-            const competing = isVirtual && mode === 'lottery' && event.laneCount > 1;
             const conflicting = isVirtual && mode !== 'lottery' && event.laneCount > 1;
             const showMeta = !isGroup && Boolean(event.meta) && (!isNarrow || event.span > 1);
             const stackOffset = isNarrow ? Math.min(event.lane, 4) : 0;
@@ -1017,11 +1016,9 @@ function OfficialScheduleTable({
                       {event.meta}
                     </p>
                   ) : null}
-                  {(competing || conflicting) ? (
-                    <span className={`mt-auto inline-flex w-fit items-center rounded-full px-1.5 text-[10px] font-medium ${
-                      conflicting ? 'bg-red-200/70 text-red-800' : 'bg-amber-200/70 text-amber-800'
-                    }`}>
-                      {conflicting ? '衝堂' : '競爭'}
+                  {conflicting ? (
+                    <span className="mt-auto inline-flex w-fit items-center rounded-full bg-red-200/70 px-1.5 text-[10px] font-medium text-red-800">
+                      衝堂
                     </span>
                   ) : null}
                 </div>
