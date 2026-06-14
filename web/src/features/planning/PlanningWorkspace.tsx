@@ -922,7 +922,7 @@ function OfficialScheduleTable({
             if (dayIndex < 0) return null;
             const isVirtual = event.kind === 'virtual';
             const isGroup = event.kind === 'group';
-            const isNarrow = event.laneCount > 1;
+            const isNarrow = !isGroup && event.laneCount > 1;
             const competing = isVirtual && mode === 'lottery' && event.laneCount > 1;
             const conflicting = isVirtual && mode !== 'lottery' && event.laneCount > 1;
             const showMeta = !isGroup && Boolean(event.meta) && (!isNarrow || event.span > 1);
@@ -1002,7 +1002,7 @@ function GroupedScheduleEventContent({ event }: { event: ScheduleEvent }) {
   return (
     <div className="min-w-0">
       <div className="mb-1 flex items-center justify-between gap-1">
-        <p className="truncate text-xs font-semibold leading-5">{groupedEvents.length} 門同時段</p>
+        <p className="truncate text-xs font-semibold leading-5">{event.title}</p>
         {hiddenCount > 0 ? (
           <span className="shrink-0 rounded-full bg-white/75 px-1.5 text-[10px] font-medium text-slate-600">
             +{hiddenCount}
@@ -1202,7 +1202,7 @@ function buildVirtualScheduleEvents(
 }
 
 function layoutScheduleEvents(events: RawScheduleEvent[]): ScheduleEvent[] {
-  const groupableEvents = groupSameSlotEvents(events);
+  const groupableEvents = groupOverlappingEvents(events);
   const grouped = new Map<string, RawScheduleEvent[]>();
   groupableEvents.forEach((event) => {
     grouped.set(event.weekdayLabel, [...(grouped.get(event.weekdayLabel) || []), event]);
@@ -1245,33 +1245,83 @@ function layoutScheduleEvents(events: RawScheduleEvent[]): ScheduleEvent[] {
   return laidOut;
 }
 
-function groupSameSlotEvents(events: RawScheduleEvent[]): RawScheduleEvent[] {
+function groupOverlappingEvents(events: RawScheduleEvent[]): RawScheduleEvent[] {
   const groups = new Map<string, RawScheduleEvent[]>();
   events.forEach((event) => {
-    const key = `${event.weekdayLabel}|${event.startIndex}|${event.span}`;
+    const key = event.weekdayLabel;
     groups.set(key, [...(groups.get(key) || []), event]);
   });
 
   return Array.from(groups.values()).flatMap((group) => {
-    if (group.length <= 1) return group;
     const sorted = [...group].sort((a, b) => (
-      (a.rank ?? 999) - (b.rank ?? 999)
+      a.startIndex - b.startIndex
+      || (a.startIndex + a.span) - (b.startIndex + b.span)
+      || (a.rank ?? 999) - (b.rank ?? 999)
       || a.title.localeCompare(b.title, 'zh-Hant')
     ));
-    const first = sorted[0];
-    return [{
-      id: `group-${first.weekdayLabel}-${first.startIndex}-${first.span}-${sorted.map((event) => event.id).join('-')}`,
-      kind: 'group',
-      weekdayLabel: first.weekdayLabel,
-      startIndex: first.startIndex,
-      span: first.span,
-      title: `${sorted.length} 門同時段`,
-      meta: sorted.map(formatGroupedEventLabel).join(' / '),
-      tone: sorted.some((event) => event.kind === 'virtual') ? 'virtual' : first.tone,
-      classificationLabel: '同時段',
-      groupedEvents: sorted,
-    }];
+    const result: RawScheduleEvent[] = [];
+    let cluster: RawScheduleEvent[] = [];
+    let clusterEnd = -1;
+
+    const flushCluster = () => {
+      if (cluster.length === 0) return;
+      if (cluster.length === 1) {
+        result.push(cluster[0]);
+        cluster = [];
+        clusterEnd = -1;
+        return;
+      }
+      result.push(createOverlappingGroupEvent(cluster));
+      cluster = [];
+      clusterEnd = -1;
+    };
+
+    sorted.forEach((event) => {
+      const eventEnd = event.startIndex + event.span;
+      if (cluster.length === 0) {
+        cluster = [event];
+        clusterEnd = eventEnd;
+        return;
+      }
+      if (event.startIndex < clusterEnd) {
+        cluster.push(event);
+        clusterEnd = Math.max(clusterEnd, eventEnd);
+        return;
+      }
+      flushCluster();
+      cluster = [event];
+      clusterEnd = eventEnd;
+    });
+    flushCluster();
+
+    return result;
   });
+}
+
+function createOverlappingGroupEvent(group: RawScheduleEvent[]): RawScheduleEvent {
+  const sorted = [...group].sort((a, b) => (
+      (a.rank ?? 999) - (b.rank ?? 999)
+      || a.startIndex - b.startIndex
+      || a.title.localeCompare(b.title, 'zh-Hant')
+  ));
+  const first = sorted[0];
+  const startIndex = Math.min(...sorted.map((event) => event.startIndex));
+  const endIndex = Math.max(...sorted.map((event) => event.startIndex + event.span));
+  const exactSameSlot = sorted.every((event) => (
+    event.startIndex === startIndex && event.startIndex + event.span === endIndex
+  ));
+  return {
+    id: `group-${first.weekdayLabel}-${startIndex}-${endIndex}-${sorted.map((event) => event.id).join('-')}`,
+    kind: 'group',
+    weekdayLabel: first.weekdayLabel,
+    startIndex,
+    span: endIndex - startIndex,
+    title: exactSameSlot ? `${sorted.length} 門同時段` : `${sorted.length} 門重疊時段`,
+    meta: sorted.map(formatGroupedEventLabel).join(' / '),
+    tone: sorted.some((event) => event.kind === 'virtual') ? 'virtual' : first.tone,
+    classificationLabel: exactSameSlot ? '同時段' : '重疊時段',
+    groupedEvents: sorted,
+  };
 }
 
 function formatGroupedEventLabel(event: RawScheduleEvent): string {
