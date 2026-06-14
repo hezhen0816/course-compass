@@ -169,7 +169,7 @@ function gpaBadgeClass(gpa?: number | null, status?: GpaStatus): string {
 
 function GpaBadge({ gpa, status }: { gpa?: number | null; status?: GpaStatus }) {
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium ring-1 ${gpaBadgeClass(gpa, status)}`}>
+    <span className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0 text-[10px] font-medium ring-1 ${gpaBadgeClass(gpa, status)}`}>
       {gpaBadgeLabel(gpa, status)}
     </span>
   );
@@ -222,7 +222,7 @@ function SelectionChanceBadge({
   const estimate = estimateSelectionChance(selectedCount, capacity);
   if (!estimate) {
     return (
-      <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
+      <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0 text-[10px] font-medium text-slate-500 ring-1 ring-slate-200">
         機率未公告
       </span>
     );
@@ -235,17 +235,32 @@ function SelectionChanceBadge({
   return (
     <>
       <span
-        className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium ring-1 ${toneClass}`}
+        className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0 text-[10px] font-medium ring-1 ${toneClass}`}
         title={`估算方式：人數 ${estimate.selectedCount} / 名額 ${estimate.capacity} = ${estimate.pressureRatio.toFixed(2)} 倍，選上估 ${formatProbabilityPercent(estimate.probabilityPercent)}`}
       >
         選上估 {formatProbabilityPercent(estimate.probabilityPercent)}
       </span>
       {isOverCapacity && (
-        <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-100">
+        <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700 ring-1 ring-amber-100">
           建議前排
         </span>
       )}
     </>
+  );
+}
+
+function EnrollmentCountBadge({
+  selectedCount,
+  capacity,
+}: {
+  selectedCount?: number | null;
+  capacity?: number | null;
+}) {
+  if (selectedCount == null || capacity == null) return null;
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-white/65 px-1.5 py-0 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">
+      {selectedCount}/{capacity} 人
+    </span>
   );
 }
 
@@ -623,33 +638,36 @@ function OfficialRegisteredList({
         const isLoading = actionCourseNo === normalizedCourseNo || isOrderSaving;
         const classification = classifyCourseByCode(course.course_no, course.require_option, data);
         return (
-        <div key={`${course.raw_priority}-${course.course_no}`} className={`rounded-md border p-3 ${
+        <div key={`${course.raw_priority}-${course.course_no}`} className={`rounded-md border p-2.5 ${
           isDirty ? 'border-blue-200 bg-blue-50' : scheduleToneClass(classification.tone)
         }`}>
-          <div className="flex items-start gap-3">
-            <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${badgeToneClass(classification.tone)}`}>
+          <div className="flex items-start gap-2">
+            <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${badgeToneClass(classification.tone)}`}>
               {index + 1}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-slate-900">{course.course_name}</p>
               <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-slate-500">
-                <span className="min-w-0 truncate">
-                  {[
+                <span
+                  className="min-w-0 truncate"
+                  title={[
                     course.course_no,
                     classification.label,
                     course.credits != null ? `${formatCredits(course.credits)} 學分` : '',
                     course.require_option || '',
                     course.teacher || '',
                   ].filter(Boolean).join('・')}
+                >
+                  {[
+                    course.course_no,
+                    classification.label,
+                    course.credits != null ? `${formatCredits(course.credits)} 學分` : '',
+                  ].filter(Boolean).join('・')}
                 </span>
                 <GpaBadge gpa={course.gpa} status={course.gpa_status} />
                 <SelectionChanceBadge selectedCount={course.selected_count} capacity={course.capacity} />
+                <EnrollmentCountBadge selectedCount={course.selected_count} capacity={course.capacity} />
               </div>
-              {course.selected_count != null && course.capacity != null && (
-                <p className="mt-1 text-xs text-slate-500">
-                  目前 {course.selected_count} / {course.capacity} 人
-                </p>
-              )}
             </div>
             <div className="flex shrink-0 flex-col gap-1">
               <button
@@ -750,12 +768,14 @@ function OfficialAvailableList({
         const normalizedCourseNo = course.course_no.trim().toUpperCase();
         const isLoading = actionCourseNo === normalizedCourseNo;
         return (
-        <div key={course.course_no} className="rounded-md border border-slate-200 bg-white p-3">
+        <div key={course.course_no} className="rounded-md border border-slate-200 bg-white p-2.5">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900">{course.course_name}</p>
               <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-slate-500">
-                <span className="min-w-0 truncate">{course.course_no}・{course.teacher || '未列教師'}</span>
+                <span className="min-w-0 truncate" title={course.teacher || '未列教師'}>
+                  {course.course_no}
+                </span>
                 <GpaBadge gpa={course.gpa} status={course.gpa_status} />
               </div>
             </div>
@@ -1342,9 +1362,9 @@ function PlanningListCourse({
     'virtual',
   );
   return (
-    <div className={`rounded-md border p-3 ${scheduleToneClass(classification.tone)}`}>
-      <div className="flex items-start gap-3">
-        <div className={`mt-0.5 rounded-full px-2 py-1 text-xs font-medium ${badgeToneClass(classification.tone)}`}>
+    <div className={`rounded-md border p-2.5 ${scheduleToneClass(classification.tone)}`}>
+      <div className="flex items-start gap-2">
+        <div className={`mt-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${badgeToneClass(classification.tone)}`}>
           {classification.label}
         </div>
         <div className="min-w-0 flex-1 text-left">
@@ -1359,10 +1379,14 @@ function PlanningListCourse({
               selectedCount={course.scheduledOffering?.selectedCount}
               capacity={course.scheduledOffering?.capacity}
             />
+            <EnrollmentCountBadge
+              selectedCount={course.scheduledOffering?.selectedCount}
+              capacity={course.scheduledOffering?.capacity}
+            />
+            <span className="min-w-0 truncate">
+              {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}
+            </span>
           </div>
-          <p className="mt-1 truncate text-xs text-slate-500">
-            {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}
-          </p>
         </div>
         <button
           type="button"
