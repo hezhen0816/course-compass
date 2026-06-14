@@ -46,6 +46,7 @@
 - Health check 與 production backend verifier regression tests 已從大型 backend pure test 拆到 `tests/backend/test_health_and_production_verifier.py`。
 - Schedule、history 與 Moodle sync API regression tests 已從大型 backend pure test 拆到 `tests/backend/test_sync_api.py`。
 - Credential repository regression tests 已從大型 backend pure test 拆到 `tests/backend/test_credentials_repository.py`。
+- School session store/repository regression tests 已從大型 backend pure test 拆到 `tests/backend/test_school_session_store.py`。
 
 ## 目前架構
 
@@ -141,6 +142,7 @@ tests/
    - Schedule helper regression tests are now isolated in `tests/backend/test_schedule_integration.py`.
    - Schedule/history/Moodle sync API regression tests are now isolated in `tests/backend/test_sync_api.py`.
    - Credential repository regression tests are now isolated in `tests/backend/test_credentials_repository.py`.
+   - School session store/repository regression tests are now isolated in `tests/backend/test_school_session_store.py`.
    - Move Supabase reads/writes into `backend/repositories/*`; school credential, school session, and snapshot row access have started.
    - Core config/time helpers are now in `backend/core/*`; retire compatibility wrappers after scripts and external imports settle.
    - Pydantic API schemas are now split by domain in `backend/schemas/*`; retire compatibility wrappers after scripts and external imports settle.
