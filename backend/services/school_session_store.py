@@ -6,15 +6,15 @@ from typing import Any
 import requests
 
 try:
-    from .core.config import (
+    from ..core.config import (
         DEFAULT_TIMEOUT,
         SCHOOL_CREDENTIALS_ENCRYPTION_SECRET,
         SUPABASE_SERVICE_ROLE_KEY,
         SUPABASE_URL,
     )
-    from .core import security
-    from .repositories import school_sessions as school_session_repository
-    from .services import school_sessions as school_session_service
+    from ..core import security
+    from ..repositories import school_sessions as school_session_repository
+    from . import school_sessions as school_session_service
 except ImportError:  # pragma: no cover
     from core.config import (
         DEFAULT_TIMEOUT,

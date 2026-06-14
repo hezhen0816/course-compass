@@ -29,7 +29,7 @@ try:
         fetch_query_courses_filtered,
     )
     from .services.planner_pdf import parse_requirement_pdf
-    from .school_sessions import (
+    from .services.school_session_store import (
         delete_school_session,
         load_school_session_state,
         official_session_expires_at,
@@ -69,7 +69,7 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         fetch_query_courses_filtered,
     )
     from services.planner_pdf import parse_requirement_pdf
-    from school_sessions import (
+    from services.school_session_store import (
         delete_school_session,
         load_school_session_state,
         official_session_expires_at,
