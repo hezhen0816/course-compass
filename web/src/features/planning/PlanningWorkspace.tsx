@@ -926,13 +926,8 @@ function OfficialScheduleTable({
             const competing = isVirtual && mode === 'lottery' && event.laneCount > 1;
             const conflicting = isVirtual && mode !== 'lottery' && event.laneCount > 1;
             const showMeta = !isGroup && Boolean(event.meta) && (!isNarrow || event.span > 1);
-            const gapPx = 4;
-            const laneWidth = isNarrow
-              ? `calc((100% - ${6 + (event.laneCount - 1) * gapPx}px) / ${event.laneCount})`
-              : 'calc(100% - 6px)';
-            const laneLeft = isNarrow
-              ? `calc(3px + ${event.lane} * ((100% - ${6 + (event.laneCount - 1) * gapPx}px) / ${event.laneCount} + ${gapPx}px))`
-              : '3px';
+            const stackOffset = isNarrow ? Math.min(event.lane, 4) : 0;
+            const stackWidth = isNarrow ? 'calc(100% - 22px)' : 'calc(100% - 6px)';
             const titleText = isGroup && event.groupedEvents
               ? event.groupedEvents.map(formatGroupedEventLabel).join('\n')
               : event.rank ? `${event.rank}. ${event.title}` : event.title;
@@ -945,9 +940,9 @@ function OfficialScheduleTable({
                 style={{
                   gridColumn: dayIndex + 2,
                   gridRow: `${event.startIndex + 2} / span ${event.span}`,
-                  width: laneWidth,
-                  marginLeft: laneLeft,
-                  marginTop: '4px',
+                  width: stackWidth,
+                  marginLeft: `${3 + stackOffset * 7}px`,
+                  marginTop: `${4 + stackOffset * 7}px`,
                   zIndex: 10 + event.lane,
                 }}
                 title={titleText}
