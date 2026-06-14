@@ -32,6 +32,7 @@
 | `test_school_session_store.py` | 必留 | 保護 official session private RPC round trip。 |
 | `test_session_context.py` | 必留 | 保護 request context、saved credential 與 official session reuse/persist 流程。 |
 | `test_database_migrations.py` | 必留 | 保護 migration 是 additive、legacy data 不被提前破壞。 |
+| `test_typed_planner_apply_service.py` | 必留 | 保護 typed planner backfill apply dry-run 不寫資料庫、不輸出完整 rows。 |
 | `test_typed_planner_repository.py` | 必留 | 保護 typed planner batch repository 的 dry-run 與 PostgREST upsert URL/header/body shape。 |
 | `test_snapshots_service.py` | 保守保留 | 保護 snapshot repository/service 的 Supabase query/write shape；若未來 typed API 完成可重新評估。 |
 | `test_ntust_content_parsers.py` | 保守保留 | 保護 Moodle/history parser；若改成正式 fixture contract 後可拆小或整併。 |

@@ -157,7 +157,7 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
 
 ## Backfill Preview Tool
 
-`backend/services/typed_planner_backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py` 與 `scripts/plan_typed_planner_backfill.py` 是本機 CLI wrappers。
+`backend/services/typed_planner_backfill.py` 是 typed schema 切換前的離線預覽與對帳核心；`scripts/preview_typed_planner_backfill.py`、`scripts/plan_typed_planner_backfill.py` 與 `scripts/apply_typed_planner_backfill.py` 是本機 CLI wrappers。
 
 目前 preview contract version：`typed-planner-backfill-preview-v1`。
 
@@ -181,6 +181,9 @@ Migration `20260614211338_add_typed_planner_schema_foundation.sql` 已加入 typ
   - 使用 `Prefer: resolution=merge-duplicates,return=minimal`，讓下一階段 repository 寫入可以沿用同一份 batch contract。
   - batches 只使用 redacted `preview.json` rows，不讀取 raw backup。
   - `backend/repositories/typed_planner.py` 的執行 helper 會跳過 `rows=[]` 的空 batch，避免對 PostgREST 發空 upsert。
+- `scripts/apply_typed_planner_backfill.py` 目前只做 dry-run：
+  - 讀取 package，產生 batches，通過 repository dry-run，輸出 batch count / non-empty count / total row count。
+  - 不輸出完整 rows，避免 dry-run report 變成另一份搬移資料。
 
 明確限制：
 - 不連 Supabase。
@@ -197,6 +200,7 @@ bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_expor
 bash scripts/python.sh scripts/preview_typed_planner_backfill.py user_data_export.json --package-dir /tmp/course-planner-backfill-preview
 bash scripts/python.sh scripts/plan_typed_planner_backfill.py /tmp/course-planner-backfill-preview --output /tmp/course-planner-backfill-preview/apply-plan.json
 bash scripts/python.sh scripts/plan_typed_planner_backfill.py /tmp/course-planner-backfill-preview --format batches --output /tmp/course-planner-backfill-preview/apply-batches.json
+bash scripts/python.sh scripts/apply_typed_planner_backfill.py /tmp/course-planner-backfill-preview --output /tmp/course-planner-backfill-preview/apply-dry-run.json
 ```
 
 輸入可為：

@@ -36,7 +36,7 @@
 - 已建立 `docs/architecture/refactor-inventory.md` 作為重構盤點基準。
 - 已建立 typed schema foundation migration：`supabase/migrations/20260614211338_add_typed_planner_schema_foundation.sql`。
 - Supabase Auth 與 `public.user_data` REST 存取已開始移到 `backend/repositories/credentials.py`，credential runtime wiring 已移到 `backend/services/credential_store.py`。
-- Typed planner no-write apply batches 已有 repository 邊界 `backend/repositories/typed_planner.py`，可用注入的 `post` 執行或 dry-run 驗證 batch URL/header/body；目前尚未接 production flow。
+- Typed planner no-write apply batches 已有 service/repository 邊界：`backend/services/typed_planner_apply.py` 與 `backend/repositories/typed_planner.py` 可 dry-run 驗證 package、batch URL/header/body 與 row counts；目前尚未接 production flow。
 - 資料庫 migration regression tests 已從大型 backend pure test 拆到 `tests/backend/test_database_migrations.py`，並補上 typed schema foundation additive gate。
 - 課程查詢 endpoint regression tests 已從大型 backend pure test 拆到 `tests/backend/test_course_search_api.py`。
 - PDF requirement parser regression tests 已從大型 backend pure test 拆到 `tests/backend/test_planner_pdf_service.py`。
@@ -93,6 +93,7 @@ backend/
     school_sessions.py   # official session domain flow, encryption payload, TTL helpers
     session_context.py   # backend-owned credential/session context helpers
     snapshots.py         # schedule/history/Moodle snapshot domain flow
+    typed_planner_apply.py # typed planner backfill apply dry-run service
     typed_planner_backfill.py # offline typed planner preview/reconciliation service
   core/
     config.py            # backend settings, constants, NTUST/Supabase URLs
