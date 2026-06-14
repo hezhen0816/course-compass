@@ -967,7 +967,7 @@ function OfficialScheduleTable({
               width: stackWidth,
               marginLeft: `${3 + stackOffset * 7}px`,
               marginTop: `${4 + stackOffset * 7}px`,
-              zIndex: isHovered ? 100 : 10 + event.lane,
+              zIndex: isHovered ? 30 : 10 + Math.min(event.lane, 9),
               '--overlap-shift': `${stackOffset * 7}px`,
             };
             return (

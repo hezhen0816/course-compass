@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <nav
-      className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm"
+      className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
