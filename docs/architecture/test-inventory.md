@@ -53,7 +53,7 @@
 
 本階段不刪 backend regression tests，因為它們大多對應已拆分的 backend module 與官方系統風險。可立即清理的是：
 
-- 本機未追蹤 cache：`.pytest_cache/`、`tests/backend/__pycache__/`、`tests/.DS_Store`。
+- 本機未追蹤 cache：`.pytest_cache/`、各層 `__pycache__/`、`*.pyc`、`.DS_Store`。
 - 若後續要進一步瘦身，先查 `rg 'tests/fixtures' tests backend scripts docs`，確認 fixture 是否還被使用。
 - 若 fixture 只作為研究紀錄，優先移到 `docs/research/` 或刪除輸出檔，避免讓 `tests/` 看起來比實際更重。
 

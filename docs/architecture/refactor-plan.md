@@ -153,8 +153,9 @@ tests/
 
 ## Execution Order
 
-1. Keep the current production lane green.
-   - Verify: `npm run check`, production backend verifier, Railway/Vercel commit checks.
+1. Keep the current local refactor lane green.
+   - Verify per phase: `git diff --check`, `npm run backend:check`, `npm run web:lint`, `npm run web:build`.
+   - Do not run production backend verifier, Railway checks, or Vercel checks during this refactor goal.
 2. Finish low-risk structure cleanup.
    - Remove historical docs, reference images, and obsolete QA notes that no longer represent the current app.
    - Move long-lived test fixtures into `tests/fixtures/`.
@@ -193,19 +194,22 @@ tests/
 - No frontend or iOS access to service-role secrets.
 - No immediate drop of legacy `public.user_data.content`.
 
-## Required Gates
+## Current Refactor Gates
 
 ```bash
+git diff --check
 npm run web:lint
 npm run web:build
 npm run backend:check
-npm run ios:build
-npm run check
 ```
 
-Production gates:
+## Release/Deployment Gates
+
+These are intentionally outside the current local refactor lane. Run them only for a release/deployment checkpoint, not during the current "do not touch Vercel/Railway" goal.
 
 ```bash
+npm run ios:build
+npm run check
 bash scripts/python.sh scripts/verify_production_backend.py
 curl -fsS https://course-planner-backend-production.up.railway.app/health
 ```

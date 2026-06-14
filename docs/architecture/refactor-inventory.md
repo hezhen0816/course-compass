@@ -22,16 +22,11 @@
 - `supabase/`：production migration history。
 - `docs/`：現行架構與資料契約。
 - `tests/`：backend tests 與可回查 fixtures。
-- `scripts/`：本機啟動、Python runtime wrapper、production verifier 與 migration helper。
+- `scripts/`：本機啟動、Python runtime wrapper、typed planner 本機維護工具、production verifier 與 migration helper。
 
 ## Generated Or Local-Only Files
 
-目前有本機產生但未被 git 追蹤的 Python cache：
-
-- `backend/__pycache__/`
-- `tests/backend/__pycache__/`
-
-`git ls-files` 沒有列出 tracked `__pycache__`、`.pytest_cache`、`node_modules`、`dist`、`.DS_Store` 或 `*.pyc`。後續只需要清除本機 cache，不需要從版控移除。
+本機 gate 會產生 `__pycache__/`、`.pytest_cache/`、`.DS_Store` 或 `*.pyc`。這些檔案都已由 `.gitignore` 排除，不屬於重構成果；若工作區出現，只需清除本機產物，不需要從版控移除。
 
 ## Backend Compatibility Wrappers
 
@@ -171,7 +166,7 @@ npm run web:build
 npm run backend:check
 ```
 
-合併前再跑：
+release/deployment lane 才跑；本輪重構不碰 Vercel、Railway 或 production verifier：
 
 ```bash
 npm run check
