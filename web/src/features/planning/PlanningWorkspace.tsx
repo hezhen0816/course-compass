@@ -33,11 +33,11 @@ const PERIOD_TIME_LABELS: Record<string, { start: string; end: string }> = {
 function ScheduleLegend() {
   const items = [
     { label: '本系必修', className: 'border-rose-200 bg-rose-50' },
-    { label: '本系選修', className: 'border-sky-200 bg-sky-50' },
-    { label: '通識', className: 'border-purple-200 bg-purple-50' },
+    { label: '本系選修', className: 'border-blue-200 bg-blue-50' },
+    { label: '通識', className: 'border-violet-200 bg-violet-50' },
     { label: '體育', className: 'border-lime-200 bg-lime-50' },
-    { label: '雙主修', className: 'border-emerald-200 bg-emerald-50' },
-    { label: '輔系', className: 'border-cyan-200 bg-cyan-50' },
+    { label: '雙主修', className: 'border-teal-200 bg-teal-50' },
+    { label: '輔系', className: 'border-fuchsia-200 bg-fuchsia-50' },
     { label: '待加簽', className: 'border-amber-300 bg-amber-50' },
   ];
 
@@ -106,11 +106,11 @@ function scheduleToneClass(tone: CourseTone, conflicting = false): string {
   if (conflicting) return 'border-red-300 bg-red-50 text-red-950';
   const toneClasses: Record<CourseTone, string> = {
     required: 'border-rose-200 bg-rose-50 text-rose-950',
-    elective: 'border-sky-200 bg-sky-50 text-sky-950',
-    general: 'border-purple-200 bg-purple-50 text-purple-950',
+    elective: 'border-blue-200 bg-blue-50 text-blue-950',
+    general: 'border-violet-200 bg-violet-50 text-violet-950',
     pe: 'border-lime-200 bg-lime-50 text-lime-950',
-    doubleMajor: 'border-emerald-200 bg-emerald-50 text-emerald-950',
-    minor: 'border-cyan-200 bg-cyan-50 text-cyan-950',
+    doubleMajor: 'border-teal-200 bg-teal-50 text-teal-950',
+    minor: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950',
     virtual: 'border-amber-300 bg-amber-50 text-amber-950',
     group: 'border-amber-300 bg-amber-50 text-amber-950',
     conflict: 'border-red-300 bg-red-50 text-red-950',
@@ -123,11 +123,11 @@ function scheduleAccentClass(tone: CourseTone, conflicting = false): string {
   if (conflicting) return 'bg-red-400';
   const toneClasses: Record<CourseTone, string> = {
     required: 'bg-rose-400',
-    elective: 'bg-sky-400',
-    general: 'bg-purple-400',
+    elective: 'bg-blue-400',
+    general: 'bg-violet-400',
     pe: 'bg-lime-400',
-    doubleMajor: 'bg-emerald-400',
-    minor: 'bg-cyan-400',
+    doubleMajor: 'bg-teal-400',
+    minor: 'bg-fuchsia-400',
     virtual: 'bg-amber-400',
     group: 'bg-amber-400',
     conflict: 'bg-red-400',
@@ -140,11 +140,11 @@ function badgeToneClass(tone: CourseTone, conflicting = false): string {
   if (conflicting) return 'bg-red-500 text-white';
   const toneClasses: Record<CourseTone, string> = {
     required: 'bg-rose-100 text-rose-700',
-    elective: 'bg-sky-100 text-sky-700',
-    general: 'bg-purple-100 text-purple-700',
+    elective: 'bg-blue-100 text-blue-700',
+    general: 'bg-violet-100 text-violet-700',
     pe: 'bg-lime-100 text-lime-700',
-    doubleMajor: 'bg-emerald-100 text-emerald-700',
-    minor: 'bg-cyan-100 text-cyan-700',
+    doubleMajor: 'bg-teal-100 text-teal-700',
+    minor: 'bg-fuchsia-100 text-fuchsia-700',
     virtual: 'bg-amber-100 text-amber-700',
     group: 'bg-amber-100 text-amber-700',
     conflict: 'bg-red-500 text-white',
