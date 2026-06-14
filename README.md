@@ -164,10 +164,10 @@ bash scripts/python.sh scripts/verify_production_backend.py
 
 ```bash
 # 只統計，不寫 DB
-bash scripts/python.sh scripts/migrate_legacy_school_credentials.py
+bash scripts/python.sh scripts/migrations/migrate_legacy_school_credentials.py
 
 # 確認 .env 有真實 SUPABASE_SERVICE_ROLE_KEY 與 SCHOOL_CREDENTIALS_ENCRYPTION_SECRET 後才執行
-bash scripts/python.sh scripts/migrate_legacy_school_credentials.py --apply
+bash scripts/python.sh scripts/migrations/migrate_legacy_school_credentials.py --apply
 ```
 
 腳本不會輸出密碼內容；如果 `.env` 的 service role key 還是 placeholder，會停止而不寫入。

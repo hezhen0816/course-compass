@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts import migrate_legacy_school_credentials as legacy_credential_migration
+from scripts.migrations import migrate_legacy_school_credentials as legacy_credential_migration
 
 
 def test_legacy_credential_migration_dry_run_counts_without_writing(monkeypatch) -> None:
