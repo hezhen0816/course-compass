@@ -38,6 +38,7 @@
 - Supabase Auth 與 `public.user_data` REST 存取已開始移到 `backend/repositories/credentials.py`，credential runtime wiring 已移到 `backend/services/credential_store.py`。
 - 資料庫 migration regression tests 已從大型 backend pure test 拆到 `tests/backend/test_database_migrations.py`，並補上 typed schema foundation additive gate。
 - 課程查詢 endpoint regression tests 已從大型 backend pure test 拆到 `tests/backend/test_course_search_api.py`。
+- PDF requirement parser regression tests 已從大型 backend pure test 拆到 `tests/backend/test_planner_pdf_service.py`。
 
 ## 目前架構
 
