@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Course, CourseSearchResult, OfficialSelectionSyncResponse, PendingRequirement } from '../shared/types';
+import type { AppSettings, Course, CourseSearchResult, OfficialSelectionSyncResponse, PendingRequirement } from '../shared/types';
 import {
   addOfficialInitialSelectionWaitlistCourse,
   joinOfficialInitialSelectionCourse,
@@ -36,6 +36,7 @@ import {
   mergeHistoryRecordsIntoSemesters,
   normalizeImportPreview,
   parseNodeSlots,
+  programFromOfferingSettings,
   resolveSemesterById,
   semesterIdForAcademicTerm,
   semesterNameForId,
@@ -61,6 +62,18 @@ function officialSelectionContainsCourse(payload: OfficialSelectionSyncResponse,
   return [...payload.available_courses, ...payload.registered_courses].some((course) => (
     course.course_no.trim().toUpperCase() === normalizedCourseNo
   ));
+}
+
+function programForCourseOffering(
+  offering: CourseSearchResult,
+  requirement: PendingRequirement | undefined,
+  settings?: AppSettings,
+) {
+  return requirement?.setId === DOUBLE_MAJOR_TODO_SET_ID
+    ? 'double_major'
+    : requirement?.setId === MINOR_TODO_SET_ID
+      ? 'minor'
+      : programFromOfferingSettings(offering, settings);
 }
 
 export default function CoursePlannerWebApp() {
@@ -291,8 +304,9 @@ export default function CoursePlannerWebApp() {
       const names = conflicts.map((course) => course.name).join('、');
       if (!window.confirm(`這門課與 ${names} 衝堂，仍要排入嗎？`)) return false;
     }
+    const courseProgram = programForCourseOffering(offering, requirement, data.settings);
     const course: Course = {
-      ...courseFromOffering(offering, requirement),
+      ...courseFromOffering(offering, requirement, courseProgram),
       virtualSelection: {
         status: virtualReason ? 'rejected' : 'manual',
         reason: virtualReason || '手動加入待加簽規劃，尚未送入官方選課系統。',
@@ -415,6 +429,15 @@ export default function CoursePlannerWebApp() {
     if (!detailCourse) return;
     setData((prev) => ({
       ...prev,
+      selectionPlan: detailCourse.semesterId === SELECTION_PLAN_SEMESTER_ID && prev.selectionPlan
+        ? {
+            ...prev.selectionPlan,
+            courses: prev.selectionPlan.courses.map((course) => (
+              course.id === updatedCourse.id ? updatedCourse : course
+            )),
+            updatedAt: new Date().toISOString(),
+          }
+        : prev.selectionPlan,
       semesters: prev.semesters.map((semester) => (
         semester.id === detailCourse.semesterId
           ? {

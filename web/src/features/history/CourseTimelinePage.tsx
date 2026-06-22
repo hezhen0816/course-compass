@@ -19,8 +19,20 @@ export function CourseTimelinePage({ data, onOpenCourseDetail }: CourseTimelineP
     ...semester,
     courses: semester.courses.filter(isHistoryImportedCourse),
   }));
-  const totalCourses = timelineSemesters.reduce((sum, semester) => sum + semester.courses.length, 0);
-  const historyCount = totalCourses;
+  const plannedCourses = data.selectionPlan?.courses || [];
+  const displaySemesters = plannedCourses.length > 0
+    ? [
+        ...timelineSemesters,
+        {
+          id: '__selection_plan__',
+          name: data.selectionPlan?.targetLabel || '未來規劃',
+          courses: plannedCourses,
+        },
+      ]
+    : timelineSemesters;
+  const historyCount = timelineSemesters.reduce((sum, semester) => sum + semester.courses.length, 0);
+  const plannedCount = plannedCourses.length;
+  const totalCourses = historyCount + plannedCount;
   const failedCount = timelineSemesters.reduce((sum, semester) => (
     sum + semester.courses.filter(isFailedImportedHistoryCourse).length
   ), 0);
@@ -31,17 +43,18 @@ export function CourseTimelinePage({ data, onOpenCourseDetail }: CourseTimelineP
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">修課軌跡</p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-950">歷史修課與未來規劃</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          這裡集中查看已修、未通過與同步匯入的課程；選課工作台的本地草稿不會出現在這裡。
+          這裡集中查看已修、未通過與從課程查詢加入的未來規劃；未來規劃只代表草稿或待加簽，不代表已選上。
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
           <SummaryBox label="總課程" value={`${totalCourses} 門`} tone="slate" />
           <SummaryBox label="歷史匯入" value={`${historyCount} 門`} tone="blue" />
+          <SummaryBox label="未來規劃" value={`${plannedCount} 門`} tone="amber" />
           <SummaryBox label="未通過" value={`${failedCount} 門`} tone={failedCount > 0 ? 'red' : 'emerald'} />
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {timelineSemesters.map((semester) => {
+        {displaySemesters.map((semester) => {
           const semesterCredits = semester.courses.reduce((sum, course) => (
             sum + (course.category === 'pe' ? 0 : course.credits)
           ), 0);
@@ -85,13 +98,14 @@ function SummaryBox({
 }: {
   label: string;
   value: string;
-  tone: 'slate' | 'blue' | 'emerald' | 'red';
+  tone: 'slate' | 'blue' | 'emerald' | 'red' | 'amber';
 }) {
   const toneClass = {
     slate: 'border-slate-200 bg-slate-50 text-slate-700',
     blue: 'border-blue-200 bg-blue-50 text-blue-700',
     emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     red: 'border-red-200 bg-red-50 text-red-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
   }[tone];
 
   return (
@@ -105,6 +119,7 @@ function SummaryBox({
 function TimelineCourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) {
   const isHistory = isHistoryImportedCourse(course);
   const isFailed = isFailedImportedHistoryCourse(course);
+  const isVirtual = Boolean(course.virtualSelection);
   const slots = course.scheduledOffering?.slots || [];
   const teacher = course.scheduledOffering?.teacher || course.details?.professor || '未列教師';
   const location = displayClassroom(course.scheduledOffering?.classroom || course.details?.location);
@@ -112,7 +127,9 @@ function TimelineCourseCard({ course, onOpen }: { course: Course; onOpen: () => 
     ? 'border-red-200 bg-red-50 hover:bg-red-100'
     : isHistory
       ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
-      : 'border-blue-200 bg-blue-50 hover:bg-blue-100';
+      : isVirtual
+        ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
+        : 'border-blue-200 bg-blue-50 hover:bg-blue-100';
 
   return (
     <button
@@ -135,6 +152,11 @@ function TimelineCourseCard({ course, onOpen }: { course: Course; onOpen: () => 
             {isHistory && (
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isFailed ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
                 {isFailed ? '未通過' : '歷史修課'}
+              </span>
+            )}
+            {!isHistory && (
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isVirtual ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                {isVirtual ? '待加簽' : '未來規劃'}
               </span>
             )}
           </div>

@@ -1,6 +1,7 @@
 import type {
   AcademicHistoryRecord,
   AppData,
+  AppSettings,
   Course,
   CourseCategory,
   CourseProgram,
@@ -15,6 +16,7 @@ import type {
   SyncedCourseRow,
 } from '../types';
 import { searchCourses } from '../api';
+import { parseCourseDepartment } from './courseDepartments';
 
 export const DAY_COLUMNS = [
   { code: 'M', label: '一' },
@@ -129,6 +131,31 @@ export function inferCourseCategory(offering: CourseSearchResult): CourseCategor
   return 'unclassified';
 }
 
+export function programFromOfferingSettings(
+  offering: Pick<CourseSearchResult, 'course_no'>,
+  settings?: AppSettings,
+): CourseProgram {
+  const departmentCode = parseCourseDepartment(offering.course_no)?.code;
+  const programDepartments = settings?.programDepartments;
+  if (departmentCode && departmentCode === programDepartments?.doubleMajorDepartmentCode) return 'double_major';
+  if (departmentCode && departmentCode === programDepartments?.minorDepartmentCode) return 'minor';
+  if (departmentCode && departmentCode === programDepartments?.homeDepartmentCode) return 'home';
+  return 'other';
+}
+
+export function categoryFromOfferingForProgram(
+  offering: CourseSearchResult,
+  program: CourseProgram,
+): CourseCategory {
+  const inferred = inferCourseCategory(offering);
+  if (program === 'double_major' || program === 'minor' || program === 'home') {
+    const requireOption = offering.require_option.trim().toUpperCase();
+    if (requireOption === 'R' || requireOption.includes('必')) return 'compulsory';
+    if (requireOption === 'E' || requireOption.includes('選')) return 'elective';
+  }
+  return inferred;
+}
+
 export function toScheduledOffering(offering: CourseSearchResult): ScheduledOffering {
   return {
     semester: offering.semester,
@@ -159,7 +186,7 @@ export function courseFromOffering(
     id: `${offering.course_no || offering.course_name}-${nextPlannerId()}`,
     name: offering.course_name,
     credits,
-    category: inferCourseCategory(offering),
+    category: categoryFromOfferingForProgram(offering, program),
     program,
     dimension: offering.dimension ? 'None' : undefined,
     sourceRequirementId: requirement?.id,
