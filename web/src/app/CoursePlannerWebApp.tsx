@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AppSettings, Course, CourseSearchResult, OfficialSelectionSyncResponse, PendingRequirement } from '../shared/types';
+import type { AppSettings, Course, CourseProgram, CourseSearchResult, OfficialSelectionSyncResponse, PendingRequirement } from '../shared/types';
 import {
   addOfficialInitialSelectionWaitlistCourse,
   joinOfficialInitialSelectionCourse,
@@ -13,7 +13,6 @@ import { useCourseData } from '../shared/hooks/useCourseData';
 import { AuthPage } from './AuthPage';
 import { AppModals } from './AppModals';
 import { Navbar, type AppPage } from './Navbar';
-import { PagePlaceholder } from './PagePlaceholder';
 import { SafetyNotice } from './SafetyNotice';
 import { CourseSearchCenter } from '../features/course-search/CourseSearchCenter';
 import { useCourseSearch } from '../features/course-search/useCourseSearch';
@@ -26,6 +25,8 @@ import {
   MANUAL_SET_ID,
   type ApiImportPreview,
   type PlanningMode,
+  DOUBLE_MAJOR_RECOGNITION_SET_ID,
+  MINOR_RECOGNITION_SET_ID,
   courseFromOffering,
   displaySlots,
   fallbackAdmissionYear,
@@ -75,6 +76,16 @@ function programForCourseOffering(
       ? 'minor'
       : programFromOfferingSettings(offering, settings);
 }
+
+type RecognitionRequirementDraft = {
+  program: Extract<CourseProgram, 'double_major' | 'minor'>;
+  kind: PendingRequirement['kind'];
+  title: string;
+  requiredCredits?: number | null;
+  courseNames: string[];
+  courseCodePrefix?: string | null;
+  note?: string;
+};
 
 export default function CoursePlannerWebApp() {
   const { session, loading: authLoading } = useAuth();
@@ -387,6 +398,55 @@ export default function CoursePlannerWebApp() {
   };
 
   const deletePendingCourseName = (requirementId: string) => {
+    setData((prev) => ({
+      ...prev,
+      pendingRequirements: prev.pendingRequirements.filter((requirement) => requirement.id !== requirementId),
+    }));
+  };
+
+  const addRecognitionRequirement = (draft: RecognitionRequirementDraft) => {
+    const title = draft.title.trim();
+    if (!title) return;
+    const setId = draft.program === 'double_major'
+      ? DOUBLE_MAJOR_RECOGNITION_SET_ID
+      : MINOR_RECOGNITION_SET_ID;
+    const setName = draft.program === 'double_major' ? '雙主修認列規則' : '輔系認列規則';
+    setData((prev) => {
+      const nextSet = prev.requirementSets.some((set) => set.id === setId)
+        ? prev.requirementSets
+        : [
+            ...prev.requirementSets,
+            {
+              id: setId,
+              name: setName,
+              source: 'manual' as const,
+              totalCredits: null,
+              notes: ['使用者自訂認列規則'],
+            },
+          ];
+      return {
+        ...prev,
+        requirementSets: nextSet,
+        pendingRequirements: [
+          ...prev.pendingRequirements,
+          {
+            id: `${setId}-${Date.now()}`,
+            setId,
+            kind: draft.kind,
+            title,
+            credits: draft.requiredCredits ?? null,
+            requiredCredits: draft.requiredCredits ?? null,
+            courseNames: draft.courseNames,
+            options: [],
+            note: draft.note || '使用者自訂認列規則',
+            courseCodePrefix: draft.courseCodePrefix || null,
+          },
+        ],
+      };
+    });
+  };
+
+  const deleteRecognitionRequirement = (requirementId: string) => {
     setData((prev) => ({
       ...prev,
       pendingRequirements: prev.pendingRequirements.filter((requirement) => requirement.id !== requirementId),
@@ -788,16 +848,12 @@ export default function CoursePlannerWebApp() {
           />
         )}
 
-        {activePage === 'graduation' && (
-          <PagePlaceholder
-            title="畢業進度"
-            description="這裡會專注顯示畢業條件完成度、缺口學分與尚未滿足的課程類別；門檻數字改到設定頁維護。"
-          />
-        )}
-
         {activePage === 'history' && (
           <CourseTimelinePage
             data={data}
+            stats={stats}
+            onAddRecognitionRequirement={addRecognitionRequirement}
+            onDeleteRecognitionRequirement={deleteRecognitionRequirement}
             onOpenCourseDetail={(semesterId, semesterName, course) => {
               setDetailCourse({ semesterId, semesterName, course });
             }}

@@ -2,7 +2,7 @@ import React from 'react';
 import { GraduationCap, LogOut, CircleHelp, BookOpen } from 'lucide-react';
 import { supabase } from '../shared/supabase';
 
-export type AppPage = 'course-search' | 'planning' | 'graduation' | 'history' | 'settings';
+export type AppPage = 'course-search' | 'planning' | 'history' | 'settings';
 
 interface NavbarProps {
   userEmail: string;
@@ -38,8 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems: Array<{ page: AppPage; label: string }> = [
     { page: 'course-search', label: '課程查詢' },
     { page: 'planning', label: `選課工作台 ${pendingCount}` },
-    { page: 'graduation', label: '畢業進度' },
-    { page: 'history', label: '修課軌跡' },
+    { page: 'history', label: '修課軌跡 / 畢業進度' },
     { page: 'settings', label: '設定' },
   ];
 
@@ -91,7 +90,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div className="grid grid-cols-3 items-center gap-1 sm:flex sm:w-auto">
               <button
-                onClick={() => alert('平台分成課程查詢、選課工作台、畢業進度與修課軌跡。選課工作台只輔助目前選課學期，不會自動搶課。')}
+                onClick={() => alert('平台分成課程查詢、選課工作台、修課軌跡與設定。修課軌跡整合歷史修課、未來規劃與畢業進度；選課工作台只輔助目前選課學期，不會自動搶課。')}
                 className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 title="匯入說明"
               >

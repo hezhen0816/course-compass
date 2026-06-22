@@ -31,6 +31,8 @@ export const DAY_COLUMNS = [
 export const PERIODS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'A', 'B', 'C', 'D'];
 export const MANUAL_SET_ID = 'manual-requirements';
 export const RETAKE_SET_ID = 'retake-requirements';
+export const DOUBLE_MAJOR_RECOGNITION_SET_ID = 'manual-double-major-recognition';
+export const MINOR_RECOGNITION_SET_ID = 'manual-minor-recognition';
 export const HISTORY_IMPORT_NOTE_MARKER = '已修紀錄匯入';
 let generatedIdCounter = 0;
 
@@ -635,7 +637,10 @@ export function normalizeName(value: string): string {
 }
 
 export function getRequirementStatus(requirement: PendingRequirement, data: AppData): RequirementStatus {
-  const scheduledCourses = data.semesters.flatMap((semester) => semester.courses);
+  const scheduledCourses = [
+    ...data.semesters.flatMap((semester) => semester.courses),
+    ...(data.selectionPlan?.courses || []),
+  ];
   const targetCredits = requirement.requiredCredits ?? requirement.credits ?? 0;
   const candidateNames = new Set(requirement.courseNames.map(normalizeName));
   const candidateCodePrefix = requirement.courseCodePrefix?.trim().toUpperCase() || '';
