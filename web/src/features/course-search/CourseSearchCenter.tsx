@@ -6,6 +6,8 @@ import {
   type CapacityFilter,
   type ManualSearchSummary,
   type SearchMode,
+  DOUBLE_MAJOR_RECOGNITION_SET_ID,
+  MINOR_RECOGNITION_SET_ID,
   capacityLabel,
   capacityStatus,
   displayClassroom,
@@ -55,6 +57,7 @@ type CourseSearchCenterProps = {
   onSearchPendingCourse: (courseName: string) => void;
   officialActionCourseNo: string | null;
   onAddSelectionCourse: (offering: CourseSearchResult) => void;
+  onAddPlannedCourse: (offering: CourseSearchResult, requirementId?: string) => void;
   onDeleteVirtualCourse: (courseId: string) => void;
   onOpenPlanning: () => void;
 };
@@ -106,10 +109,14 @@ export function CourseSearchCenter({
   onSearchPendingCourse,
   officialActionCourseNo,
   onAddSelectionCourse,
+  onAddPlannedCourse,
   onDeleteVirtualCourse,
   onOpenPlanning,
 }: CourseSearchCenterProps) {
   const virtualCourses = data.selectionPlan?.courses || [];
+  const recognitionRequirements = data.pendingRequirements.filter((requirement) => (
+    requirement.setId === DOUBLE_MAJOR_RECOGNITION_SET_ID || requirement.setId === MINOR_RECOGNITION_SET_ID
+  ));
   const [activePendingGroup, setActivePendingGroup] = useState<PendingCourseGroup>('double_major');
   const [pendingCourseName, setPendingCourseName] = useState('');
   const activePendingSetId = PENDING_COURSE_GROUPS.find((group) => group.value === activePendingGroup)?.setId || '';
@@ -351,8 +358,10 @@ export function CourseSearchCenter({
                   offering={offering}
                   conflicts={findConflicts(offering, data, activeSemesterId)}
                   alreadyVirtual={Boolean(findScheduledCourseByOffering(offering, data, activeSemesterId))}
+                  recognitionRequirements={recognitionRequirements}
                   officialActionCourseNo={officialActionCourseNo}
                   onAddSelectionCourse={() => onAddSelectionCourse(offering)}
+                  onAddPlannedCourse={(requirementId) => onAddPlannedCourse(offering, requirementId)}
                 />
               ))}
             </tbody>
@@ -363,8 +372,8 @@ export function CourseSearchCenter({
       <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-start justify-between border-b border-slate-100 p-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">待加簽 ({virtualCourses.length})</h2>
-            <p className="mt-1 text-xs text-slate-500">未被官方正式接受的課程。</p>
+            <h2 className="text-base font-semibold text-slate-900">未來規劃 ({virtualCourses.length})</h2>
+            <p className="mt-1 text-xs text-slate-500">本地規劃與待加簽追蹤課程。</p>
           </div>
           <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
             明確標注
@@ -373,7 +382,7 @@ export function CourseSearchCenter({
         <div className="max-h-[640px] overflow-y-auto p-4">
           {virtualCourses.length === 0 ? (
             <div className="rounded-md border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-              官方拒絕或需要加簽追蹤的課程會出現在這裡。
+              從課程查詢加入的本地規劃或待加簽課程會出現在這裡。
             </div>
           ) : (
             <div className="space-y-3">
@@ -389,7 +398,7 @@ export function CourseSearchCenter({
           )}
         </div>
         <div className="space-y-2 border-t border-slate-100 p-4">
-          <p className="text-xs text-slate-500">待加簽課程學分：{formatCredits(virtualCourseCredits)} 學分</p>
+          <p className="text-xs text-slate-500">未來規劃學分：{formatCredits(virtualCourseCredits)} 學分</p>
           <button
             onClick={onOpenPlanning}
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-blue-700"
@@ -400,7 +409,7 @@ export function CourseSearchCenter({
             disabled
             className="w-full cursor-not-allowed rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400"
           >
-            待加簽清單已自動儲存
+            未來規劃已自動儲存
           </button>
         </div>
       </aside>
@@ -541,15 +550,20 @@ function CourseResultRow({
   offering,
   conflicts,
   alreadyVirtual,
+  recognitionRequirements,
   officialActionCourseNo,
   onAddSelectionCourse,
+  onAddPlannedCourse,
 }: {
   offering: CourseSearchResult;
   conflicts: Course[];
   alreadyVirtual: boolean;
+  recognitionRequirements: PendingRequirement[];
   officialActionCourseNo: string | null;
   onAddSelectionCourse: () => void;
+  onAddPlannedCourse: (requirementId?: string) => void;
 }) {
+  const [selectedRequirementId, setSelectedRequirementId] = useState('');
   const slots = parseNodeSlots(offering.node);
   const status = capacityStatus(offering);
   const isOfficialActionLoading = officialActionCourseNo === offering.course_no.trim().toUpperCase();
@@ -582,7 +596,7 @@ function CourseResultRow({
         <div className="font-semibold text-slate-900">{offering.course_name}</div>
           <div className="mt-1 flex flex-wrap gap-1">
           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">{requirementLabel(offering.require_option)}</span>
-          {alreadyVirtual && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">已列入待加簽</span>}
+          {alreadyVirtual && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">已列入規劃</span>}
           {conflicts.length > 0 && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">衝堂</span>}
         </div>
       </td>
@@ -606,7 +620,30 @@ function CourseResultRow({
         {offering.contents || (conflicts.length > 0 ? `與 ${conflicts.map((course) => course.name).join('、')} 衝堂` : '無備註')}
       </td>
       <td className="border-b border-slate-100 px-3 py-3">
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex max-w-[260px] flex-wrap justify-end gap-2">
+            <select
+              value={selectedRequirementId}
+              onChange={(event) => setSelectedRequirementId(event.target.value)}
+              className="min-h-8 max-w-[160px] rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+              title="指定認列規則"
+            >
+              <option value="">不指定認列</option>
+              {recognitionRequirements.map((requirement) => (
+                <option key={requirement.id} value={requirement.id}>
+                  {requirement.setId === DOUBLE_MAJOR_RECOGNITION_SET_ID ? '雙主修' : '輔系'}・{requirement.title}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => onAddPlannedCourse(selectedRequirementId || undefined)}
+              disabled={!offering.course_no}
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-300 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+            >
+              {alreadyVirtual ? '更新規劃' : '加入未來規劃'}
+            </button>
+          </div>
           <button
             onClick={onAddSelectionCourse}
             disabled={!offering.course_no || isOfficialActionLoading}
@@ -631,8 +668,9 @@ function VirtualCourseCard({
   onDelete: () => void;
 }) {
   const slots = course.scheduledOffering?.slots || [];
+  const isRejected = course.virtualSelection?.status === 'rejected';
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+    <div className={`rounded-md border p-3 ${isRejected ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-700">
           {rank}
@@ -640,8 +678,8 @@ function VirtualCourseCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-semibold text-slate-900">{course.name}</p>
-            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              待加簽
+            <span className={`shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium ${isRejected ? 'text-amber-700' : 'text-emerald-700'}`}>
+              {isRejected ? '待加簽' : '未來規劃'}
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-600">
@@ -651,14 +689,14 @@ function VirtualCourseCard({
           <p className="mt-1 truncate text-xs text-slate-600">
             {slots.length > 0 ? `${displaySlots(slots)}・${displayClassroom(course.scheduledOffering?.classroom)}` : '未提供節次'}
           </p>
-          <p className="mt-2 line-clamp-2 text-xs text-amber-800">
-            {course.virtualSelection?.reason || '尚未被官方正式接受。'}
+          <p className={`mt-2 line-clamp-2 text-xs ${isRejected ? 'text-amber-800' : 'text-emerald-800'}`}>
+            {course.virtualSelection?.reason || '本地未來規劃。'}
           </p>
         </div>
         <button
           type="button"
           onClick={onDelete}
-          className="rounded-md border border-amber-200 bg-white px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+          className={`rounded-md border bg-white px-2 py-1 text-xs font-medium ${isRejected ? 'border-amber-200 text-amber-700 hover:bg-amber-100' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}
         >
           移除
         </button>

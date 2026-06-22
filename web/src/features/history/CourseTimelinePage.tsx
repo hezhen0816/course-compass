@@ -41,21 +41,38 @@ export function CourseTimelinePage({
   const timelineSemesters = data.semesters.map((semester) => ({
     ...semester,
     courses: semester.courses.filter(isHistoryImportedCourse),
+    plannedSourceLabel: '',
   }));
   const plannedCourses = data.selectionPlan?.courses || [];
-  const displaySemesters = plannedCourses.length > 0
-    ? [
-        ...timelineSemesters,
-        {
-          id: '__selection_plan__',
-          name: data.selectionPlan?.targetLabel || '未來規劃',
-          courses: plannedCourses,
-        },
-      ]
-    : timelineSemesters;
+  const plannedSemesterName = plannedSemesterNameFromLabel(data.selectionPlan?.targetLabel);
+  const plannedTargetIndex = plannedCourses.length > 0 && plannedSemesterName
+    ? timelineSemesters.findIndex((semester) => semester.name === plannedSemesterName)
+    : -1;
+  const displaySemesters = plannedCourses.length === 0
+    ? timelineSemesters
+    : plannedTargetIndex >= 0
+      ? timelineSemesters.map((semester, index) => (
+          index === plannedTargetIndex
+            ? {
+                ...semester,
+                courses: [...semester.courses, ...plannedCourses],
+                plannedSourceLabel: data.selectionPlan?.targetLabel || '未來規劃',
+              }
+            : semester
+        ))
+      : [
+          ...timelineSemesters,
+          {
+            id: '__selection_plan__',
+            name: data.selectionPlan?.targetLabel || '未來規劃',
+            courses: plannedCourses,
+            plannedSourceLabel: data.selectionPlan?.targetLabel || '未來規劃',
+          },
+        ];
   const historyCount = timelineSemesters.reduce((sum, semester) => sum + semester.courses.length, 0);
   const plannedCount = plannedCourses.length;
   const totalCourses = historyCount + plannedCount;
+  const requirementById = new Map(data.pendingRequirements.map((requirement) => [requirement.id, requirement]));
   const failedCount = timelineSemesters.reduce((sum, semester) => (
     sum + semester.courses.filter(isFailedImportedHistoryCourse).length
   ), 0);
@@ -97,6 +114,11 @@ export function CourseTimelinePage({
                   <p className="mt-1 text-xs text-slate-500">
                     {semester.courses.length} 門課 · {formatCredits(semesterCredits)} 學分
                   </p>
+                  {semester.plannedSourceLabel && (
+                    <p className="mt-1 text-xs font-medium text-blue-600">
+                      含 {semester.plannedSourceLabel} 的未來規劃
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="space-y-2 p-4">
@@ -109,6 +131,7 @@ export function CourseTimelinePage({
                     <TimelineCourseCard
                       key={course.id}
                       course={course}
+                      recognitionLabel={course.sourceRequirementId ? requirementById.get(course.sourceRequirementId)?.title : undefined}
                       onOpen={() => onOpenCourseDetail(semester.id, semester.name, course)}
                     />
                   ))
@@ -120,6 +143,11 @@ export function CourseTimelinePage({
       </section>
     </div>
   );
+}
+
+function plannedSemesterNameFromLabel(label: string | undefined): string | null {
+  const matched = label?.match(/推定([^·\s]+)/);
+  return matched?.[1] || null;
 }
 
 function GraduationProgressPanel({ data, stats }: { data: AppData; stats: PlannerStats }) {
@@ -449,10 +477,18 @@ function SummaryBox({
   );
 }
 
-function TimelineCourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) {
+function TimelineCourseCard({
+  course,
+  recognitionLabel,
+  onOpen,
+}: {
+  course: Course;
+  recognitionLabel?: string;
+  onOpen: () => void;
+}) {
   const isHistory = isHistoryImportedCourse(course);
   const isFailed = isFailedImportedHistoryCourse(course);
-  const isVirtual = Boolean(course.virtualSelection);
+  const isRejected = course.virtualSelection?.status === 'rejected';
   const slots = course.scheduledOffering?.slots || [];
   const teacher = course.scheduledOffering?.teacher || course.details?.professor || '未列教師';
   const location = displayClassroom(course.scheduledOffering?.classroom || course.details?.location);
@@ -460,7 +496,7 @@ function TimelineCourseCard({ course, onOpen }: { course: Course; onOpen: () => 
     ? 'border-red-200 bg-red-50 hover:bg-red-100'
     : isHistory
       ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
-      : isVirtual
+      : isRejected
         ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
         : 'border-blue-200 bg-blue-50 hover:bg-blue-100';
 
@@ -477,7 +513,7 @@ function TimelineCourseCard({ course, onOpen }: { course: Course; onOpen: () => 
             <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
               {CATEGORY_LABELS[course.category]}
             </span>
-            {course.program && course.program !== 'home' && (
+            {course.program && course.program !== 'home' && !recognitionLabel && (
               <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                 {PROGRAM_LABELS[course.program]}
               </span>
@@ -487,9 +523,14 @@ function TimelineCourseCard({ course, onOpen }: { course: Course; onOpen: () => 
                 {isFailed ? '未通過' : '歷史修課'}
               </span>
             )}
+            {recognitionLabel && course.program && course.program !== 'home' && (
+              <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                {PROGRAM_LABELS[course.program]}・{recognitionLabel}
+              </span>
+            )}
             {!isHistory && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isVirtual ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                {isVirtual ? '待加簽' : '未來規劃'}
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isRejected ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                {isRejected ? '待加簽' : '未來規劃'}
               </span>
             )}
           </div>

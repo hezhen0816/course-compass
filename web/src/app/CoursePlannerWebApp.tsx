@@ -71,8 +71,10 @@ function programForCourseOffering(
   settings?: AppSettings,
 ) {
   return requirement?.setId === DOUBLE_MAJOR_TODO_SET_ID
+    || requirement?.setId === DOUBLE_MAJOR_RECOGNITION_SET_ID
     ? 'double_major'
     : requirement?.setId === MINOR_TODO_SET_ID
+      || requirement?.setId === MINOR_RECOGNITION_SET_ID
       ? 'minor'
       : programFromOfferingSettings(offering, settings);
 }
@@ -281,6 +283,7 @@ export default function CoursePlannerWebApp() {
     virtualReason?: string,
   ) => {
     const existingCourse = findScheduledCourseByOffering(offering, selectionData, SELECTION_PLAN_SEMESTER_ID);
+    const courseProgram = programForCourseOffering(offering, requirement, data.settings);
     if (existingCourse && virtualReason && existingCourse.virtualSelection) {
       setData((prev) => ({
         ...prev,
@@ -307,7 +310,35 @@ export default function CoursePlannerWebApp() {
       return true;
     }
     if (existingCourse) {
-      setPlannerMessage(`已在待加簽課程中：${offering.course_name}`);
+      if (requirement) {
+        setData((prev) => ({
+          ...prev,
+          selectionPlan: prev.selectionPlan
+            ? {
+                ...prev.selectionPlan,
+                courses: prev.selectionPlan.courses.map((course) => (
+                  course.id === existingCourse.id
+                    ? {
+                        ...course,
+                        program: courseProgram,
+                        sourceRequirementId: requirement.id,
+                        sourceSetId: requirement.setId,
+                        virtualSelection: {
+                          status: 'manual',
+                          reason: `本地未來規劃，認列到：${requirement.title}`,
+                          createdAt: course.virtualSelection?.createdAt || new Date().toISOString(),
+                        },
+                      }
+                    : course
+                )),
+                updatedAt: new Date().toISOString(),
+              }
+            : prev.selectionPlan,
+        }));
+        setPlannerMessage(`已更新未來規劃認列：${offering.course_name} → ${requirement.title}`);
+        return true;
+      }
+      setPlannerMessage(`已在未來規劃中：${offering.course_name}`);
       return false;
     }
     const conflicts = findConflicts(offering, selectionData, SELECTION_PLAN_SEMESTER_ID);
@@ -315,12 +346,11 @@ export default function CoursePlannerWebApp() {
       const names = conflicts.map((course) => course.name).join('、');
       if (!window.confirm(`這門課與 ${names} 衝堂，仍要排入嗎？`)) return false;
     }
-    const courseProgram = programForCourseOffering(offering, requirement, data.settings);
     const course: Course = {
       ...courseFromOffering(offering, requirement, courseProgram),
       virtualSelection: {
         status: virtualReason ? 'rejected' : 'manual',
-        reason: virtualReason || '手動加入待加簽規劃，尚未送入官方選課系統。',
+        reason: virtualReason || (requirement ? `本地未來規劃，認列到：${requirement.title}` : '本地未來規劃，尚未送入官方選課系統。'),
         createdAt: new Date().toISOString(),
       },
     };
@@ -337,7 +367,7 @@ export default function CoursePlannerWebApp() {
         ? prev.pendingRequirements.filter((item) => item.id !== requirement.id)
         : prev.pendingRequirements,
     }));
-    setPlannerMessage(`已加入待加簽規劃：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
+    setPlannerMessage(`${virtualReason ? '已加入待加簽規劃' : '已加入未來規劃'}：${offering.course_name}（${displaySlots(parseNodeSlots(offering.node))}）`);
     return true;
   };
 
@@ -642,6 +672,13 @@ export default function CoursePlannerWebApp() {
     }
   };
 
+  const addPlannedCourse = (offering: CourseSearchResult, requirementId?: string) => {
+    const requirement = requirementId
+      ? data.pendingRequirements.find((item) => item.id === requirementId)
+      : undefined;
+    addCourseToSemester(offering, requirement, true);
+  };
+
   const saveOfficialSelectionOrder = async (orderedCourseNos: string[]) => {
     const username = officialSelection?.school_account || schoolUsername.trim();
     if (!username || !officialSelection || (!officialSelection.session_valid && !hasSavedSchoolCredentials)) {
@@ -786,6 +823,7 @@ export default function CoursePlannerWebApp() {
             onSearchPendingCourse={searchPendingCourseName}
             officialActionCourseNo={officialActionCourseNo}
             onAddSelectionCourse={(offering) => void submitSelectionCourse(offering)}
+            onAddPlannedCourse={addPlannedCourse}
             onDeleteVirtualCourse={deleteSelectionCourse}
             onOpenPlanning={() => setActivePage('planning')}
           />
