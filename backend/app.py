@@ -29,6 +29,7 @@ try:
         fetch_query_courses_filtered,
     )
     from .services.planner_pdf import parse_requirement_pdf
+    from .services.typed_planner.read import read_typed_planner_app_data
     from .services.school_session_store import (
         delete_school_session,
         load_school_session_state,
@@ -69,6 +70,7 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
         fetch_query_courses_filtered,
     )
     from services.planner_pdf import parse_requirement_pdf
+    from services.typed_planner.read import read_typed_planner_app_data
     from services.school_session_store import (
         delete_school_session,
         load_school_session_state,
@@ -88,10 +90,11 @@ except ImportError:  # pragma: no cover - supports Railway backend/ cwd imports.
     from services import session_context
 
 
-API_VERSION = "0.3.0"
+API_VERSION = "0.3.1"
 OFFICIAL_SELECTION_CAPABILITIES = {
     "school_credentials": True,
     "school_sessions": True,
+    "typed_planner_read": True,
     "official_selection": True,
     "official_selection_actions": [
         "sync",
@@ -262,7 +265,13 @@ app.include_router(
         )
     )
 )
-app.include_router(create_planner_router(lambda pdf_bytes, filename: parse_requirement_pdf(pdf_bytes, filename)))
+app.include_router(
+    create_planner_router(
+        lambda pdf_bytes, filename: parse_requirement_pdf(pdf_bytes, filename),
+        lambda authorization: _current_user_context(authorization),
+        lambda user_id: read_typed_planner_app_data(user_id),
+    )
+)
 app.include_router(
     create_school_credentials_router(
         lambda authorization: _current_user_context(authorization),

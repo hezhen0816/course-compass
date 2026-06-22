@@ -10,6 +10,7 @@ from typing import Any
 
 DEFAULT_BACKEND_URL = "https://course-planner-backend-production.up.railway.app"
 REQUIRED_OPENAPI_PATHS = {
+    "/api/planner/data",
     "/api/school-credentials",
     "/api/official-selection/a02/sync",
     "/api/official-selection/a02/keep-alive",
@@ -55,6 +56,8 @@ def verify_backend(base_url: str) -> list[str]:
             issues.append("/health missing school_sessions capability")
         if capabilities.get("official_selection") is not True:
             issues.append("/health missing official_selection capability")
+        if capabilities.get("typed_planner_read") is not True:
+            issues.append("/health missing typed_planner_read capability")
 
     openapi = _fetch_json(f"{base_url}/openapi.json")
     paths = openapi.get("paths")

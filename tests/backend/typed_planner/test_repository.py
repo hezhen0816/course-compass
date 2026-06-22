@@ -122,3 +122,51 @@ def test_typed_planner_repository_raises_on_failed_batch() -> None:
             post=fake_post,
             dry_run=False,
         )
+
+
+def test_typed_planner_repository_loads_related_rows_in_order() -> None:
+    calls: list[str] = []
+    payloads = {
+        "planner_profiles": [{"id": "profile-1"}],
+        "academic_terms": [{"id": "term-1"}],
+        "planner_courses": [{"id": "course-1"}],
+        "requirement_sets": [{"id": "set-1"}],
+        "requirements": [{"id": "req-1"}],
+        "requirement_options": [{"id": "option-1"}],
+        "selection_plans": [{"id": "plan-1"}],
+    }
+
+    class Response:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self.rows = rows
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> list[dict[str, object]]:
+            return self.rows
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> Response:
+        calls.append(url)
+        for table, rows in payloads.items():
+            if f"/rest/v1/{table}?" in url:
+                return Response(rows)
+        return Response([])
+
+    rows = typed_planner_repository.load_typed_planner_rows(
+        "11111111-1111-1111-1111-111111111111",
+        supabase_url="https://example.supabase.co",
+        headers={"Authorization": "Bearer service"},
+        timeout=12,
+        get=fake_get,
+    )
+
+    assert rows["planner_profiles"] == [{"id": "profile-1"}]
+    assert rows["academic_terms"] == [{"id": "term-1"}]
+    assert rows["planner_courses"] == [{"id": "course-1"}]
+    assert rows["selection_plans"] == [{"id": "plan-1"}]
+    assert calls[0] == (
+        "https://example.supabase.co/rest/v1/planner_profiles?"
+        "select=*&user_id=eq.11111111-1111-1111-1111-111111111111&profile_key=eq.default&limit=1"
+    )
+    assert any("/rest/v1/course_meetings?select=*&course_id=in.(course-1)" in call for call in calls)

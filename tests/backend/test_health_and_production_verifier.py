@@ -17,6 +17,7 @@ def test_healthcheck_reports_official_selection_capabilities() -> None:
     assert payload["version"] == backend_app.API_VERSION
     assert payload["capabilities"]["school_credentials"] is True
     assert payload["capabilities"]["school_sessions"] is True
+    assert payload["capabilities"]["typed_planner_read"] is True
     assert payload["capabilities"]["official_selection"] is True
     assert set(payload["capabilities"]["official_selection_actions"]) == {
         "sync",
@@ -36,6 +37,7 @@ def test_production_backend_verifier_accepts_required_capabilities(monkeypatch) 
                 "capabilities": {
                     "school_credentials": True,
                     "school_sessions": True,
+                    "typed_planner_read": True,
                     "official_selection": True,
                 },
             }
@@ -62,5 +64,6 @@ def test_production_backend_verifier_reports_missing_official_selection(monkeypa
     issues = verify_production_backend.verify_backend("https://backend.example.test")
 
     assert "/health missing capabilities object" in issues
+    assert "/openapi.json missing /api/planner/data" in issues
     assert "/openapi.json missing /api/official-selection/a02/sync" in issues
     assert "/openapi.json missing /api/school-credentials" in issues
