@@ -3,7 +3,11 @@ import {
   X, User, Calculator, Award, Trash2, Plus, FileText, Save, 
   Mail, MapPin, Clock, Link as LinkIcon, Copy, ChevronUp, ChevronDown, MoreHorizontal
 } from 'lucide-react';
-import type { Course, CourseDetails, GradingItem, CourseCategory } from '../../shared/types';
+import type { Course, CourseDetails, GradingItem, CourseCategory, PendingRequirement } from '../../shared/types';
+import {
+  DOUBLE_MAJOR_RECOGNITION_SET_ID,
+  MINOR_RECOGNITION_SET_ID,
+} from '../../shared/domain/planner';
 
 interface CourseDetailModalProps {
   isOpen: boolean;
@@ -11,11 +15,12 @@ interface CourseDetailModalProps {
   course: Course;
   semesterId: string;
   semesterName?: string;
+  recognitionRequirements: PendingRequirement[];
   onSave: (updatedCourse: Course) => void;
 }
 
 export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
-  isOpen, onClose, course, semesterId, semesterName, onSave
+  isOpen, onClose, course, semesterId, semesterName, recognitionRequirements, onSave
 }) => {
   const [detailData, setDetailData] = useState<CourseDetails>(() => course.details || {
     professor: '',
@@ -26,6 +31,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
     notes: '',
     gradingPolicy: [],
   });
+  const [recognitionRequirementId, setRecognitionRequirementId] = useState(course.sourceRequirementId || '');
   const [openGradingMenuId, setOpenGradingMenuId] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -149,12 +155,34 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
   };
 
   const handleSave = () => {
+    const recognitionRequirement = recognitionRequirements.find((requirement) => requirement.id === recognitionRequirementId);
     onSave({
       ...course,
-      details: detailData
+      details: detailData,
+      sourceRequirementId: recognitionRequirement?.id,
+      sourceSetId: recognitionRequirement?.setId,
+      program: recognitionRequirement?.setId === DOUBLE_MAJOR_RECOGNITION_SET_ID
+        ? 'double_major'
+        : recognitionRequirement?.setId === MINOR_RECOGNITION_SET_ID
+          ? 'minor'
+          : course.program,
+      virtualSelection: course.virtualSelection
+        ? {
+            ...course.virtualSelection,
+            reason: recognitionRequirement
+              ? `本地未來規劃，認列到：${recognitionRequirement.title}`
+              : course.virtualSelection.status === 'manual'
+                ? '本地未來規劃，尚未指定認列規則。'
+                : course.virtualSelection.reason,
+          }
+        : course.virtualSelection,
     });
     onClose();
   };
+
+  const selectableRecognitionRequirements = recognitionRequirements.filter((requirement) => (
+    requirement.setId === DOUBLE_MAJOR_RECOGNITION_SET_ID || requirement.setId === MINOR_RECOGNITION_SET_ID
+  ));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto">
@@ -247,6 +275,25 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                 />
               </div>
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+            <h3 className="font-bold text-slate-800 mb-2">認列歸屬</h3>
+            <p className="mb-3 text-sm text-slate-500">
+              可把這門課指定到雙主修或輔系規則；選「不指定」只會取消認列，不會移除課程。
+            </p>
+            <select
+              value={recognitionRequirementId}
+              onChange={(event) => setRecognitionRequirementId(event.target.value)}
+              className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">不指定認列</option>
+              {selectableRecognitionRequirements.map((requirement) => (
+                <option key={requirement.id} value={requirement.id}>
+                  {requirement.setId === DOUBLE_MAJOR_RECOGNITION_SET_ID ? '雙主修' : '輔系'}・{requirement.title}
+                </option>
+              ))}
+            </select>
           </section>
   
           {/* 2. 成績試算 & 預測區塊 (Calculator Section) */}

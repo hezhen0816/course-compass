@@ -114,6 +114,7 @@ export function AppModals({
           course={detailCourse.course}
           semesterId={detailCourse.semesterId}
           semesterName={detailCourse.semesterName}
+          recognitionRequirements={data.pendingRequirements}
           onClose={onCloseCourseDetail}
           onSave={onSaveCourseDetail}
         />

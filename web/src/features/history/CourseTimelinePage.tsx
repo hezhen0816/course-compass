@@ -11,6 +11,7 @@ import {
   getRequirementStatus,
   isFailedImportedHistoryCourse,
   isHistoryImportedCourse,
+  normalizeName,
 } from '../../shared/domain/planner';
 
 type RecognitionRequirementDraft = {
@@ -416,6 +417,7 @@ function RecognitionRequirementCard({
   onDelete: () => void;
 }) {
   const status = getRequirementStatus(requirement, data);
+  const matchedCourses = matchedRecognitionCourses(requirement, data);
   const targetCredits = status.targetCredits || requirement.requiredCredits || requirement.credits || 0;
   const ratio = targetCredits > 0 ? Math.min(100, Math.round((status.earnedCredits / targetCredits) * 100)) : status.completed ? 100 : 0;
   const kindLabel = requirement.kind === 'credit_pool' ? '學分池' : requirement.kind === 'choice' ? '多選一' : '課程';
@@ -438,6 +440,17 @@ function RecognitionRequirementCard({
           <div className="mt-2 h-1.5 rounded-full bg-white">
             <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${ratio}%` }} />
           </div>
+          {matchedCourses.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {matchedCourses.map((label) => (
+                <span key={label} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  {label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-400">尚未匹配到歷史修課或未來規劃。</p>
+          )}
         </div>
         <button
           type="button"
@@ -450,6 +463,37 @@ function RecognitionRequirementCard({
       </div>
     </div>
   );
+}
+
+function matchedRecognitionCourses(requirement: PendingRequirement, data: AppData): string[] {
+  const candidateNames = new Set(requirement.courseNames.map(normalizeName));
+  const candidateCodePrefix = requirement.courseCodePrefix?.trim().toUpperCase() || '';
+  const labels = new Set<string>();
+  const plannedCourses = [
+    ...data.semesters.flatMap((semester) => semester.courses),
+    ...(data.selectionPlan?.courses || []),
+  ];
+
+  plannedCourses.forEach((course) => {
+    const code = course.scheduledOffering?.courseNo?.trim().toUpperCase() || '';
+    const matchedBySource = course.sourceRequirementId === requirement.id;
+    const matchedByName = candidateNames.has(normalizeName(course.name));
+    const matchedByPrefix = Boolean(candidateCodePrefix && code.startsWith(candidateCodePrefix));
+    if (matchedBySource || matchedByName || matchedByPrefix) {
+      labels.add(`規劃：${course.name}`);
+    }
+  });
+
+  (data.historyRecords || []).forEach((record) => {
+    if (record.status === 'failed') return;
+    const matchedByName = candidateNames.has(normalizeName(record.courseName));
+    const matchedByPrefix = Boolean(candidateCodePrefix && record.courseCode.toUpperCase().startsWith(candidateCodePrefix));
+    if (matchedByName || matchedByPrefix) {
+      labels.add(`歷史：${record.courseName}`);
+    }
+  });
+
+  return Array.from(labels);
 }
 
 function SummaryBox({
