@@ -781,6 +781,15 @@ function getOfficialScheduleCell(row: Record<string, string>, label: string): st
   ));
   if (matched?.[1]) return matched[1];
 
+  // Positional fallback is only safe for header-less rows. Rows that already
+  // carry weekday keys (possibly with empty cells) must not fall through to it:
+  // JSONB storage reorders keys, so Object.values() no longer follows column
+  // order and an empty 星期二 would render 星期三's course.
+  const hasNamedColumns = Object.keys(row).some((key) => (
+    OFFICIAL_SCHEDULE_COLUMNS.includes(compactOfficialKey(key))
+  ));
+  if (hasNamedColumns) return '';
+
   const columnIndex = OFFICIAL_SCHEDULE_COLUMNS.indexOf(label);
   if (columnIndex < 0) return '';
   return Object.values(row)[columnIndex] || '';
