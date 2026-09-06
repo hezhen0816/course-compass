@@ -19,6 +19,9 @@ except ImportError:  # pragma: no cover
 
 ROOM_RE = re.compile(r"\bTR-\d+(?:-\d+)?\b", re.IGNORECASE)
 _tr_course_cache: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
+# The unfiltered semester course list is ~2 MB and the school API routinely
+# takes 60s+ to produce it in the evening; the default 30s timeout aborts it.
+FULL_COURSE_LIST_TIMEOUT = max(DEFAULT_TIMEOUT, 150)
 
 def query_course_payload(semester: str) -> dict[str, Any]:
     return {
@@ -74,7 +77,7 @@ def fetch_query_courses(semester: str, refresh: bool, verify_ssl: bool) -> list[
             "Referer": "https://querycourse.ntust.edu.tw/querycourse/",
             "User-Agent": "Mozilla/5.0",
         },
-        timeout=DEFAULT_TIMEOUT,
+        timeout=FULL_COURSE_LIST_TIMEOUT,
         verify=verify_ssl,
     )
     response.raise_for_status()
