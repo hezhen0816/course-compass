@@ -128,6 +128,9 @@ export default function CoursePlannerWebApp() {
     markHistoryMigrated: () => {
       hasMigratedHistoryCoursesRef.current = true;
     },
+    onOfficialScheduleRowsSynced: (rows) => {
+      setOfficialSelection((current) => (current ? { ...current, schedule_rows: rows } : current));
+    },
   });
   const [schoolSyncModalMode, setSchoolSyncModalMode] = useState<'school-data' | 'official-selection'>('school-data');
   const [officialSelection, setOfficialSelection] = useState<OfficialSelectionSyncResponse | null>(null);

@@ -209,6 +209,49 @@ export function uniqueTextValues(values: Array<string | null | undefined>): stri
   return normalized;
 }
 
+const OFFICIAL_SCHEDULE_WEEKDAYS = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+const OFFICIAL_SCHEDULE_PERIOD_TIMES: Record<string, string> = {
+  '1': '08:10～09:00',
+  '2': '9:10～10:00',
+  '3': '10:20～11:10',
+  '4': '11:20～12:10',
+  '5': '12:20～13:10',
+  '6': '13:20～14:10',
+  '7': '14:20～15:10',
+  '8': '15:30～16:20',
+  '9': '16:30～17:20',
+  '10': '17:30～18:20',
+  A: '18:25～19:15',
+  B: '19:20～20:10',
+  C: '20:15～21:05',
+  D: '21:10～22:00',
+};
+
+/**
+ * Build the official-timetable grid rows (節次/時間/星期一…星期日) from a schedule
+ * sync. Mirrors backend `_schedule_rows_from_slots` so a plain schedule sync can
+ * refresh the workbench grid without a separate official-selection sync.
+ */
+export function officialScheduleRowsFromSlots(slots: ScheduleSyncResponse['slots']): Record<string, string>[] {
+  const rows = PERIODS.map((period) => {
+    const row: Record<string, string> = { 節次: period, 時間: OFFICIAL_SCHEDULE_PERIOD_TIMES[period] || '' };
+    OFFICIAL_SCHEDULE_WEEKDAYS.forEach((weekday) => {
+      row[weekday] = '';
+    });
+    return row;
+  });
+  const rowByPeriod = new Map(rows.map((row) => [row.節次, row]));
+  slots.forEach((slot) => {
+    const period = slot.period.trim().toUpperCase();
+    const weekday = slot.weekday_label.trim();
+    const courseName = slot.course_name.trim();
+    const row = rowByPeriod.get(period);
+    if (!row || !OFFICIAL_SCHEDULE_WEEKDAYS.includes(weekday) || !courseName) return;
+    row[weekday] = [row[weekday], courseName].filter(Boolean).join('、');
+  });
+  return rows;
+}
+
 export function coursesFromScheduleSync(payload: ScheduleSyncResponse): Course[] {
   return payload.courses.map((course) => {
     const matchingSlots = payload.slots.filter((slot) => slot.course_name === course.course_name);
