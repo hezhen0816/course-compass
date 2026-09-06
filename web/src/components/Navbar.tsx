@@ -61,8 +61,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex min-w-0 items-center gap-3 xl:w-[260px]">
             <GraduationCap className="h-8 w-8 flex-shrink-0 text-blue-600" />
             <div className="min-w-0">
-              <span className="block truncate text-xl font-bold text-gray-900">修課羅盤</span>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="block truncate text-xl font-bold text-slate-900">修課羅盤</span>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span>Course Compass</span>
                 {isDemoMode && <span className="text-amber-600">略過登入模式</span>}
               </div>
@@ -92,7 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="grid grid-cols-3 items-center gap-1 sm:flex sm:w-auto">
               <button
                 onClick={() => alert('平台分成課程查詢、選課工作台、畢業進度與修課軌跡。選課工作台只輔助目前選課學期，不會自動搶課。')}
-                className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                className="flex items-center justify-center rounded-lg p-2 text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 title="匯入說明"
               >
                 <CircleHelp className="h-5 w-5" />
@@ -100,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={onOpenHelp}
-                className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                className="flex items-center justify-center rounded-lg p-2 text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 title="功能導覽"
               >
                 <BookOpen className="h-5 w-5" />

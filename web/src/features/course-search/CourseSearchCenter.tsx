@@ -99,7 +99,7 @@ export function CourseSearchCenter({
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_300px]">
       <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 p-4">
-          <h2 className="text-base font-semibold text-slate-900">篩選條件</h2>
+          <h2 className="text-lg font-semibold text-slate-900">篩選條件</h2>
           <button onClick={onResetFilters} className="text-sm font-medium text-blue-600 hover:text-blue-700">
             清除全部
           </button>
@@ -224,7 +224,7 @@ export function CourseSearchCenter({
 
           <div className="border-t border-slate-100 pt-4">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Upload className="h-4 w-4 text-blue-600" />
                 需求匯入
               </h3>
@@ -324,7 +324,7 @@ export function CourseSearchCenter({
       <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-start justify-between border-b border-slate-100 p-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">虛擬加入 ({virtualCourses.length})</h2>
+            <h2 className="text-lg font-semibold text-slate-900">虛擬加入 ({virtualCourses.length})</h2>
             <p className="mt-1 text-xs text-slate-500">未被官方正式接受的課程。</p>
           </div>
           <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">

@@ -92,7 +92,7 @@ export function SettingsPage({
           <div>
             <div className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-blue-600" />
-              <h2 className="text-base font-semibold text-slate-900">校務帳號與選課目標</h2>
+              <h2 className="text-lg font-semibold text-slate-900">校務帳號與選課目標</h2>
             </div>
             <p className="mt-2 text-sm text-slate-500">
               校務帳號用來同步官方選課清單與歷年成績，並可由學號推定目前選課對應的大幾學期。
@@ -135,7 +135,7 @@ export function SettingsPage({
           <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4 text-blue-600" />
-              <h2 className="text-base font-semibold text-slate-900">設定畢業門檻</h2>
+              <h2 className="text-lg font-semibold text-slate-900">設定畢業門檻</h2>
             </div>
             <div className="flex items-center gap-3">
               <span

@@ -36,9 +36,9 @@ export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose, onSav
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-slate-800">
+          <h3 className="text-lg font-semibold text-slate-900">
             {editingCourse ? '編輯課程' : '新增課程'}
           </h3>
           <button 
@@ -73,7 +73,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose, onSav
                 onChange={(e) => setFormCredits(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
-              {formCategory === 'pe' && <p className="text-xs text-gray-500 mt-1">體育課通常為 0 學分</p>}
+              {formCategory === 'pe' && <p className="text-xs text-slate-500 mt-1">體育課通常為 0 學分</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">類別</label>

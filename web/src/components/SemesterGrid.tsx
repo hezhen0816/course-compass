@@ -33,8 +33,8 @@ export const SemesterGrid: React.FC<SemesterGridProps> = ({
       case 'chinese': return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'english': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       case 'social': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'unclassified': return 'bg-gray-200 text-gray-800 border-gray-400 border-dashed';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'unclassified': return 'bg-slate-200 text-slate-800 border-slate-400 border-dashed';
+      default: return 'bg-slate-100 text-slate-800 border-slate-200';
     }
   };
 
@@ -45,10 +45,10 @@ export const SemesterGrid: React.FC<SemesterGridProps> = ({
           const semesterCredits = semester.courses.reduce((acc, c) => c.category === 'pe' ? acc : acc + c.credits, 0);
           
           return (
-            <div key={semester.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+            <div key={semester.id} className="bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col h-full">
               {/* Semester Header */}
-              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50 rounded-t-xl flex justify-between items-center">
-                <h3 className="font-bold text-slate-700">{semester.name}</h3>
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50 rounded-t-lg flex justify-between items-center">
+                <h3 className="font-semibold text-slate-700">{semester.name}</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onSortByCategory(semester.id)}

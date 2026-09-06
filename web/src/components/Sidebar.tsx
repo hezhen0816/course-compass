@@ -11,8 +11,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ data, stats }) => {
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center">
           <Activity className="h-5 w-5 mr-2 text-blue-500" />
           畢業門檻進度
         </h2>
@@ -74,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ data, stats }) => {
                 className={`text-xs px-2 py-1 rounded border ${
                   stats.genEdDimensions.has(dim) 
                     ? 'bg-purple-500 text-white border-purple-600' 
-                    : 'bg-white text-gray-400 border-gray-200'
+                    : 'bg-white text-slate-400 border-slate-200'
                 }`}
               >
                 {dim}
@@ -85,8 +85,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ data, stats }) => {
 
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center">
           <BookOpen className="h-5 w-5 mr-2 text-red-500" />
           系所課程
         </h2>

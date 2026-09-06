@@ -586,7 +586,7 @@ export default function CoursePlannerWebApp() {
   };
 
   if (authLoading || (session && dataLoading)) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50">載入中...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50">載入中...</div>;
   }
 
   if (!session && !isDemoMode) {

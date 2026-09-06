@@ -44,7 +44,7 @@ function ScheduleLegend() {
     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
       {items.map((item) => (
         <span key={item.label} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1">
-          <span className={`h-2.5 w-2.5 rounded-sm border ${item.className}`} />
+          <span className={`h-2.5 w-2.5 rounded border ${item.className}`} />
           {item.label}
         </span>
       ))}
