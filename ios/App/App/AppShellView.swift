@@ -214,9 +214,11 @@ private struct AuthGateView: View {
     var body: some View {
         ZStack {
             Color(.systemGroupedBackground)
-            VStack(spacing: 0) {
-                Spacer(minLength: 48)
-
+                .ignoresSafeArea()
+            // ScrollView (not a fixed VStack) so the keyboard's safe-area inset
+            // pushes the card up instead of covering the password field.
+            GeometryReader { proxy in
+            ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 12) {
@@ -312,15 +314,17 @@ private struct AuthGateView: View {
                         .stroke(Color.black.opacity(0.04), lineWidth: 1)
                 )
                 .padding(.horizontal, 22)
-
-                Spacer(minLength: 40)
+                .padding(.top, 48)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    focusedField = nil
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            focusedField = nil
-        }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     private func authModeChip(_ mode: AuthFormMode) -> some View {
