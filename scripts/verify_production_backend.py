@@ -8,7 +8,7 @@ import urllib.request
 from typing import Any
 
 
-DEFAULT_BACKEND_URL = "https://course-planner-backend-production.up.railway.app"
+DEFAULT_BACKEND_URL = "http://100.72.243.88:8000"
 REQUIRED_OPENAPI_PATHS = {
     "/api/school-credentials",
     "/api/official-selection/a02/sync",

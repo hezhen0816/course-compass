@@ -149,13 +149,30 @@ npm run ios:build
 
 ### 驗證 production backend
 
-Vercel Web 只負責前端，官方選課送出能力依賴 Railway backend。部署後用以下指令確認 production backend 已包含校務帳密、官方 session 持久化與官方初選 API：
+Vercel Web 只負責前端，官方選課送出能力依賴 backend。backend 目前部署在家用 Windows 主機（見下方「Windows 後端部署」），Railway 部署已於 2026-09-06 移除。部署後用以下指令確認 production backend 已包含校務帳密、官方 session 持久化與官方初選 API：
 
 ```bash
 bash scripts/python.sh scripts/verify_production_backend.py
 ```
 
 若此檢查失敗，正式站台可能已更新前端但 backend 仍是舊版，官方選課送出會無法使用。
+
+### Windows 後端部署
+
+backend 以 `NTUST_Course_Monitor` 相同方式常駐在家用 Windows 主機（Tailscale 節點 `hezhen` / `100.72.243.88`，SSH 別名 `winhome`）：
+
+- 程式位於 `C:\Users\hezhe\source\repos\course-compass`，venv 在 `.venv\`，`.env` 放在 repo 根目錄
+- `scripts/deployment/run_backend.bat` 複製到該 repo 根目錄，由工作排程器 `Course_Compass_Backend`（開機啟動、S4U）常駐，監聽 `0.0.0.0:8000`，log 在 `logs\backend.log`
+- venv 需額外安裝 `tzdata`，否則 `ZoneInfo("Asia/Taipei")` 會失敗
+- iOS `Info.plist` 的 `BackendServiceBaseURL` 指向 `http://100.72.243.88:8000`，並以 `NSAllowsArbitraryLoads` 允許 http
+
+更新程式：
+
+```bash
+ssh winhome "cd C:\Users\hezhe\source\repos\course-compass && git pull --ff-only && .venv\Scripts\python.exe -m pip install -q -r backend\requirements.txt tzdata && powershell -NoProfile -Command \"Stop-ScheduledTask Course_Compass_Backend; Get-Process python | ? Path -like '*course-compass*' | Stop-Process -Force; Start-ScheduledTask Course_Compass_Backend\""
+```
+
+iOS 與 Web 只有在同一個 tailnet 內才連得到此後端；Vercel 上的 Web 無法連線。
 
 ### 遷移 legacy 校務密碼
 

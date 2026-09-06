@@ -27,7 +27,7 @@ npm run ios:build
 - 規劃資料讀寫 `public.user_data`
 - 課表與歷史修課紀錄透過根目錄 `backend/` 的同步服務抓取
 - 同步結果由後端寫入快照表，再回傳給 iOS
-- 同步服務網址由 `Info.plist` 的 `BackendServiceBaseURL` 提供，預設為 Railway production backend
+- 同步服務網址由 `Info.plist` 的 `BackendServiceBaseURL` 提供，預設為家用 Windows 主機上的後端（Tailscale `http://100.72.243.88:8000`，手機需連上同一個 tailnet）
 
 ## 程式結構
 
@@ -39,4 +39,4 @@ npm run ios:build
 
 - iOS 不再把校務密碼寫入 `user_data.content.settings.school_password`
 - 校務密碼會在同步成功後交給後端 credential API 加密保存於 `app_private.school_credentials`；官方選課 session 由後端加密保存於 `app_private.school_sessions`，後續同步可只輸入校務帳號，由後端重用 session 或使用已保存帳密重新登入
-- iOS 端透過 `BackendServiceBaseURL` 使用 Railway 上的同步服務，不需要手動輸入 IP
+- iOS 端透過 `BackendServiceBaseURL` 使用 Windows 主機（Tailscale）上的同步服務，不需要手動輸入 IP；Railway 部署已於 2026-09-06 移除
