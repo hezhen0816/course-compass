@@ -33,3 +33,4 @@ __pycache__/
 # Local test/debug artifacts
 tests/fixtures/**/.venv/
 tests/fixtures/**/__pycache__/
+.vercel
