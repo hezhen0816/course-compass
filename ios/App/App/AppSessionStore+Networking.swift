@@ -99,17 +99,21 @@ extension AppSessionStore {
         Bundle.main.object(forInfoDictionaryKey: "SupabaseAnonKey") as? String
     }
 
-    static var backendServiceBaseURL: String {
-        Bundle.main.object(forInfoDictionaryKey: "BackendServiceBaseURL") as? String
-            ?? "https://course-planner-backend-production.up.railway.app"
+    // No fallback host: a missing BackendServiceBaseURL must fail loudly rather
+    // than send school credentials to a domain this project no longer controls.
+    static var backendServiceBaseURL: String? {
+        let value = (Bundle.main.object(forInfoDictionaryKey: "BackendServiceBaseURL") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
     }
 
     static func backendURL(path: String) throws -> URL {
         guard
-            let baseURL = URL(string: backendServiceBaseURL),
+            let rawBaseURL = backendServiceBaseURL,
+            let baseURL = URL(string: rawBaseURL),
             let url = URL(string: path, relativeTo: baseURL)
         else {
-            throw URLError(.badURL)
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "App 未設定同步服務網址（BackendServiceBaseURL）。"])
         }
         return url.absoluteURL
     }

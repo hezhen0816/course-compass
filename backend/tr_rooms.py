@@ -85,6 +85,9 @@ def fetch_query_courses(semester: str, refresh: bool, verify_ssl: bool) -> list[
     if not isinstance(courses, list):
         raise RuntimeError("課程查詢系統回傳格式不是課程清單。")
 
+    # Keep a single semester in memory: `semester` is caller-controlled, so an
+    # unbounded dict would let anyone grow the process by ~2 MB per key.
+    _tr_course_cache.clear()
     _tr_course_cache[semester] = (now(), courses)
     return courses
 
