@@ -96,8 +96,8 @@ export function CourseSearchCenter({
 }: CourseSearchCenterProps) {
   const virtualCourses = data.selectionPlan?.courses || [];
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_300px]">
-      <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="search-layout grid grid-cols-1 gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+      <aside className="search-filters rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 p-4">
           <h2 className="text-lg font-semibold text-slate-900">篩選條件</h2>
           <button onClick={onResetFilters} className="text-sm font-medium text-blue-600 hover:text-blue-700">
@@ -108,11 +108,13 @@ export function CourseSearchCenter({
           <div>
             <label className="block text-xs font-medium text-slate-500">學期</label>
             <select
+              aria-label="查詢學期"
               value={querySemester}
               onChange={(event) => onQuerySemesterChange(event.target.value)}
               className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
-              {courseSemesters.length === 0 && <option value={querySemester}>{querySemester}</option>}
+              {courseSemesters.length === 0 && <option aria-label="查詢學期"
+              value={querySemester}>{querySemester}</option>}
               {courseSemesters.map((semester) => (
                 <option key={semester.semester} value={semester.semester}>
                   {semester.semester}{semester.english_label ? `・${semester.english_label}` : ''}
@@ -126,7 +128,8 @@ export function CourseSearchCenter({
             <label className="block text-xs font-medium text-slate-500">課名 / 課碼</label>
             <div className="mt-1 grid grid-cols-[82px_minmax(0,1fr)] gap-2">
               <select
-                value={manualMode}
+                aria-label="搜尋方式"
+              value={manualMode}
                 onChange={(event) => onManualModeChange(event.target.value as SearchMode)}
                 className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
               >
@@ -134,7 +137,8 @@ export function CourseSearchCenter({
                 <option value="code">課碼</option>
               </select>
               <input
-                value={manualQuery}
+                aria-label="課名或課碼"
+              value={manualQuery}
                 onChange={(event) => onManualQueryChange(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && canRunManualSearch) void onRunManualSearch();
@@ -148,6 +152,7 @@ export function CourseSearchCenter({
           <div>
             <label className="block text-xs font-medium text-slate-500">教師</label>
             <input
+              aria-label="教師"
               value={teacherFilter}
               onChange={(event) => onTeacherFilterChange(event.target.value)}
               placeholder="輸入教師姓名"
@@ -158,6 +163,7 @@ export function CourseSearchCenter({
           <div>
             <label className="block text-xs font-medium text-slate-500">必選修</label>
             <select
+              aria-label="必選修"
               value={requireOptionFilter}
               onChange={(event) => onRequireOptionFilterChange(event.target.value)}
               className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -171,6 +177,7 @@ export function CourseSearchCenter({
           <div>
             <label className="block text-xs font-medium text-slate-500">學分</label>
             <select
+              aria-label="學分"
               value={creditFilter}
               onChange={(event) => onCreditFilterChange(event.target.value)}
               className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -187,6 +194,7 @@ export function CourseSearchCenter({
           <div>
             <label className="block text-xs font-medium text-slate-500">節次</label>
             <input
+              aria-label="節次"
               value={timeFilter}
               onChange={(event) => onTimeFilterChange(event.target.value)}
               placeholder="例如 M3 或 W4"
@@ -197,6 +205,7 @@ export function CourseSearchCenter({
           <div>
             <label className="block text-xs font-medium text-slate-500">名額狀態</label>
             <select
+              aria-label="名額狀態"
               value={capacityFilter}
               onChange={(event) => onCapacityFilterChange(event.target.value as CapacityFilter)}
               className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -251,10 +260,10 @@ export function CourseSearchCenter({
       <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-950">課程查詢中心</h2>
-            <p className="mt-1 text-sm text-slate-500">查詢官方開課資料，加入官方選課清單；若官方拒絕，會以虛擬加入標示在課表上。</p>
+            <h2 className="text-2xl font-semibold text-slate-950">找到下一門好課</h2>
+            <p className="mt-1 text-sm text-slate-500">搜尋開課資訊，比較時段與名額，再安排你的課表。</p>
           </div>
-          <div className="flex items-center gap-3 text-sm text-slate-500">
+          <div className="flex shrink-0 items-center gap-3 text-sm text-slate-500">
             <span>
               {manualSearchSummary
                 ? `共找到 ${manualSearchSummary.resultCount} 筆，顯示 ${filteredManualResults.length} 筆`
@@ -284,7 +293,7 @@ export function CourseSearchCenter({
         )}
 
         <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full border-separate border-spacing-0 text-sm">
+          <table className="min-w-[820px] w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
                 <th className="border-b border-slate-200 px-3 py-3">課碼</th>
@@ -295,7 +304,7 @@ export function CourseSearchCenter({
                 <th className="border-b border-slate-200 px-3 py-3">教室</th>
                 <th className="border-b border-slate-200 px-3 py-3">名額</th>
                 <th className="border-b border-slate-200 px-3 py-3">備註</th>
-                <th className="border-b border-slate-200 px-3 py-3 text-right">操作</th>
+                <th className="sticky right-0 border-b border-slate-200 bg-slate-50 px-3 py-3 text-right">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -321,7 +330,8 @@ export function CourseSearchCenter({
         </div>
       </section>
 
-      <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <details className="virtual-tray rounded-lg border border-slate-200 bg-white lg:col-start-2">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-700">虛擬加入 {virtualCourses.length} 門 · {formatCredits(virtualCourseCredits)} 學分 <span className="ml-2 font-normal text-slate-500">查看追蹤清單</span></summary>
         <div className="flex items-start justify-between border-b border-slate-100 p-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">虛擬加入 ({virtualCourses.length})</h2>
@@ -337,7 +347,7 @@ export function CourseSearchCenter({
               官方拒絕或需要加簽追蹤的課程會出現在這裡。
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {virtualCourses.map((course, index) => (
                 <VirtualCourseCard
                   key={course.id}
@@ -364,7 +374,7 @@ export function CourseSearchCenter({
             虛擬清單已自動儲存
           </button>
         </div>
-      </aside>
+      </details>
     </div>
   );
 }
@@ -410,7 +420,7 @@ function CourseResultRow({
       <td className="max-w-[150px] truncate border-b border-slate-100 px-3 py-3 text-slate-500" title={offering.contents || undefined}>
         {offering.contents || (conflicts.length > 0 ? `與 ${conflicts.map((course) => course.name).join('、')} 衝堂` : '無備註')}
       </td>
-      <td className="border-b border-slate-100 px-3 py-3">
+      <td className="sticky right-0 border-b border-slate-100 bg-white px-3 py-3">
         <div className="flex justify-end gap-2">
           <button
             onClick={onAddSelectionCourse}

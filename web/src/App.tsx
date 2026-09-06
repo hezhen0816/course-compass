@@ -14,7 +14,7 @@ import { useCourseData } from './hooks/useCourseData';
 import { AuthPage } from './components/AuthPage';
 import { AppModals } from './components/AppModals';
 import { Navbar, type AppPage } from './components/Navbar';
-import { PagePlaceholder } from './components/PagePlaceholder';
+import { GraduationPage } from './features/graduation/GraduationPage';
 import { SafetyNotice } from './components/SafetyNotice';
 import { CourseSearchCenter } from './features/course-search/CourseSearchCenter';
 import { useCourseSearch } from './features/course-search/useCourseSearch';
@@ -59,6 +59,9 @@ export default function CoursePlannerWebApp() {
   const [activePage, setActivePage] = useState<AppPage>(() => (
     window.location.hash === '#schedule-preview' ? 'planning' : 'course-search'
   ));
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activePage]);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
     return !localStorage.getItem('hasSeenOnboarding');
   });
@@ -594,7 +597,7 @@ export default function CoursePlannerWebApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="app-shell min-h-screen">
       <Navbar
         userEmail={session?.user?.email || '略過登入'}
         syncStatus={session ? syncStatus : 'idle'}
@@ -606,8 +609,8 @@ export default function CoursePlannerWebApp() {
         onExitDemo={() => setIsDemoMode(false)}
       />
 
-      <main className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8">
-        <SafetyNotice />
+      <main className="app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8">
+        {(activePage === 'course-search' || activePage === 'planning') && <SafetyNotice />}
 
         {activePage === 'course-search' && (
           <CourseSearchCenter
@@ -692,10 +695,7 @@ export default function CoursePlannerWebApp() {
         )}
 
         {activePage === 'graduation' && (
-          <PagePlaceholder
-            title="畢業進度"
-            description="這裡會專注顯示畢業條件完成度、缺口學分與尚未滿足的課程類別；門檻數字改到設定頁維護。"
-          />
+          <GraduationPage data={data} onOpenSettings={() => setActivePage('settings')} />
         )}
 
         {activePage === 'history' && (

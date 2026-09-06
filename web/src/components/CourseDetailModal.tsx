@@ -172,7 +172,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
             <h2 className="text-2xl font-semibold text-slate-900">{course.name}</h2>
           </div>
           <div className="flex space-x-2">
-             <button onClick={onClose} className="p-2 rounded-full bg-white/50 hover:bg-white text-slate-700 transition-colors">
+             <button aria-label="關閉課程詳情" onClick={onClose} className="p-2 rounded-full bg-white/50 hover:bg-white text-slate-700 transition-colors">
                 <X className="h-6 w-6" />
              </button>
           </div>
@@ -254,6 +254,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
             {(() => {
                 const { currentScore, totalWeight } = calculateTotalScore(detailData.gradingPolicy);
                 const gradeInfo = getGradeFromScore(currentScore);
+                const hasScores = detailData.gradingPolicy.some(item => item.score !== undefined && item.weight > 0);
                 
                 return (
                   <>
@@ -264,16 +265,17 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                                 成績試算 & 預測
                             </h3>
                             <p className="text-sm text-slate-500 mt-1">
-                                總權重: {totalWeight}% {totalWeight !== 100 && <span className="text-red-500">(未達100%)</span>}
+                                {course.grade && <span className="mr-3 font-medium text-slate-700">已登錄成績：{course.grade}</span>}
+                                總權重: {totalWeight}% {totalWeight > 0 && totalWeight !== 100 && <span className="text-red-500">(未達100%)</span>}
                             </p>
                         </div>
                         <div className="text-right">
                             <div className="text-3xl font-bold text-slate-800">
-                                {currentScore} <span className="text-lg text-slate-400">/ 100</span>
+                                {hasScores ? currentScore : '—'} <span className="text-lg text-slate-400">/ 100</span>
                             </div>
-                            <div className={`text-sm font-bold flex items-center justify-end mt-1 ${gradeInfo.color}`}>
+                            <div className={`text-sm font-bold flex items-center justify-end mt-1 ${hasScores ? gradeInfo.color : 'text-slate-500'}`}>
                                 <Award className="h-4 w-4 mr-1"/>
-                                目前等級: {gradeInfo.grade} ({gradeInfo.gpa})
+                                {hasScores ? `試算等級：${gradeInfo.grade} (${gradeInfo.gpa})` : '尚未設定評分項目與分數'}
                             </div>
                         </div>
                     </div>

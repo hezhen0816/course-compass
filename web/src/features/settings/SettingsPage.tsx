@@ -37,6 +37,7 @@ export function SettingsPage({
   onOpenOfficialSelectionSync,
   onClearSavedSchoolCredentials,
 }: SettingsPageProps) {
+  const [section, setSection] = useState('thresholds');
   const [settingsForm, setSettingsForm] = useState(initialSettings);
   const isDirty = JSON.stringify(settingsForm) !== JSON.stringify(initialSettings);
 
@@ -49,13 +50,17 @@ export function SettingsPage({
   };
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="settings-layout mx-auto max-w-6xl">
+      <header className="page-heading"><p className="eyebrow">個人設定</p><h1>讓規劃符合你的目標</h1><p>管理畢業門檻、校務帳號與資料同步。</p></header>
+      <div className="settings-tabs" role="group" aria-label="設定分類">
+        {[['thresholds', '畢業門檻'], ['sync', '資料同步'], ['account', '校務帳號']].map(([value, label]) => <button key={value} type="button" aria-pressed={section === value} onClick={() => setSection(value)}>{label}</button>)}
+      </div>
+      <section hidden={section !== 'sync'} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">設定</p>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-950">資料同步與畢業門檻</h1>
-            <p className="mt-1 text-sm text-slate-500">校務資料同步、畢業門檻數字與帳號層級設定集中放在這裡，不混進選課流程。</p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950">校務資料同步</h2>
+            <p className="mt-1 text-sm text-slate-500">查看各來源的更新時間，依需要重新同步。</p>
           </div>
           <button
             onClick={onOpenSchoolSync}
@@ -87,7 +92,7 @@ export function SettingsPage({
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section hidden={section !== 'account'} className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -125,7 +130,7 @@ export function SettingsPage({
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section hidden={section !== 'thresholds'} className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -254,7 +259,7 @@ function ThresholdGroup({ title, hint, children }: { title: string; hint: string
         <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>
       </legend>
       {/* Cap row width so the value sits near its label instead of drifting to the far edge on wide screens. */}
-      <div className="clear-both max-w-md divide-y divide-slate-100">{children}</div>
+      <div className="clear-both w-full divide-y divide-slate-100">{children}</div>
     </fieldset>
   );
 }

@@ -53,12 +53,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <nav
-      className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm"
+      className="app-nav sticky top-0 z-10 border-b border-slate-200 bg-white"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-3 py-3 xl:h-16 xl:flex-row xl:items-center xl:justify-between xl:py-0">
-          <div className="flex min-w-0 items-center gap-3 xl:w-[260px]">
+          <div className="flex min-w-0 items-center gap-3 xl:w-[220px]">
             <GraduationCap className="h-8 w-8 flex-shrink-0 text-blue-600" />
             <div className="min-w-0">
               <span className="block truncate text-xl font-bold text-slate-900">修課羅盤</span>
@@ -74,8 +74,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               {navItems.map((item) => (
                 <button
                   key={item.page}
+                  aria-current={activePage === item.page ? "page" : undefined}
                   onClick={() => onPageChange(item.page)}
-                  className={`border-b-2 px-1 py-5 ${
+                  className={`nav-item border-b-2 px-3 py-2 ${
                     activePage === item.page ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -93,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={() => alert('平台分成課程查詢、選課工作台、畢業進度與修課軌跡。選課工作台只輔助目前選課學期，不會自動搶課。')}
                 className="flex items-center justify-center rounded-lg p-2 text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                title="匯入說明"
+                title="使用說明"
               >
                 <CircleHelp className="h-5 w-5" />
               </button>
@@ -108,7 +109,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={handleLogout}
-                className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-red-600 transition-colors hover:bg-red-50"
+                className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-slate-500 transition-colors hover:bg-slate-100"
                 title={isDemoMode ? '離開略過登入模式' : '登出'}
               >
                 <LogOut className="h-4 w-4" />

@@ -30,28 +30,6 @@ const PERIOD_TIME_LABELS: Record<string, { start: string; end: string }> = {
   C: { start: '20:15', end: '21:05' },
   D: { start: '21:10', end: '22:00' },
 };
-function ScheduleLegend() {
-  const items = [
-    { label: '本系必修', className: 'border-rose-200 bg-rose-50' },
-    { label: '本系選修', className: 'border-sky-200 bg-sky-50' },
-    { label: '通識', className: 'border-purple-200 bg-purple-50' },
-    { label: '雙主修', className: 'border-emerald-200 bg-emerald-50' },
-    { label: '虛擬加入', className: 'border-amber-300 bg-amber-50' },
-    { label: '衝堂', className: 'border-red-300 bg-red-100' },
-  ];
-
-  return (
-    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-      {items.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1">
-          <span className={`h-2.5 w-2.5 rounded border ${item.className}`} />
-          {item.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function planningModeLabel(mode: PlanningMode): string {
   if (mode === 'lottery') return '初選志願';
   if (mode === 'addDrop') return '加退選';
@@ -139,12 +117,12 @@ export function PlanningWorkspace({
   ];
 
   return (
-    <section id="schedule-preview" className="mt-6 rounded-lg border border-slate-200 bg-white shadow-sm">
+    <section id="schedule-preview" className="planning-workspace rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 p-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">選課工作台</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">官方選課清單、志願排序與功課表</h2>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950">安排你的這一週</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-500">
               {planningModeDescription(planningMode)}
             </p>
@@ -171,24 +149,15 @@ export function PlanningWorkspace({
             </div>
           </div>
         </div>
-        <ScheduleLegend />
         {plannerMessage && (
           <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
             {plannerMessage}
           </div>
         )}
-        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-          官方功課表為準；加入、取消或儲存志願序時才會送出一次官方請求。被官方拒絕或需要加簽追蹤的課程會以「虛擬加入」標示在課表上。
-        </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-4">
-          <OfficialSelectionMetric label="官方已登記" value={`${officialRegisteredCount} 門`} />
-          <OfficialSelectionMetric label="官方待加入" value={`${officialAvailableCount} 門`} />
-          <OfficialSelectionMetric label="虛擬加入" value={`${virtualCourses.length} 門`} />
-          <OfficialSelectionMetric label="同步時間" value={syncedAtLabel} />
-        </div>
+        <p className="mt-3 text-xs text-slate-500">課表中的「虛擬」課程尚未完成官方選課。{officialSelection && !officialSelection.session_valid && <span className="ml-2 font-medium text-amber-700">目前顯示舊快取，官方登入已過期。</span>}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-0 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
+      <div className="grid grid-cols-1 gap-0 xl:grid-cols-[270px_minmax(0,1fr)_230px]">
         <aside className="border-b border-slate-200 p-4 xl:border-b-0 xl:border-r">
           <div className="flex items-start justify-between">
             <div>
@@ -303,7 +272,7 @@ export function PlanningWorkspace({
 
         <aside className="p-4">
           <h3 className="text-base font-semibold text-slate-900">規劃檢查</h3>
-          <p className="mt-1 text-xs text-slate-500">依目前選課階段解讀衝堂、互斥與學分限制。</p>
+          <p className="mt-1 text-xs text-slate-500">重疊檢查僅比較虛擬課程，請另核對官方課表。</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <MetricBox label="官方已登記" value={String(officialRegisteredCount)} tone="emerald" />
@@ -319,7 +288,7 @@ export function PlanningWorkspace({
             <div className="mt-3 space-y-2">
               {slotGroups.length === 0 && nameGroups.length === 0 ? (
                 <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  目前沒有偵測到同時段或同課名重疊。
+                  虛擬課程彼此沒有同時段或同名重疊。
                 </p>
               ) : (
                 <>
@@ -371,7 +340,7 @@ export function PlanningWorkspace({
           </div>
 
           <div className="mt-4 rounded-lg border border-slate-200 p-3">
-            <h4 className="text-sm font-semibold text-slate-800">畢業門檻影響</h4>
+            <h4 className="text-sm font-semibold text-slate-800">目前修課與規劃統計</h4>
             <div className="mt-3 space-y-3 text-sm">
               <ProgressSummary label="總學分" value={stats.total} target={data.targets.total} />
               <ProgressSummary label="本系必修" value={stats.homeCompulsory} target={data.targets.home_compulsory} />
@@ -381,15 +350,6 @@ export function PlanningWorkspace({
         </aside>
       </div>
     </section>
-  );
-}
-
-function OfficialSelectionMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-    </div>
   );
 }
 
@@ -567,8 +527,8 @@ function OfficialAvailableList({
 
 function formatSyncTime(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '剛剛';
-  return date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+  if (Number.isNaN(date.getTime())) return '時間不明';
+  return date.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function PlanningScheduleGrid({
