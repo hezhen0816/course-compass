@@ -399,18 +399,6 @@ export default function CoursePlannerWebApp() {
     openSchoolSyncModal();
   };
 
-  const requestOfficialSelectionSync = () => {
-    if (schoolUsername.trim() && (schoolPassword.trim() || hasSavedSchoolCredentials)) {
-      void syncOfficialSelectionData();
-      return;
-    }
-    openOfficialSelectionSync(
-      hasSavedSchoolCredentials
-        ? '已保存校務帳密，但目前尚未載入密碼，請稍候再試或重新登入 App。'
-        : '尚未保存校務密碼，請輸入校務帳密後同步一次。',
-    );
-  };
-
   const submitOfficialSelectionCourse = async (
     action: 'waitlist' | 'join' | 'remove',
     courseNo: string,
@@ -690,10 +678,12 @@ export default function CoursePlannerWebApp() {
             hasSavedSchoolCredentials={hasSavedSchoolCredentials}
             syncStatus={schoolSyncStatus}
             syncMessage={schoolSyncMessage}
+            schoolSync={data.schoolSync}
+            officialSelection={officialSelection}
             officialSelectionStatus={officialSelectionStatus}
             officialSelectionMessage={officialSelectionMessage}
             onOpenSchoolSync={openSchoolDataSync}
-            onOpenOfficialSelectionSync={requestOfficialSelectionSync}
+            onOpenOfficialSelectionSync={() => openOfficialSelectionSync()}
             onClearSavedSchoolCredentials={() => void clearSavedSchoolCredentials()}
             onSaveTargets={(targets) => {
               setData((prev) => ({ ...prev, targets }));
@@ -730,6 +720,7 @@ export default function CoursePlannerWebApp() {
         importPreview={importPreview}
         isSchoolSyncOpen={isSchoolSyncOpen}
         schoolSyncMode={schoolSyncModalMode}
+        onSchoolSyncModeChange={setSchoolSyncModalMode}
         schoolUsername={schoolUsername}
         schoolPassword={schoolPassword}
         rememberSchoolCredentials={rememberSchoolCredentials}

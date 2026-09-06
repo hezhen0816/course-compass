@@ -281,7 +281,12 @@ export function PlanningWorkspace({
               <div>
                 <h3 className="text-base font-semibold text-slate-900">官方功課表</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  官方同步 · {officialSelection?.schedule_rows.length || 0} 節次列 · 虛擬 {virtualCourses.length} 門
+                  {data.schoolSync?.scheduleSyncedAt
+                    ? `課表同步於 ${new Date(data.schoolSync.scheduleSyncedAt).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}`
+                    : officialSelection
+                      ? `官方初選快取 ${formatSyncTime(officialSelection.synced_at)}`
+                      : '尚未同步課表'}
+                  {' · '}虛擬 {virtualCourses.length} 門
                 </p>
               </div>
               <p className="text-xs text-slate-400 sm:hidden">課表可左右滑動查看更多星期欄位。</p>

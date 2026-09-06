@@ -216,6 +216,13 @@ export function useSchoolSync({
             historyRecords,
             requirementSets: retakeRequirements.length > 0 ? [...otherSets, retakeSet] : otherSets,
             pendingRequirements: [...otherRequirements, ...retakeRequirements],
+            schoolSync: {
+              ...prev.schoolSync,
+              scheduleSyncedAt: schedulePayload.synced_at,
+              scheduleCourseCount: courses.length,
+              historyImportedAt: historyPayload.imported_at,
+              historyRecordCount: historyRecords.length,
+            },
             // The workbench grid renders officialSelectionCache.schedule_rows, which
             // otherwise only changes on an official-selection sync and goes stale
             // (e.g. still showing a course dropped since June). Refresh just the

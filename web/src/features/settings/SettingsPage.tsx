@@ -1,15 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { KeyRound, RefreshCw, Settings } from 'lucide-react';
-import type { AppData } from '../../types';
+import type { AppData, OfficialSelectionSyncResponse, SchoolSyncStatus } from '../../types';
+
+type SyncActivity = 'idle' | 'loading' | 'error' | 'success';
 
 type SettingsPageProps = {
   initialSettings: AppData['targets'];
   schoolUsername: string;
   selectionTargetLabel: string;
   hasSavedSchoolCredentials: boolean;
-  syncStatus: 'idle' | 'loading' | 'error' | 'success';
+  syncStatus: SyncActivity;
   syncMessage: string;
-  officialSelectionStatus: 'idle' | 'loading' | 'error' | 'success';
+  schoolSync?: SchoolSyncStatus;
+  officialSelection: OfficialSelectionSyncResponse | null;
+  officialSelectionStatus: SyncActivity;
   officialSelectionMessage: string;
   onSaveTargets: (targets: AppData['targets']) => void;
   onOpenSchoolSync: () => void;
@@ -24,6 +28,8 @@ export function SettingsPage({
   hasSavedSchoolCredentials,
   syncStatus,
   syncMessage,
+  schoolSync,
+  officialSelection,
   officialSelectionStatus,
   officialSelectionMessage,
   onSaveTargets,
@@ -51,38 +57,34 @@ export function SettingsPage({
             <h1 className="mt-1 text-2xl font-semibold text-slate-950">資料同步與畢業門檻</h1>
             <p className="mt-1 text-sm text-slate-500">校務資料同步、畢業門檻數字與帳號層級設定集中放在這裡，不混進選課流程。</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              onClick={onOpenSchoolSync}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              <RefreshCw className="h-4 w-4" />
-              同步校務資料
-            </button>
-            <button
-              onClick={onOpenOfficialSelectionSync}
-              disabled={officialSelectionStatus === 'loading'}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${officialSelectionStatus === 'loading' ? 'animate-spin' : ''}`} />
-              同步官方初選
-            </button>
-          </div>
+          <button
+            onClick={onOpenSchoolSync}
+            disabled={syncStatus === 'loading' || officialSelectionStatus === 'loading'}
+            className="inline-flex items-center justify-center gap-2 self-start rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncStatus === 'loading' || officialSelectionStatus === 'loading' ? 'animate-spin' : ''}`} />
+            同步校務資料
+          </button>
         </div>
-        {syncMessage && (
-          <p className={`mt-4 rounded-md px-3 py-2 text-sm ${
-            syncStatus === 'error' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
-          }`}>
-            {syncMessage}
-          </p>
-        )}
-        {officialSelectionMessage && (
-          <p className={`mt-3 rounded-md px-3 py-2 text-sm ${
-            officialSelectionStatus === 'error' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
-          }`}>
-            官方初選：{officialSelectionMessage}
-          </p>
-        )}
+
+        {/* Per-source status rows with timestamps replace the free-text banners,
+            so "did this actually sync, and when?" is answered at a glance. */}
+        <div className="mt-4 divide-y divide-slate-100 rounded-md border border-slate-200">
+          <SyncStatusRow
+            title="課表與成績"
+            activity={syncStatus}
+            message={syncMessage}
+            summary={scheduleSummary(schoolSync)}
+            onSync={onOpenSchoolSync}
+          />
+          <SyncStatusRow
+            title="官方初選"
+            activity={officialSelectionStatus}
+            message={officialSelectionMessage}
+            summary={officialSelectionSummary(officialSelection)}
+            onSync={onOpenOfficialSelectionSync}
+          />
+        </div>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -96,13 +98,6 @@ export function SettingsPage({
               校務帳號用來同步官方選課清單與歷年成績，並可由學號推定目前選課對應的大幾學期。
             </p>
           </div>
-          <button
-            onClick={onOpenSchoolSync}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
-          >
-            <RefreshCw className="h-4 w-4" />
-            設定 / 同步校務帳號
-          </button>
         </div>
         <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2">
           <InfoRow label="目前學號" value={schoolUsername.trim() || '尚未設定'} />
@@ -181,6 +176,76 @@ export function SettingsPage({
   );
 }
 
+type SyncSummary = { state: 'never' | 'fresh' | 'stale'; label: string; detail?: string };
+
+function formatSyncStamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function scheduleSummary(schoolSync?: SchoolSyncStatus): SyncSummary {
+  if (!schoolSync?.scheduleSyncedAt) return { state: 'never', label: '尚未同步' };
+  const parts = [`${schoolSync.scheduleCourseCount ?? 0} 門課`];
+  if (schoolSync.historyImportedAt) parts.push(`歷年紀錄 ${schoolSync.historyRecordCount ?? 0} 筆`);
+  return { state: 'fresh', label: `上次同步 ${formatSyncStamp(schoolSync.scheduleSyncedAt)}`, detail: parts.join(' · ') };
+}
+
+function officialSelectionSummary(selection: OfficialSelectionSyncResponse | null): SyncSummary {
+  if (!selection) return { state: 'never', label: '尚未同步' };
+  const detail = `已登記 ${selection.registered_count} 門 · 待加入 ${selection.available_count} 門`;
+  return selection.session_valid
+    ? { state: 'fresh', label: `上次同步 ${formatSyncStamp(selection.synced_at)} · session 有效`, detail }
+    : { state: 'stale', label: `快取 ${formatSyncStamp(selection.synced_at)} · session 已過期`, detail };
+}
+
+function SyncStatusRow({
+  title,
+  activity,
+  message,
+  summary,
+  onSync,
+}: {
+  title: string;
+  activity: SyncActivity;
+  message: string;
+  summary: SyncSummary;
+  onSync: () => void;
+}) {
+  const dotClass = activity === 'loading'
+    ? 'bg-blue-500 animate-pulse'
+    : activity === 'error'
+      ? 'bg-red-500'
+      : summary.state === 'fresh'
+        ? 'bg-emerald-500'
+        : summary.state === 'stale'
+          ? 'bg-amber-500'
+          : 'bg-slate-300';
+  return (
+    <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
+          <span className="text-sm font-semibold text-slate-900">{title}</span>
+          <span className={`text-xs ${summary.state === 'stale' ? 'text-amber-700' : 'text-slate-500'}`}>{summary.label}</span>
+        </div>
+        {summary.detail && <p className="mt-0.5 pl-4 text-xs text-slate-500">{summary.detail}</p>}
+        {message && (
+          <p className={`mt-1 pl-4 text-xs ${activity === 'error' ? 'text-red-700' : 'text-slate-600'}`}>{message}</p>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onSync}
+        disabled={activity === 'loading'}
+        className="shrink-0 self-start text-sm font-medium text-blue-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
+      >
+        {activity === 'loading' ? '同步中…' : '同步'}
+      </button>
+    </div>
+  );
+}
+
 function ThresholdGroup({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
     <fieldset className="min-w-0 px-5 py-4">
@@ -188,7 +253,8 @@ function ThresholdGroup({ title, hint, children }: { title: string; hint: string
         <span className="block text-sm font-semibold text-slate-800">{title}</span>
         <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>
       </legend>
-      <div className="clear-both divide-y divide-slate-100">{children}</div>
+      {/* Cap row width so the value sits near its label instead of drifting to the far edge on wide screens. */}
+      <div className="clear-both max-w-md divide-y divide-slate-100">{children}</div>
     </fieldset>
   );
 }
