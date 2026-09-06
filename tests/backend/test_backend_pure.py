@@ -454,7 +454,7 @@ def test_official_selection_action_uses_saved_credentials_for_session(monkeypatc
     assert response.status_code == 200
     assert response.json()["registered_courses"][0]["course_no"] == "CS2002302"
     assert calls == [
-        ("ensure_session", "B11430207", "saved-password", False),
+        ("ensure_session", "B11430207", "saved-password", True),
         ("add_course_to_waitlist", "CS2002302"),
     ]
 
@@ -596,7 +596,7 @@ def test_schedule_sync_uses_saved_credentials_without_request_password(monkeypat
 
     assert response.status_code == 200
     assert response.json()["school_account"] == "B11430207"
-    assert calls == [("B11430207", "saved-password", False)]
+    assert calls == [("B11430207", "saved-password", True)]
 
 
 def test_schedule_sync_requires_password_or_saved_credentials(monkeypatch) -> None:
@@ -840,7 +840,7 @@ def test_history_import_uses_saved_credentials_without_request_password(monkeypa
 
     assert response.status_code == 200
     assert response.json()["student_no"] == "B11430207"
-    assert calls == [("B11430207", "saved-password", False)]
+    assert calls == [("B11430207", "saved-password", True)]
 
 
 def test_moodle_sync_uses_saved_credentials_without_request_password(monkeypatch) -> None:
@@ -882,7 +882,7 @@ def test_moodle_sync_uses_saved_credentials_without_request_password(monkeypatch
 
     assert response.status_code == 200
     assert response.json()["timeline_filter"] == "未來"
-    assert calls == [("B11430207", "saved-password", False)]
+    assert calls == [("B11430207", "saved-password", True)]
 
 
 def test_school_credentials_status_reads_private_rpc_without_password(monkeypatch) -> None:

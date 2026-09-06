@@ -15,7 +15,6 @@ class SyncRequest(BaseModel):
     password: str | None = None
     profile_key: str | None = None
     persist_to_supabase: bool = True
-    verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
 class HistoryImportRequest(BaseModel):
@@ -23,7 +22,6 @@ class HistoryImportRequest(BaseModel):
     password: str | None = None
     profile_key: str | None = None
     persist_to_supabase: bool = True
-    verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
 class MoodleAssignmentsRequest(BaseModel):
@@ -31,20 +29,17 @@ class MoodleAssignmentsRequest(BaseModel):
     password: str | None = None
     profile_key: str | None = None
     persist_to_supabase: bool = True
-    verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
 class OfficialSelectionSyncRequest(BaseModel):
     username: str = Field(min_length=1)
     password: str | None = None
     profile_key: str | None = None
-    verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
 class OfficialSelectionKeepAliveRequest(BaseModel):
     username: str = Field(min_length=1)
     profile_key: str | None = None
-    verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
 class OfficialSelectionCourseActionRequest(BaseModel):
@@ -53,7 +48,6 @@ class OfficialSelectionCourseActionRequest(BaseModel):
     confirmed: bool = False
     password: str | None = None
     profile_key: str | None = None
-    verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
 class OfficialSelectionPriorityUpdateRequest(BaseModel):
@@ -62,7 +56,6 @@ class OfficialSelectionPriorityUpdateRequest(BaseModel):
     confirmed: bool = False
     password: str | None = None
     profile_key: str | None = None
-    verify_ssl: bool = DEFAULT_VERIFY_SSL
 
 
 class SchoolCredentialsSaveRequest(BaseModel):

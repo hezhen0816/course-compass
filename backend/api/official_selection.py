@@ -7,6 +7,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 
 try:
+    from ..config import DEFAULT_VERIFY_SSL
     from ..models import (
         OfficialSelectionCourseActionRequest,
         OfficialSelectionKeepAliveRequest,
@@ -15,6 +16,7 @@ try:
         OfficialSelectionSyncResponse,
     )
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
+    from config import DEFAULT_VERIFY_SSL
     from models import (
         OfficialSelectionCourseActionRequest,
         OfficialSelectionKeepAliveRequest,
@@ -85,13 +87,13 @@ def create_official_selection_router(
         context, username, client_key = _authorize(request, authorization)
         try:
             client = get_client(client_key)
-            if reuse_official_session(client, username, context, request.verify_ssl):
-                payload = client.fetch_current_a02_workspace(request.verify_ssl)
+            if reuse_official_session(client, username, context, DEFAULT_VERIFY_SSL):
+                payload = client.fetch_current_a02_workspace(DEFAULT_VERIFY_SSL)
             else:
                 password = resolve_official_password(username, request.password, authorization)
                 if not password:
                     raise HTTPException(status_code=400, detail="請輸入校務密碼，或先保存校務帳密後再同步官方初選。")
-                payload = client.fetch_a02_workspace(username, password, request.verify_ssl)
+                payload = client.fetch_a02_workspace(username, password, DEFAULT_VERIFY_SSL)
                 persist_official_session(context, username, client)
             return OfficialSelectionSyncResponse.model_validate(
                 {
@@ -113,11 +115,11 @@ def create_official_selection_router(
         context, username, client_key = _authorize(request, authorization)
         try:
             client = get_client(client_key)
-            session_valid = reuse_official_session(client, username, context, request.verify_ssl)
+            session_valid = reuse_official_session(client, username, context, DEFAULT_VERIFY_SSL)
             if not session_valid:
                 saved_credentials = read_saved_credentials(username, authorization)
                 if saved_credentials:
-                    client.ensure_session(username, saved_credentials[1], request.verify_ssl)
+                    client.ensure_session(username, saved_credentials[1], DEFAULT_VERIFY_SSL)
                     session_valid = True
                     persist_official_session(context, username, client)
                 else:
@@ -141,8 +143,8 @@ def create_official_selection_router(
         require_confirmation(request.confirmed)
         context, username, client_key = _authorize(request, authorization)
         try:
-            client = ensure_official_session(client_key, username, request.password, authorization, request.verify_ssl)
-            payload = run_action(client, request.course_no, request.verify_ssl)
+            client = ensure_official_session(client_key, username, request.password, authorization, DEFAULT_VERIFY_SSL)
+            payload = run_action(client, request.course_no, DEFAULT_VERIFY_SSL)
             persist_official_session(context, username, client)
             return OfficialSelectionSyncResponse.model_validate(
                 {
@@ -197,8 +199,8 @@ def create_official_selection_router(
         require_confirmation(request.confirmed)
         context, username, client_key = _authorize(request, authorization)
         try:
-            client = ensure_official_session(client_key, username, request.password, authorization, request.verify_ssl)
-            payload = client.reorder_registered_courses(request.ordered_course_nos, request.verify_ssl)
+            client = ensure_official_session(client_key, username, request.password, authorization, DEFAULT_VERIFY_SSL)
+            payload = client.reorder_registered_courses(request.ordered_course_nos, DEFAULT_VERIFY_SSL)
             persist_official_session(context, username, client)
             return OfficialSelectionSyncResponse.model_validate(
                 {

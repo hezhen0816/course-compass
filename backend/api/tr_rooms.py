@@ -45,12 +45,11 @@ def create_tr_rooms_router() -> APIRouter:
         node: str | None = None,
         target: str = "current",
         refresh: bool = False,
-        verify_ssl: bool = DEFAULT_VERIFY_SSL,
     ) -> TRRoomStatusResponse:
         try:
             query_time = now().replace(microsecond=0)
-            selected_semester = semester or fetch_current_query_semester(verify_ssl=verify_ssl)
-            courses = fetch_query_courses(selected_semester, refresh=refresh, verify_ssl=verify_ssl)
+            selected_semester = semester or fetch_current_query_semester(verify_ssl=DEFAULT_VERIFY_SSL)
+            courses = fetch_query_courses(selected_semester, refresh=refresh, verify_ssl=DEFAULT_VERIFY_SSL)
             meetings = build_tr_meetings(courses)
             normalized_target = target.lower()
             if normalized_target not in {"current", "next"}:

@@ -7,6 +7,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 
 try:
+    from ..config import DEFAULT_VERIFY_SSL
     from ..models import (
         HistoryImportRequest,
         HistoryImportResponse,
@@ -16,6 +17,7 @@ try:
         SyncResponse,
     )
 except ImportError:  # pragma: no cover - supports PYTHONPATH=backend imports.
+    from config import DEFAULT_VERIFY_SSL
     from models import (
         HistoryImportRequest,
         HistoryImportResponse,
@@ -89,7 +91,7 @@ def create_sync_router(
         profile_key = _authorize_sync(request, authorization)
         try:
             password = resolve_password(request.username, request.password, authorization)
-            payload = fetch_schedule_payload(request.username, password, request.verify_ssl)
+            payload = fetch_schedule_payload(request.username, password, DEFAULT_VERIFY_SSL)
             response_payload = {
                 **payload,
                 "profile_key": profile_key,
@@ -138,7 +140,7 @@ def create_sync_router(
         profile_key = _authorize_sync(request, authorization)
         try:
             password = resolve_password(request.username, request.password, authorization)
-            payload = fetch_history_payload(request.username, password, request.verify_ssl)
+            payload = fetch_history_payload(request.username, password, DEFAULT_VERIFY_SSL)
             response_payload = {
                 **payload,
                 "profile_key": profile_key,
@@ -183,7 +185,7 @@ def create_sync_router(
         profile_key = _authorize_sync(request, authorization)
         try:
             password = resolve_password(request.username, request.password, authorization)
-            payload = fetch_moodle_payload(request.username, password, request.verify_ssl)
+            payload = fetch_moodle_payload(request.username, password, DEFAULT_VERIFY_SSL)
             response_payload = {
                 **payload,
                 "profile_key": profile_key,

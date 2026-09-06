@@ -106,7 +106,7 @@ VITE_SUPABASE_ANON_KEY=...
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 SCHOOL_CREDENTIALS_ENCRYPTION_SECRET=... # 建議使用 openssl rand -hex 32 產生
-NTUST_VERIFY_SSL=false
+NTUST_VERIFY_SSL=true
 ```
 
 說明：
@@ -126,12 +126,21 @@ NTUST_VERIFY_SSL=false
 - `GET /api/school-credentials`：讀取校務帳密保存狀態，不回傳密碼
 - `PUT /api/school-credentials`：由後端加密保存校務帳密
 - `DELETE /api/school-credentials`：清除已保存校務帳密
-- `POST /api/schedule/sync`：同步校務課表並保存快照；可用 request password，或帶 Authorization 使用已保存帳密
+- `POST /api/schedule/sync`：同步校務課表並保存快照；可用 request password，或使用已保存帳密
 - `GET /api/schedule/{profile_key}`：讀取最新課表快照
-- `POST /api/history/import`：匯入歷史修課紀錄並保存快照；可用 request password，或帶 Authorization 使用已保存帳密
+- `POST /api/history/import`：匯入歷史修課紀錄並保存快照；可用 request password，或使用已保存帳密
 - `GET /api/tr-rooms/status`：查詢目前或下一節 TR 教室使用狀態
-- `POST /api/moodle/assignments/sync`：同步 Moodle 待繳事項快照；可用 request password，或帶 Authorization 使用已保存帳密
+- `POST /api/moodle/assignments/sync`：同步 Moodle 待繳事項快照；可用 request password，或使用已保存帳密
 - `POST /api/official-selection/a02/*`：使用者明確確認後送出官方初選操作；mutating request 需帶 `confirmed: true`，後端會重用已保存官方 session 或用已保存帳密重新登入，但不做自動搶課、輪詢或排程送出
+
+授權規則（2026-09-06 起）：
+
+- 除 `/health`、`/api/courses/*`、`/api/tr-rooms/*`、`/api/planner/*` 外，所有校務資料 API 都必須帶 Supabase access token（`Authorization: Bearer`），否則回 401
+- 已綁定校務帳號（`app_private.school_credentials`）的使用者只能操作該帳號；`profile_key` 必須等於校務帳號，否則回 403 / 400
+- 快照 `GET` 需登入且 `profile_key` 與綁定帳號相同；尚未綁定的使用者需先輸入校務帳密同步一次
+- 官方選課 session 快取以「雲端使用者 + 校務帳號」為 key，不再由 caller 指定
+- 對校務系統的 TLS 驗證由後端 `NTUST_VERIFY_SSL` 決定（預設開啟），request body 內的 `verify_ssl` 會被忽略
+- CORS 只允許 `course-compass-six.vercel.app`、本專案的 Vercel preview 網域與本機 Vite dev server
 
 ## 驗證
 

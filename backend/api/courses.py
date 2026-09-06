@@ -22,13 +22,13 @@ def create_courses_router(fetch_courses_filtered: CourseSearchFetcher) -> APIRou
     router = APIRouter(prefix="/api/courses", tags=["courses"])
 
     @router.get("/semesters", response_model=list[CourseSemesterInfo])
-    def get_course_semesters(verify_ssl: bool = DEFAULT_VERIFY_SSL) -> list[CourseSemesterInfo]:
+    def get_course_semesters() -> list[CourseSemesterInfo]:
         try:
             response = requests.get(
                 SEMESTERS_INFO_URL,
                 headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"},
                 timeout=30,
-                verify=verify_ssl,
+                verify=DEFAULT_VERIFY_SSL,
             )
             response.raise_for_status()
             semesters = response.json()
@@ -54,7 +54,6 @@ def create_courses_router(fetch_courses_filtered: CourseSearchFetcher) -> APIRou
         q: str = Query(min_length=1),
         mode: str = "name",
         refresh: bool = False,
-        verify_ssl: bool = DEFAULT_VERIFY_SSL,
     ) -> list[CourseSearchResult]:
         try:
             if mode not in {"name", "code"}:
@@ -63,7 +62,7 @@ def create_courses_router(fetch_courses_filtered: CourseSearchFetcher) -> APIRou
                 semester,
                 course_no=q.strip() if mode == "code" else "",
                 course_name=q.strip() if mode == "name" else "",
-                verify_ssl=verify_ssl,
+                verify_ssl=DEFAULT_VERIFY_SSL,
             )
             normalized_query = _normalize_course_lookup_text(q)
             filtered = []
