@@ -99,7 +99,9 @@ extension AppSessionStore {
         do {
             let encodedProfileKey = profileKey.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? profileKey
             let endpoint = try Self.backendURL(path: "/api/schedule/\(encodedProfileKey)")
-            let (data, response) = try await URLSession.shared.data(from: endpoint)
+            var request = URLRequest(url: endpoint)
+            try await applyBackendAuthorization(to: &request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             try validateHTTPResponse(response, data: data)
 
             let decoder = JSONDecoder()

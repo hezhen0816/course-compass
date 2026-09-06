@@ -133,6 +133,26 @@ def _optional_authorization_context(authorization: str | None) -> tuple[str, str
     )
 
 
+def _required_user_context(authorization: str | None) -> tuple[str, str]:
+    return session_context.required_user_context(authorization, lambda value: _authorization_context(value))
+
+
+def _assert_school_account_ownership(context: tuple[str, str], username: str) -> None:
+    session_context.assert_school_account_ownership(
+        context,
+        username,
+        lambda user_id, access_token: get_school_credentials_status(user_id, access_token),
+    )
+
+
+def _assert_owned_profile_key(context: tuple[str, str], profile_key: str) -> None:
+    session_context.assert_owned_profile_key(
+        context,
+        profile_key,
+        lambda user_id, access_token: get_school_credentials_status(user_id, access_token),
+    )
+
+
 def _saved_school_credentials(
     username: str,
     authorization: str | None,
@@ -280,6 +300,9 @@ app.include_router(
 app.include_router(create_tr_rooms_router())
 app.include_router(
     create_sync_router(
+        lambda authorization: _required_user_context(authorization),
+        lambda context, username: _assert_school_account_ownership(context, username),
+        lambda context, profile_key: _assert_owned_profile_key(context, profile_key),
         lambda username, password, authorization: _required_school_password(username, password, authorization),
         lambda username, password, verify_ssl: fetch_schedule(username, password, verify_ssl),
         lambda username, password, verify_ssl: fetch_history_records(username, password, verify_ssl),
@@ -301,7 +324,9 @@ app.include_router(
 app.include_router(
     create_official_selection_router(
         lambda profile_key: get_official_selection_client(profile_key),
-        lambda authorization: _optional_authorization_context(authorization),
+        lambda authorization: _required_user_context(authorization),
+        lambda context, username: _assert_school_account_ownership(context, username),
+        lambda context, username: session_context.official_client_key(context, username),
         lambda client, username, context, verify_ssl: _reuse_official_session(client, username, context, verify_ssl),
         lambda profile_key, username, password, authorization, verify_ssl: _ensure_official_session(
             profile_key,

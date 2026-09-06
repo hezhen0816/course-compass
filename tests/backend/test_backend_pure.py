@@ -608,10 +608,22 @@ def test_schedule_sync_requires_password_or_saved_credentials(monkeypatch) -> No
         raise AssertionError("schedule fetch should not run without a password")
 
     monkeypatch.setattr(backend_app, "fetch_schedule", fake_fetch_schedule)
+    monkeypatch.setattr(backend_app, "_authorization_context", lambda authorization: ("user-1", "token-1"))
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_status",
+        lambda user_id, access_token: {"username": "", "hasPassword": False},
+    )
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_secret",
+        lambda user_id, access_token: {"username": "", "password": "", "hasPassword": False},
+    )
     client = TestClient(backend_app.app)
 
     response = client.post(
         "/api/schedule/sync",
+        headers={"Authorization": "Bearer token-1"},
         json={
             "username": "B11430207",
             "profile_key": "B11430207",
@@ -623,6 +635,166 @@ def test_schedule_sync_requires_password_or_saved_credentials(monkeypatch) -> No
     assert response.status_code == 400
     assert "校務密碼" in response.json()["detail"]
     assert fetch_called is False
+
+
+def test_schedule_sync_rejects_unauthenticated_requests(monkeypatch) -> None:
+    fetch_called = False
+
+    def fake_fetch_schedule(username: str, password: str, verify_ssl: bool) -> dict[str, object]:
+        nonlocal fetch_called
+        fetch_called = True
+        raise AssertionError("schedule fetch must not run without a cloud session")
+
+    monkeypatch.setattr(backend_app, "fetch_schedule", fake_fetch_schedule)
+    client = TestClient(backend_app.app)
+
+    response = client.post(
+        "/api/schedule/sync",
+        json={
+            "username": "B11430207",
+            "password": "school-password",
+            "persist_to_supabase": True,
+            "verify_ssl": False,
+        },
+    )
+
+    assert response.status_code == 401
+    assert fetch_called is False
+
+
+def test_schedule_sync_rejects_username_that_differs_from_bound_account(monkeypatch) -> None:
+    monkeypatch.setattr(backend_app, "_authorization_context", lambda authorization: ("user-1", "token-1"))
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_status",
+        lambda user_id, access_token: {"username": "B11430207", "hasPassword": True},
+    )
+    monkeypatch.setattr(
+        backend_app,
+        "fetch_schedule",
+        lambda username, password, verify_ssl: (_ for _ in ()).throw(AssertionError("must not fetch")),
+    )
+    client = TestClient(backend_app.app)
+
+    response = client.post(
+        "/api/schedule/sync",
+        headers={"Authorization": "Bearer token-1"},
+        json={"username": "B99999999", "password": "x", "persist_to_supabase": True, "verify_ssl": False},
+    )
+
+    assert response.status_code == 403
+
+
+def test_snapshot_reads_require_bound_matching_account(monkeypatch) -> None:
+    snapshot = {
+        "profile_key": "B11430207",
+        "school_account": "B11430207",
+        "source_url": "https://example.test/schedule",
+        "page_title": "選課清單",
+        "total_credits_text": "0",
+        "total_credits": 0,
+        "courses": [],
+        "slots": [],
+        "schedule_entries": [],
+        "student_name": None,
+        "synced_at": "2026-09-06T20:00:00+08:00",
+        "course_count": 0,
+        "scheduled_slot_count": 0,
+        "schedule_entry_count": 0,
+        "persisted_to_supabase": True,
+    }
+    monkeypatch.setattr(backend_app, "load_snapshot", lambda profile_key: dict(snapshot))
+    client = TestClient(backend_app.app)
+
+    # No cloud session at all.
+    assert client.get("/api/schedule/B11430207").status_code == 401
+
+    monkeypatch.setattr(backend_app, "_authorization_context", lambda authorization: ("user-1", "token-1"))
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_status",
+        lambda user_id, access_token: {"username": "B11430207", "hasPassword": True},
+    )
+    headers = {"Authorization": "Bearer token-1"}
+
+    # Another student's profile.
+    assert client.get("/api/schedule/B99999999", headers=headers).status_code == 403
+    assert client.get("/api/moodle/assignments/B99999999", headers=headers).status_code == 403
+    assert client.get("/api/history/B99999999", headers=headers).status_code == 403
+
+    # Own profile.
+    response = client.get("/api/schedule/B11430207", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["school_account"] == "B11430207"
+
+    # User who never bound a school account cannot read anything yet.
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_status",
+        lambda user_id, access_token: {"username": "", "hasPassword": False},
+    )
+    assert client.get("/api/schedule/B11430207", headers=headers).status_code == 403
+
+
+def test_official_selection_requires_cloud_session_and_scopes_client_to_user(monkeypatch) -> None:
+    created_keys: list[str] = []
+
+    class FakeOfficialSelectionClient:
+        def keep_alive(self, verify_ssl: bool) -> bool:
+            return True
+
+        def export_session_state(self) -> dict[str, object]:
+            return {}
+
+        def fetch_current_a02_workspace(self, verify_ssl: bool) -> dict[str, object]:
+            return {
+                "source_url": "https://example.test/a02",
+                "page_title": "初選登記選課",
+                "synced_at": "2026-06-13T10:00:00+08:00",
+                "session_valid": True,
+                "available_count": 0,
+                "registered_count": 0,
+                "available_courses": [],
+                "registered_courses": [],
+                "schedule_rows": [],
+                "selection_list_rows": [],
+                "required_preset_rows": [],
+                "notices": [],
+            }
+
+    def fake_get_client(profile_key: str) -> FakeOfficialSelectionClient:
+        created_keys.append(profile_key)
+        return FakeOfficialSelectionClient()
+
+    monkeypatch.setattr(backend_app, "get_official_selection_client", fake_get_client)
+    monkeypatch.setattr(backend_app, "save_school_session_state", lambda *args, **kwargs: None)
+    client = TestClient(backend_app.app)
+    body = {"username": "B11430207", "profile_key": "B11430207", "verify_ssl": False}
+
+    # Without a cloud session the cached school session must not even be touched.
+    assert client.post("/api/official-selection/a02/sync", json=body).status_code == 401
+    assert created_keys == []
+
+    monkeypatch.setattr(backend_app, "_authorization_context", lambda authorization: ("user-1", "token-1"))
+    monkeypatch.setattr(
+        backend_app,
+        "get_school_credentials_status",
+        lambda user_id, access_token: {"username": "B11430207", "hasPassword": True},
+    )
+    headers = {"Authorization": "Bearer token-1"}
+
+    response = client.post("/api/official-selection/a02/sync", headers=headers, json=body)
+    assert response.status_code == 200
+    assert created_keys == ["user-1:B11430207"]
+
+    # A bound user cannot drive another student's official selection.
+    response = client.post(
+        "/api/official-selection/a02/join",
+        headers=headers,
+        json={"username": "B99999999", "course_no": "CS2002302", "confirmed": True, "verify_ssl": False},
+    )
+    assert response.status_code == 403
+    assert created_keys == ["user-1:B11430207"]
 
 
 def test_history_import_uses_saved_credentials_without_request_password(monkeypatch) -> None:

@@ -63,6 +63,71 @@ def optional_authorization_context(
         return None
 
 
+CredentialsStatusReader = Callable[[str, str], dict[str, Any]]
+
+
+def required_user_context(
+    authorization: str | None,
+    resolve_authorization: AuthorizationResolver,
+) -> UserContext:
+    """Reject requests that carry no valid Supabase session.
+
+    Every endpoint that touches school data goes through here so that the
+    profile can be bound to a cloud user instead of a caller-supplied student ID.
+    """
+    context = resolve_authorization(authorization)
+    if context is None:
+        raise HTTPException(status_code=401, detail="請先登入雲端帳號後再使用校務同步功能。")
+    return context
+
+
+def _saved_school_account(
+    context: UserContext,
+    read_credentials_status: CredentialsStatusReader,
+) -> str:
+    user_id, access_token = context
+    try:
+        status = read_credentials_status(user_id, access_token)
+    except CredentialStoreError:
+        return ""
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"讀取校務帳號綁定失敗：{exc}") from exc
+    return str(status.get("username") or "").strip()
+
+
+def assert_school_account_ownership(
+    context: UserContext,
+    username: str,
+    read_credentials_status: CredentialsStatusReader,
+) -> None:
+    """A user who already bound a school account may only act on that account.
+
+    Users without a saved account are allowed through: the school login that
+    follows (with a password) is what proves ownership on first sync.
+    """
+    saved_username = _saved_school_account(context, read_credentials_status)
+    if saved_username and saved_username.casefold() != username.strip().casefold():
+        raise HTTPException(status_code=403, detail="已保存的校務帳號與本次操作帳號不同。")
+
+
+def assert_owned_profile_key(
+    context: UserContext,
+    profile_key: str,
+    read_credentials_status: CredentialsStatusReader,
+) -> None:
+    """Snapshot reads require a bound school account matching the profile."""
+    saved_username = _saved_school_account(context, read_credentials_status)
+    if not saved_username:
+        raise HTTPException(status_code=403, detail="尚未綁定校務帳號，請先輸入校務帳密同步一次。")
+    if saved_username.casefold() != profile_key.strip().casefold():
+        raise HTTPException(status_code=403, detail="此校務帳號不屬於目前登入的使用者。")
+
+
+def official_client_key(context: UserContext, username: str) -> str:
+    """Scope cached official-selection clients to the cloud user, not the student ID."""
+    return f"{context[0]}:{username.strip()}"
+
+
 def saved_school_credentials(
     username: str,
     authorization: str | None,
