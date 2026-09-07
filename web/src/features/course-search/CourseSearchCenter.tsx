@@ -260,8 +260,8 @@ export function CourseSearchCenter({
       <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-950">找到下一門好課</h2>
-            <p className="mt-1 text-sm text-slate-500">搜尋開課資訊，比較時段與名額，再安排你的課表。</p>
+            <h2 className="text-2xl font-semibold text-slate-950">官方開課查詢</h2>
+            <p className="mt-1 text-sm text-slate-500">以課名或課碼查詢台科大開課資料，比較節次與名額後加入選課清單。</p>
           </div>
           <div className="flex shrink-0 items-center gap-3 text-sm text-slate-500">
             <span>
