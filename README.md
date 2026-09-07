@@ -175,13 +175,15 @@ backend 以 `NTUST_Course_Monitor` 相同方式常駐在家用 Windows 主機（
 - venv 需額外安裝 `tzdata`，否則 `ZoneInfo("Asia/Taipei")` 會失敗
 - iOS `Info.plist` 的 `BackendServiceBaseURL` 指向 `http://100.72.243.88:8000`，並以 `NSAllowsArbitraryLoads` 允許 http
 
-更新程式：
+Web 也一併由此後端提供：`web/dist` 存在時 FastAPI 會在 `/` 回傳 SPA，`/api/*` 不變。對外以 `tailscale serve` 提供 HTTPS，網址為 `https://hezhen.taile9e4a0.ts.net`，只有 tailnet 內的裝置（手機需開 Tailscale）連得到。
+
+更新程式（建置 web、同步 checkout 與 dist、重啟排程、確認 tailscale serve）：
 
 ```bash
-ssh winhome "cd C:\Users\hezhe\source\repos\course-compass && git pull --ff-only && .venv\Scripts\python.exe -m pip install -q -r backend\requirements.txt tzdata && powershell -NoProfile -Command \"Stop-ScheduledTask Course_Compass_Backend; Get-Process python | ? Path -like '*course-compass*' | Stop-Process -Force; Start-ScheduledTask Course_Compass_Backend\""
+bash scripts/deployment/deploy_windows.sh
 ```
 
-iOS 與 Web 只有在同一個 tailnet 內才連得到此後端；Vercel 上的 Web 無法連線。
+只更新後端可加 `--skip-web`。Vercel 上的 Web 只能做 Supabase 相關功能，無法連到此後端。
 
 ### 遷移 legacy 校務密碼
 

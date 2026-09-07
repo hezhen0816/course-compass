@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 try:
     from .api.courses import create_courses_router
@@ -113,6 +117,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "https://course-compass-six.vercel.app",
+        "https://hezhen.taile9e4a0.ts.net",
     ],
     allow_origin_regex=r"https://course-compass(-[a-z0-9]+)?-hezhens-projects\.vercel\.app|https://course-compass-git-[a-z0-9-]+-hezhens-projects\.vercel\.app|http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
@@ -346,3 +351,22 @@ app.include_router(
         lambda: now().isoformat(),
     )
 )
+
+
+# --- Optional: serve the built web app from the same origin --------------------
+# When web/dist exists next to backend/ (the home Windows deployment), the SPA is
+# served at "/" and API routes keep their /api prefix. Same origin means no CORS
+# and no mixed-content issues behind `tailscale serve`.
+WEB_DIST_DIR = Path(os.environ.get("WEB_DIST_DIR") or Path(__file__).resolve().parent.parent / "web" / "dist")
+
+if (WEB_DIST_DIR / "index.html").is_file():
+    app.mount("/assets", StaticFiles(directory=WEB_DIST_DIR / "assets"), name="web-assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_web_app(full_path: str) -> FileResponse:
+        if full_path.startswith("api/") or full_path in {"docs", "openapi.json", "redoc"}:
+            raise HTTPException(status_code=404)
+        candidate = (WEB_DIST_DIR / full_path).resolve()
+        if full_path and candidate.is_file() and WEB_DIST_DIR.resolve() in candidate.parents:
+            return FileResponse(candidate)
+        return FileResponse(WEB_DIST_DIR / "index.html")
