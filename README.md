@@ -140,7 +140,7 @@ NTUST_VERIFY_SSL=true
 - 快照 `GET` 需登入且 `profile_key` 與綁定帳號相同；尚未綁定的使用者需先輸入校務帳密同步一次
 - 官方選課 session 快取以「雲端使用者 + 校務帳號」為 key，不再由 caller 指定
 - 對校務系統的 TLS 驗證由後端 `NTUST_VERIFY_SSL` 決定（預設開啟），request body 內的 `verify_ssl` 會被忽略
-- CORS 只允許 `course-compass-six.vercel.app`、本專案的 Vercel preview 網域與本機 Vite dev server
+- CORS 只允許 `https://hezhen.taile9e4a0.ts.net` 與本機 Vite dev server（Vercel 部署已於 2026-09-06 刪除）
 
 ## 驗證
 
@@ -158,7 +158,7 @@ npm run ios:build
 
 ### 驗證 production backend
 
-Vercel Web 只負責前端，官方選課送出能力依賴 backend。backend 目前部署在家用 Windows 主機（見下方「Windows 後端部署」），Railway 部署已於 2026-09-06 移除。部署後用以下指令確認 production backend 已包含校務帳密、官方 session 持久化與官方初選 API：
+Web 與 backend 都部署在家用 Windows 主機（見下方「Windows 後端部署」）；Railway 與 Vercel 部署已於 2026-09-06 移除。部署後用以下指令確認 production backend 已包含校務帳密、官方 session 持久化與官方初選 API：
 
 ```bash
 bash scripts/python.sh scripts/verify_production_backend.py
@@ -183,7 +183,7 @@ Web 也一併由此後端提供：`web/dist` 存在時 FastAPI 會在 `/` 回傳
 bash scripts/deployment/deploy_windows.sh
 ```
 
-只更新後端可加 `--skip-web`。Vercel 上的 Web 只能做 Supabase 相關功能，無法連到此後端。
+只更新後端可加 `--skip-web`。
 
 ### 遷移 legacy 校務密碼
 

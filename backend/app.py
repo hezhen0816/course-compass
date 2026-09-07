@@ -110,16 +110,14 @@ OFFICIAL_SELECTION_CAPABILITIES = {
 app = FastAPI(title="Course Compass Sync API", version=API_VERSION)
 app.add_middleware(
     CORSMiddleware,
-    # Only this project's production site, its own Vercel preview builds, and
-    # local Vite dev servers. A wildcard on *.vercel.app would trust any
-    # deployment anyone creates.
+    # Only the tailnet origin served by this backend and local Vite dev servers.
+    # The Vercel deployment was removed on 2026-09-06.
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://course-compass-six.vercel.app",
         "https://hezhen.taile9e4a0.ts.net",
     ],
-    allow_origin_regex=r"https://course-compass(-[a-z0-9]+)?-hezhens-projects\.vercel\.app|https://course-compass-git-[a-z0-9-]+-hezhens-projects\.vercel\.app|http://(localhost|127\.0\.0\.1):\d+",
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
