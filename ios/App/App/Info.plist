@@ -22,17 +22,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>修課羅盤會使用 Face ID 解鎖已登入的 App 內容。</string>
 	<key>SupabaseAnonKey</key>
 	<string>sb_publishable_WSWkdAmi9jRhC1iwVv-o5g_MRVeYL45</string>
 	<key>BackendServiceBaseURL</key>
-	<string>http://100.72.243.88:8000</string>
+	<string>https://hezhen.taile9e4a0.ts.net</string>
 	<key>SupabaseURL</key>
 	<string>https://qpdvtsbqdpitreslazoe.supabase.co</string>
 	<key>UILaunchStoryboardName</key>

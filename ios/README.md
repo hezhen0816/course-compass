@@ -27,7 +27,7 @@ npm run ios:build
 - 規劃資料讀寫 `public.user_data`
 - 課表與歷史修課紀錄透過根目錄 `backend/` 的同步服務抓取
 - 同步結果由後端寫入快照表，再回傳給 iOS
-- 同步服務網址由 `Info.plist` 的 `BackendServiceBaseURL` 提供，預設為家用 Windows 主機上的後端（Tailscale `http://100.72.243.88:8000`，手機需連上同一個 tailnet）
+- 同步服務網址由 `Info.plist` 的 `BackendServiceBaseURL` 提供，預設為家用 Windows 主機上的後端（`https://hezhen.taile9e4a0.ts.net`，經 tailscale serve 提供 HTTPS，手機需連上同一個 tailnet）
 
 ## 程式結構
 
