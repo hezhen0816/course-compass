@@ -36,7 +36,8 @@ if [[ $SKIP_WEB -eq 0 ]]; then
 fi
 
 echo "==> Restarting backend task"
-ssh -o BatchMode=yes "$SSH_HOST" "powershell -NoProfile -Command \"Stop-ScheduledTask Course_Compass_Backend; Get-Process python -ErrorAction SilentlyContinue | Where-Object { \\\$_.Path -like '*course-compass*' } | Stop-Process -Force; Start-Sleep 2; Start-ScheduledTask Course_Compass_Backend\""
+# Comparison syntax (no $_) keeps this free of shell-escaping pitfalls.
+ssh -o BatchMode=yes "$SSH_HOST" "powershell -NoProfile -Command \"Stop-ScheduledTask Course_Compass_Backend; Get-Process python -ErrorAction SilentlyContinue | Where-Object Path -like '*course-compass*' | Stop-Process -Force; Start-Sleep 2; Start-ScheduledTask Course_Compass_Backend\""
 
 echo "==> Ensuring tailscale serve -> :8000"
 ssh -o BatchMode=yes "$SSH_HOST" "tailscale serve --bg 8000 >nul 2>&1 & tailscale serve status"
