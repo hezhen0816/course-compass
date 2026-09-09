@@ -21,7 +21,7 @@ npm --prefix prototypes/semester-workspace run dev
 5. 點預排課程可移除；點「重設示範」回到初始預排。僅修改此原型的瀏覽器儲存。
 6. 桌面以週課表開啟；手機以清單開啟，找課為全螢幕面板。可切換週課表。
 
-預排使用獨立 localStorage key `course-compass:semester-prototype:v1`，重整後保留。模式另存於同一 key 加上 `:mode`。初選顯示「志願總量」，不是可同時修讀或已取得學分。模式切換不會刪課。沒有正式選課、志願排序／抽選、待加簽、畢業規劃或名額追蹤整合。
+預排使用獨立 localStorage key `course-compass:semester-prototype:v1`，重整後保留。模式另存於同一 key 加上 `:mode`。初選顯示「志願總量」，不是可同時修讀或已取得學分。模式切換不會刪課。官方選課與待加簽提供操作結果預覽；尚未串接正式選課、志願排序／抽選、畢業規劃或名額監控。
 
 模式是手動情境預覽，不代表目前官方入口已開放。初選登記與抽選後繼續選課的差異見 [學校系統契約](../../docs/data-contracts/ntust-systems.md#5-選課階段以教務處時程表為準)。
 
@@ -29,7 +29,18 @@ npm --prefix prototypes/semester-workspace run dev
 
 ```sh
 npm --prefix prototypes/semester-workspace run build
-node --test prototypes/semester-workspace/model.test.js
+node --test prototypes/semester-workspace/*.test.js
 ```
 
 瀏覽器驗證紀錄見 [design-qa.md](design-qa.md)。本原型不納入正式 Web 的入口、建置或部署。
+
+## 完整找課原型
+
+- 可查課名／課碼／教師；精確課名支援「、」等分隔符一次查多門。
+- 進階篩選包含系所、教師、必選修、學分、星期與節次、名額、跨校；條件標籤可個別移除。支援排序與匯出目前結果為 CSV。
+- 學期選單提供 115-1 與 114-1 歷史範例。歷史課程不可加入本學期，名額未公告不會視為額滿。
+- 詳情包含課綱／評量示範、GPA 狀態、名額、備註、認列意向、追蹤草稿及官方操作結果預覽。
+- 待修清單可新增、移除及直接查課；追蹤草稿可移除。待修、追蹤、認列用途只在本次頁面保留，重新整理會重設；預排仍使用原本獨立 localStorage。
+- 頁尾「查詢畫面示範」可切換載入中／連線失敗，再完成模擬載入或重試。查詢本身以本地資料即時篩選，不產生後端請求。
+
+這一版完成課程查詢的互動設計範圍；正式替換仍需 API、權限、真實學期、GPA、認列資料及狀態同步整合。畢業規劃和完整監控頁不屬於此查詢原型。

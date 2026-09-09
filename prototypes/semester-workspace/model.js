@@ -11,6 +11,8 @@ export const courses = [
   { id: 'CS302', name: '人工智慧概論', teacher: '王老師', credits: 3, category: '本系選修', color: 'blue', room: 'TR-310', slots: [[0,3,3]], seats: 12, description: '介紹搜尋、知識表示與機器學習，探索人工智慧的基礎方法。' },
   { id: 'BA303', name: '管理與企業倫理', teacher: '羅老師', credits: 3, category: '雙主修', color: 'teal', room: 'IB-502', slots: [[1,6,3]], seats: 0, description: '透過案例分析企業責任、利害關係人與管理倫理。額滿仍可加入本地預排。' },
   { id: 'GE302', name: '設計思考與實踐', teacher: '李老師', credits: 2, category: '通識', color: 'purple', room: 'IB-302', slots: [[2,6,2]], seats: 6, description: '從使用者觀察、問題定義到原型實作，以團隊合作探索解決方案。' },
+  {id:'FN301',name:'貨幣銀行學',teacher:'周老師',credits:3,category:'輔系',color:'orange',room:'TR-610',slots:[[3,2,3]],seats:null,description:'認識金融體系、貨幣政策與銀行經營。',gpa:'查無資料'},
+  {id:'3N101',name:'經濟學原理',teacher:'林老師',credits:3,category:'跨校',color:'teal',room:'臺大校本部',slots:[[4,6,3]],seats:0,cross:true,description:'以市場與總體經濟議題理解經濟學的基本方法。',notes:'跨校示範班別；須符合校際選課資格，並預留交通時間。'},
 ];
 export const official = courses.filter(c => c.official);
 export const defaultPlans = ['BA302'];

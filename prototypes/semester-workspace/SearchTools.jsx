@@ -1,0 +1,34 @@
+import React, { useState } from 'react';
+import { Search, X, Download, Radar, Check, Plus } from 'lucide-react';
+import { departments, initialFilters, resultCsv } from './search-model.js';
+
+export function SearchTools({filters, setFilters, advanced, clear, results}) {
+  const update=(key,value)=>setFilters(prev=>({...prev,[key]:value}));
+  const select=(key,label,options)=><label className="field">{label}<select value={filters[key]} onChange={e=>update(key,e.target.value)}><option value="">不限</option>{options.map(([value,text])=><option key={value} value={value}>{text}</option>)}</select></label>;
+  const exportResults=()=>{
+    const url=URL.createObjectURL(new Blob([resultCsv(results)],{type:'text/csv;charset=utf-8'}));
+    const link=document.createElement('a'); link.href=url; link.download=`模擬課程-${filters.semester}.csv`; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  const active=Object.keys(filters).filter(key=>!['semester','sort','state'].includes(key)&&filters[key]!==initialFilters[key]);
+  return <div className="search-tools">
+    <div className="search-context"><label className="field">查詢學期<select value={filters.semester} onChange={e=>setFilters(prev=>({...prev,semester:e.target.value,capacity:'',state:'ready'}))}><option value="1151">115-1 本學期</option><option value="1141">114-1 歷史參考</option></select></label><label className="field">排序<select value={filters.sort} onChange={e=>update('sort',e.target.value)}><option value="default">預設順序</option><option value="name">課程名稱</option><option value="credits">學分由多到少</option><option value="seats">名額由多到少</option></select></label><button className="subtle" disabled={!results.length||filters.state!=='ready'} onClick={exportResults}><Download size={15}/>匯出 CSV</button></div>
+    {filters.semester!=='1151'&&<p className="history-banner">歷史開課只供參考，不能加入本學期課表或送出選課。想記住這門課，可加入下方待修清單。</p>}
+    {advanced&&<div className="advanced-grid"><label className="field">教師<input placeholder="例如 黃老師" value={filters.teacher} onChange={e=>update('teacher',e.target.value)}/></label>{select('department','開課系所',Object.values(departments).map(x=>[x,x]))}{select('required','必選修',[['必修','必修'],['選修','選修']])}{select('credits','學分',[0,1,2,3,4].map(x=>[String(x),`${x} 學分`]))}{select('day','星期',['一','二','三','四','五'].map((x,i)=>[String(i+1),`週${x}`]))}{select('period','節次',Array.from({length:10},(_,i)=>[String(i+1),`第 ${i+1} 節`]))}{select('capacity','名額狀態',[['available','尚有名額'],['full','額滿'],['unknown','未公告']])}<label className="filter-check"><input type="checkbox" checked={filters.exact} onChange={e=>update('exact',e.target.checked)}/>精確課名（可用「、」查多門）</label><label className="filter-check"><input type="checkbox" checked={filters.cross} onChange={e=>update('cross',e.target.checked)}/>含臺大／師大跨校課</label></div>}
+    <div className="filter-summary"><span>{active.length?`已套用 ${active.length} 項進階條件`:'課名、課碼、教師都能直接搜尋'}</span><button className="subtle" onClick={clear}>清除所有條件</button></div>
+    {active.length>0&&<div className="filter-chips">{active.map(key=><button key={key} onClick={()=>update(key,initialFilters[key])}>{({teacher:'教師',department:'系所',required:'必選修',credits:'學分',day:'星期',period:'節次',capacity:'名額',exact:'精確課名',cross:'跨校'})[key]}{typeof filters[key]==='string'?`：${({available:'有名額',full:'額滿',unknown:'未公告'})[filters[key]]||filters[key]}`:''}<X size={12}/></button>)}</div>}
+  </div>;
+}
+
+export function PlanningTray({items,setItems,onSearch,tracked,onUntrack}) {
+  const [name,setName]=useState(''); const [group,setGroup]=useState('雙主修');
+  function add(e) {e.preventDefault(); const title=name.trim(); if(title&&!items.some(x=>x.name===title&&x.group===group))setItems([...items,{name:title,group}]);setName('');}
+  return <div className="planning-tray"><details><summary>待修清單 <span>{items.length} 門 · 先記課名，再找開課</span></summary><form onSubmit={add}><label className="field">規劃類別<select value={group} onChange={e=>setGroup(e.target.value)}><option>雙主修</option><option>輔系</option></select></label><label className="field">待修課名<input value={name} onChange={e=>setName(e.target.value)} placeholder="例如 貨幣銀行學"/></label><button className="primary" disabled={!name.trim()}><Plus size={15}/>新增</button></form><p className="muted">此處只記錄待修意向，不代表已符合學分認列。</p>{items.length?items.map(x=><div className="tray-row" key={x.group+x.name}><span><small>{x.group}</small>{x.name}</span><button className="subtle" onClick={()=>onSearch(x.name)}><Search size={14}/>查課</button><button className="icon-button" aria-label={`移除待修 ${x.name}`} onClick={()=>setItems(items.filter(y=>y!==x))}><X size={14}/></button></div>):<p className="tray-empty">還沒有待修課程，先記下一門想修的課。</p>}</details><details><summary>名額追蹤草稿 <span>{tracked.length} 門</span></summary><p className="tray-empty">僅保存本機追蹤意向，尚未啟用通知或自動加選。</p>{tracked.map(c=><div className="tray-row" key={c.id}><span>{c.name}</span><button className="subtle" onClick={()=>onUntrack(c.id)}>移除追蹤</button></div>)}</details></div>;
+}
+
+export function DetailExtras({course,tracked,toggleTrack,recognition,onRecognition}) {
+  const [flow,setFlow]=useState('');
+  return <div className="detail-extras"><dl><div><dt>開課系所</dt><dd>{course.department}</dd></div><div><dt>必選修</dt><dd>{course.required}</dd></div><div><dt>名額</dt><dd>{course.historical?'歷史資料':course.seats==null?'未公告':course.seats===0?'模擬：額滿':`模擬餘額 ${course.seats} 人`}</dd></div><div><dt>GPA 參考</dt><dd>{course.gpa}</dd></div></dl><p className="description">{course.notes}</p><details className="syllabus"><summary>課綱與評量示範</summary><p>課程主題：{course.description}</p><p>評量方式：期中 30%、期末 30%、作業與專題 40%（全為示範，非官方課綱）。</p></details>
+    {!course.historical&&!course.official&&<><label className="field">規劃認列用途<select value={recognition||'未指定'} onChange={e=>onRecognition(e.target.value)}><option>未指定</option><option>本系選修</option><option>雙主修待認列</option><option>輔系待認列</option><option>通識待認列</option></select></label><p className="muted">只記錄用途；審核通過前不計入已完成學分。</p><button className="secondary wide" onClick={toggleTrack}>{tracked?<Check size={16}/>:<Radar size={16}/>} {tracked?'已存追蹤草稿 · 點此移除':'加入名額追蹤草稿'}</button>
+    <details className="official-preview" onToggle={e=>{if(!e.currentTarget.open)setFlow('');}}><summary>官方選課流程預覽</summary><p>原型示範：115-1「{course.name}」，{course.credits} 學分。以下按鈕只切換畫面，不向學校送出。</p>{!flow?<div className="flow-buttons"><button className="secondary" onClick={()=>setFlow('success')}>預覽成功結果</button><button className="secondary" onClick={()=>setFlow('rejected')}>預覽拒絕結果</button><button className="secondary" onClick={()=>setFlow('error')}>預覽連線失敗</button></div>:<div role="status" className="flow-result"><strong>{flow==='success'?'示範結果：學校已接受':flow==='rejected'?'示範結果：選課未成功':'示範結果：尚無法確認送出結果'}</strong><p>{flow==='success'?'正式版需同步官方清單確認狀態；原型不更動已選課程。':flow==='rejected'?'例如額滿或資格限制。正式版保留待加簽狀態，並可追蹤名額；待加簽不代表已選上。':'先查詢官方選課清單，再決定是否重試，避免重複送出。'}</p><button className="subtle" onClick={()=>setFlow('')}>回到流程預覽</button></div>}</details></>}
+  </div>;
+}
