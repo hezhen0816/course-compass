@@ -108,9 +108,10 @@ type UserDataRecord = {
   content: StoredAppData;
 };
 
-export function useCourseData(session: Session | null) {
+export function useCourseData(session: Session | null, readOnly = false) {
   const [data, setData] = useState<AppData>(() => createEmptyAppData());
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [loadError, setLoadError] = useState('');
   const [loadedUserID, setLoadedUserID] = useState<string | null>(null);
   const userID = session?.user.id ?? null;
 
@@ -142,6 +143,9 @@ export function useCourseData(session: Session | null) {
 
       if (result.error) {
         console.error('Error loading data:', result.error);
+        setLoadError('無法讀取雲端資料，請重新整理後再試。');
+      } else {
+        setLoadError('');
       }
 
       const userData = result.data as UserDataRecord | null;
@@ -162,7 +166,7 @@ export function useCourseData(session: Session | null) {
   }, [userID]);
 
   useEffect(() => {
-    if (!userID || !supabase || loadedUserID !== userID) {
+    if (readOnly || !userID || !supabase || loadedUserID !== userID) {
       return;
     }
 
@@ -211,7 +215,7 @@ export function useCourseData(session: Session | null) {
         window.clearTimeout(resetStatusTimer);
       }
     };
-  }, [data, loadedUserID, userID]);
+  }, [data, loadedUserID, userID, readOnly]);
 
-  return { data, setData, syncStatus, isLoading };
+  return { data, setData, syncStatus, isLoading, loadError };
 }
