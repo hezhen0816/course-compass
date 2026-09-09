@@ -132,70 +132,37 @@ private struct WeeklyScheduleGrid: View {
     let currentPeriodID: String?
     let onSelectEntries: ([ScheduleEntry]) -> Void
 
-    private let cellSpacing: CGFloat = 4
-    private let headerHeight: CGFloat = 28
     private let horizontalPadding: CGFloat = 6
     private let periodColumnWidth: CGFloat = 32
     private let rowHeight: CGFloat = 70
 
-    private var gridHeight: CGFloat {
-        headerHeight + CGFloat(periods.count) * rowHeight + CGFloat(periods.count) * cellSpacing + horizontalPadding * 2
-    }
-
+    // 沒有自己的 ScrollView：整頁只有一個垂直捲動。之前這裡包了一層
+    // ScrollView 並套上算出來的固定高度，但那個高度漏算了表頭與列距
+    // （表頭實際 34 而非 28、列距 6 而非 4），比內容矮了二三十點，
+    // 於是手指落在課表上時捲的是那一小段內層捲動，整頁反而動不了。
     var body: some View {
-        GeometryReader { proxy in
-            let dayColumnWidth = Self.dayColumnWidth(
-                availableWidth: proxy.size.width,
-                weekdayCount: weekdays.count,
-                periodColumnWidth: periodColumnWidth,
-                spacing: cellSpacing,
-                horizontalPadding: horizontalPadding
+        VStack(spacing: 6) {
+            WeekdayHeaderRow(
+                weekdays: weekdays,
+                highlightedWeekday: highlightedWeekday,
+                periodColumnWidth: periodColumnWidth
             )
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 6) {
-                    WeekdayHeaderRow(
-                        weekdays: weekdays,
-                        highlightedWeekday: highlightedWeekday,
-                        periodColumnWidth: periodColumnWidth,
-                        dayColumnWidth: dayColumnWidth
-                    )
-
-                    ForEach(periods) { period in
-                        SchedulePeriodRow(
-                            period: period,
-                            weekdays: weekdays,
-                            highlightedWeekday: highlightedWeekday,
-                            cells: cells,
-                            periodColumnWidth: periodColumnWidth,
-                            dayColumnWidth: dayColumnWidth,
-                            rowHeight: rowHeight,
-                            currentPeriodID: currentPeriodID,
-                            onSelectEntries: onSelectEntries
-                        )
-                    }
-                }
-                .padding(horizontalPadding)
+            ForEach(periods) { period in
+                SchedulePeriodRow(
+                    period: period,
+                    weekdays: weekdays,
+                    highlightedWeekday: highlightedWeekday,
+                    cells: cells,
+                    periodColumnWidth: periodColumnWidth,
+                    rowHeight: rowHeight,
+                    currentPeriodID: currentPeriodID,
+                    onSelectEntries: onSelectEntries
+                )
             }
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .frame(height: gridHeight)
-    }
-
-    private static func dayColumnWidth(
-        availableWidth: CGFloat,
-        weekdayCount: Int,
-        periodColumnWidth: CGFloat,
-        spacing: CGFloat,
-        horizontalPadding: CGFloat
-    ) -> CGFloat {
-        guard weekdayCount > 0 else {
-            return 0
-        }
-
-        let totalSpacing = spacing * CGFloat(weekdayCount)
-        let usableWidth = availableWidth - horizontalPadding * 2 - periodColumnWidth - totalSpacing
-        return max(38, floor(usableWidth / CGFloat(weekdayCount)))
+        .padding(horizontalPadding)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -203,7 +170,6 @@ private struct WeekdayHeaderRow: View {
     let weekdays: [Weekday]
     let highlightedWeekday: Weekday
     let periodColumnWidth: CGFloat
-    let dayColumnWidth: CGFloat
 
     var body: some View {
         HStack(spacing: 4) {
@@ -215,7 +181,8 @@ private struct WeekdayHeaderRow: View {
             ForEach(weekdays) { weekday in
                 Text(weekday.shortTitle)
                     .font(.subheadline.weight(.bold))
-                    .frame(width: dayColumnWidth, height: 34)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 34)
                     .background(
                         weekday == highlightedWeekday ? Color.indigo.opacity(0.12) : Color.clear,
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -231,7 +198,6 @@ private struct SchedulePeriodRow: View {
     let highlightedWeekday: Weekday
     let cells: [ScheduleGridKey: [ScheduleEntry]]
     let periodColumnWidth: CGFloat
-    let dayColumnWidth: CGFloat
     let rowHeight: CGFloat
     let currentPeriodID: String?
     let onSelectEntries: ([ScheduleEntry]) -> Void
@@ -269,7 +235,6 @@ private struct SchedulePeriodRow: View {
                     isHighlighted: weekday == highlightedWeekday,
                     isCurrentPeriod: isCurrentPeriod,
                     isCurrentSlot: isCurrentPeriod && weekday == highlightedWeekday,
-                    width: dayColumnWidth,
                     height: rowHeight,
                     onSelectEntries: onSelectEntries
                 )
@@ -283,7 +248,6 @@ private struct ScheduleGridCell: View {
     let isHighlighted: Bool
     let isCurrentPeriod: Bool
     let isCurrentSlot: Bool
-    let width: CGFloat
     let height: CGFloat
     let onSelectEntries: ([ScheduleEntry]) -> Void
 
@@ -305,7 +269,8 @@ private struct ScheduleGridCell: View {
                 )
             }
         }
-        .frame(width: width, height: height)
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
     }
 }
 

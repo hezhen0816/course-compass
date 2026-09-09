@@ -16,6 +16,22 @@
 
 ---
 
+## 2026-09-09 iOS 課表：手指落在課表上就捲不動整頁
+
+`WeeklyScheduleGrid` 自己包了一層 `ScrollView(.vertical)`，外面再套 `.frame(height: gridHeight)`，
+而 `gridHeight` 是自己算的：`headerHeight(28) + N*rowHeight + N*cellSpacing(4) + padding*2`。
+實際版面是表頭 34、`VStack(spacing: 6)`，所以 10 節課時算出 780、內容其實 806 ——
+框比內容矮 26 點，那層 ScrollView 就有 26 點可捲。手指落在課表上時捲的是這 26 點，
+外層整頁不動，看起來就是「滑到內部就看不到下面」，下拉更新也一起被吃掉。
+
+改成課表沒有自己的捲動：拿掉內層 `ScrollView` 與整個 `GeometryReader`＋固定高度，
+日欄改用 `frame(maxWidth: .infinity)` 讓 `HStack` 等分（本來用 GeometryReader 量寬度只是為了算欄寬，
+而且 `max(38, …)` 在 7 天時還會反過來撐破版面）。整頁只剩 `ScheduleView` 那一個 `ScrollView`。
+
+驗證：把 App 進入點暫時換成塞了 7 門課的課表 harness，在 iPhone 17 Pro 模擬器實測——
+從課表格子內往上滑會捲到整頁底部（第 10 節、18:20 可見）、往下滑回到頁首，
+點課程格子仍正常開出課程詳情。驗完已還原進入點並重新 build 確認。
+
 ## 2026-09-09 監控設定併入「設定」頁；選課監控只剩「現在在監聽什麼」
 
 延續上一則的視覺對齊。監控頁原本自己帶一個「監控設定」分頁（監聽間隔、選課時段、
