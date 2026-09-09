@@ -16,6 +16,10 @@
 
 ---
 
+## 2026-09-09 UI／UX 採獨立原型迭代
+
+使用者同意先做可操作的「本學期課表＋找課側欄」，看完整主畫面後逐區完善。第一階段放在 `prototypes/semester-workspace/`，使用模擬資料與獨立瀏覽器儲存，不修改正式選課、監控或畢業認列流程；確認方向後才整合。使用者初看回饋「感覺還不錯」。
+
 ## 2026-09-09 iOS Face ID 每次回來都要掃：鎖在 `.inactive` 觸發
 
 `AppShellView` 原本 `case .inactive, .background:` 都呼叫 `lockForBiometricUnlockIfNeeded()`。
