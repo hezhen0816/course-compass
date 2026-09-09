@@ -15,6 +15,13 @@ struct AppShellView: View {
             }
         }
         .environmentObject(store)
+        // 多工切換畫面的縮圖是在 .inactive 時拍的，這層遮罩就是原本「一離開前景就鎖」
+        // 買到的隱私效果，但不必逼使用者再掃一次臉。
+        .overlay {
+            if scenePhase != .active, store.shouldUseBiometricUnlock, !store.isBiometricAuthenticating {
+                PrivacyCoverView()
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard store.isAuthenticated else {
                 return
@@ -22,6 +29,7 @@ struct AppShellView: View {
 
             switch newPhase {
             case .active:
+                store.lockIfBiometricGracePeriodExpired()
                 guard !store.requiresBiometricUnlock else {
                     return
                 }
@@ -29,12 +37,14 @@ struct AppShellView: View {
                 Task {
                     await store.refreshAppContent(suppressErrors: true)
                 }
-            case .inactive, .background:
+            case .background:
                 guard !store.isBiometricAuthenticating else {
                     return
                 }
 
-                store.lockForBiometricUnlockIfNeeded()
+                store.markEnteredBackground()
+            case .inactive:
+                break
             @unknown default:
                 break
             }
@@ -96,6 +106,22 @@ struct AppShellView: View {
             .tag(AppTab.settings)
         }
         .tint(.indigo)
+    }
+}
+
+/// 切到多工畫面／控制中心時蓋住內容，只擋畫面不要求解鎖。
+private struct PrivacyCoverView: View {
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+
+            Image(systemName: "lock.fill")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(.indigo)
+        }
+        .ignoresSafeArea()
+        .transition(.opacity)
     }
 }
 

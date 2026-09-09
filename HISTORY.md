@@ -16,6 +16,27 @@
 
 ---
 
+## 2026-09-09 iOS Face ID 每次回來都要掃：鎖在 `.inactive` 觸發
+
+`AppShellView` 原本 `case .inactive, .background:` 都呼叫 `lockForBiometricUnlockIfNeeded()`。
+`.inactive` 不只在離開 App 時送出——拉下控制中心／通知中心、切到多工畫面、來電橫幅，
+甚至 Face ID 自己的系統提示都會觸發，於是幾乎每次回到 App 都要重掃。
+
+改成一般行動裝置 App 的做法：
+
+- `.background` 才記時間戳（`courseplanner.biometricAuth.lastBackgroundedAt`），
+  `.active` 時才判斷「離開超過寬限期沒有」，超過才鎖。預設 5 分鐘，
+  設定頁可選 立即／1／5／15／60 分鐘。
+- `.inactive` 不再鎖，改蓋一層 `PrivacyCoverView`（`.ultraThinMaterial` + 鎖頭）。
+  原本鎖在 `.inactive` 真正買到的是「多工畫面縮圖不外洩內容」，遮罩同樣做到，
+  而且不必掃臉。
+- 冷啟動走同一條規則（時間戳存在 UserDefaults），所以「關掉再打開」在寬限期內也不用掃。
+
+一個容易踩的細節：**沒有時間戳時必須當成「不用鎖」**。剛登入／剛啟用／剛解鎖都會清掉時間戳，
+而 Face ID 面板收起時會再送一次 `.active`；若把「沒有時間戳」當成過期，使用者剛解鎖就會被鎖回去。
+
+已用 xcodebuild + devicectl 裝到 Hz iPhone（iPhone 14 Pro）。
+
 ## 2026-09-09 iOS 課表：手指落在課表上就捲不動整頁
 
 `WeeklyScheduleGrid` 自己包了一層 `ScrollView(.vertical)`，外面再套 `.frame(height: gridHeight)`，

@@ -64,6 +64,8 @@ final class AppSessionStore: ObservableObject {
     @Published var authErrorMessage: String?
     @Published var authNoticeMessage: String?
     @Published var isBiometricAuthEnabled = false
+    /// 回到 App 後多久之內不必重新解鎖；0 代表每次離開就鎖。
+    @Published var biometricLockGraceMinutes = AppSessionStore.defaultBiometricLockGraceMinutes
     @Published var requiresBiometricUnlock = false
     @Published var isBiometricAuthenticating = false
     @Published var biometricAuthErrorMessage: String?
@@ -88,6 +90,7 @@ final class AppSessionStore: ObservableObject {
         self.subtitle = "尚未同步課表"
         self.lastSyncedAt = nil
         self.isBiometricAuthEnabled = UserDefaults.standard.bool(forKey: Self.biometricAuthEnabledStorageKey)
+        self.biometricLockGraceMinutes = Self.storedBiometricLockGraceMinutes()
         restoreCachedAuthSession()
 
         if !isAuthConfigured, authSession != nil {
@@ -206,6 +209,19 @@ final class AppSessionStore: ObservableObject {
 
     static let authSessionStorageKey = "courseplanner.supabase.session"
     static let biometricAuthEnabledStorageKey = "courseplanner.biometricAuth.enabled"
+    static let biometricLockGraceMinutesStorageKey = "courseplanner.biometricAuth.graceMinutes"
+    static let biometricLastBackgroundedAtStorageKey = "courseplanner.biometricAuth.lastBackgroundedAt"
+    static let defaultBiometricLockGraceMinutes = 5
+    static let biometricLockGraceOptions = [0, 1, 5, 15, 60]
+
+    /// UserDefaults 沒設過時 `integer(forKey:)` 回 0，那會被當成「立即鎖定」，
+    /// 所以要先確認鍵存在再讀。
+    static func storedBiometricLockGraceMinutes() -> Int {
+        guard UserDefaults.standard.object(forKey: biometricLockGraceMinutesStorageKey) != nil else {
+            return defaultBiometricLockGraceMinutes
+        }
+        return UserDefaults.standard.integer(forKey: biometricLockGraceMinutesStorageKey)
+    }
     static let scheduleSnapshotStorageKeyPrefix = "courseplanner.scheduleSnapshot."
     static let moodleAssignmentsStorageKeyPrefix = "courseplanner.moodleAssignments."
 

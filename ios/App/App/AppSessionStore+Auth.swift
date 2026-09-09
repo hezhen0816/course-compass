@@ -111,7 +111,7 @@ extension AppSessionStore {
         authSession = storedSession
         currentUserEmail = storedSession.email
         if isBiometricAuthEnabled {
-            requiresBiometricUnlock = true
+            requiresBiometricUnlock = biometricGracePeriodHasExpired()
         }
         restoreCachedScheduleSnapshot(for: storedSession)
         restoreCachedMoodleAssignmentsSnapshot(for: storedSession)
@@ -148,6 +148,7 @@ extension AppSessionStore {
         authSession = storedSession
         currentUserEmail = storedSession.email
         requiresBiometricUnlock = false
+        clearBiometricBackgroundStamp()
         biometricAuthErrorMessage = nil
         authErrorMessage = nil
         subtitle = "尚未同步課表"
@@ -263,6 +264,7 @@ extension AppSessionStore {
         selectedTab = .home
         UserDefaults.standard.removeObject(forKey: Self.authSessionStorageKey)
         UserDefaults.standard.removeObject(forKey: Self.biometricAuthEnabledStorageKey)
+        UserDefaults.standard.removeObject(forKey: Self.biometricLastBackgroundedAtStorageKey)
     }
 
     var localizedBiometricName: String {
@@ -313,16 +315,64 @@ extension AppSessionStore {
 
         isBiometricAuthEnabled = true
         requiresBiometricUnlock = false
+        clearBiometricBackgroundStamp()
         UserDefaults.standard.set(true, forKey: Self.biometricAuthEnabledStorageKey)
         authNoticeMessage = "已啟用 \(localizedBiometricName) 登入"
     }
 
+    /// 立刻鎖定（設定頁的「立即鎖定 App」）。
     func lockForBiometricUnlockIfNeeded() {
         guard shouldUseBiometricUnlock else {
             return
         }
         requiresBiometricUnlock = true
         biometricAuthErrorMessage = nil
+        clearBiometricBackgroundStamp()
+    }
+
+    /// 進到背景時記時間，回前景再判斷要不要鎖。
+    ///
+    /// 原本是一離開前景就鎖，但 `.inactive` 連拉下控制中心、切到多工畫面、
+    /// 甚至 Face ID 自己的系統提示都會觸發，於是每次回來都要再掃一次臉。
+    /// 改成只在真的進背景時記時間，超過寬限期才鎖。
+    func markEnteredBackground() {
+        guard shouldUseBiometricUnlock else {
+            return
+        }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.biometricLastBackgroundedAtStorageKey)
+    }
+
+    func lockIfBiometricGracePeriodExpired() {
+        guard shouldUseBiometricUnlock, !requiresBiometricUnlock else {
+            return
+        }
+        guard biometricGracePeriodHasExpired() else {
+            return
+        }
+        requiresBiometricUnlock = true
+        biometricAuthErrorMessage = nil
+    }
+
+    func setBiometricLockGraceMinutes(_ minutes: Int) {
+        biometricLockGraceMinutes = minutes
+        UserDefaults.standard.set(minutes, forKey: Self.biometricLockGraceMinutesStorageKey)
+    }
+
+    /// 沒有時間戳代表使用者剛通過驗證（剛登入、剛啟用、剛解鎖），不要再鎖一次；
+    /// Face ID 面板收起時會再送一次 `.active`，這裡回 true 的話人就會被鎖回去。
+    func biometricGracePeriodHasExpired(now: Date = Date()) -> Bool {
+        guard let stamp = UserDefaults.standard.object(forKey: Self.biometricLastBackgroundedAtStorageKey) as? Double else {
+            return false
+        }
+        guard biometricLockGraceMinutes > 0 else {
+            return true
+        }
+        let elapsed = now.timeIntervalSince1970 - stamp
+        return elapsed < 0 || elapsed > TimeInterval(biometricLockGraceMinutes * 60)
+    }
+
+    func clearBiometricBackgroundStamp() {
+        UserDefaults.standard.removeObject(forKey: Self.biometricLastBackgroundedAtStorageKey)
     }
 
     func unlockWithBiometrics() async {
@@ -339,6 +389,7 @@ extension AppSessionStore {
         if didAuthenticate {
             requiresBiometricUnlock = false
             biometricAuthErrorMessage = nil
+            clearBiometricBackgroundStamp()
             bootstrapAuthenticatedData(forceRefresh: false)
         }
     }

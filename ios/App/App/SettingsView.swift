@@ -55,7 +55,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(store.localizedBiometricName) 登入")
                                     .font(.body.weight(.semibold))
-                                Text("重新開啟 App 或回到前景時先完成本機解鎖")
+                                Text("離開 App 超過設定的時間後，回來要先完成本機解鎖")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -64,6 +64,12 @@ struct SettingsView: View {
                     .disabled(store.isBiometricAuthenticating)
 
                     if store.isBiometricAuthEnabled {
+                        Picker("自動鎖定", selection: biometricGraceBinding) {
+                            ForEach(AppSessionStore.biometricLockGraceOptions, id: \.self) { minutes in
+                                Text(Self.graceLabel(minutes)).tag(minutes)
+                            }
+                        }
+
                         Button {
                             store.lockForBiometricUnlockIfNeeded()
                         } label: {
@@ -294,6 +300,24 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+
+    private var biometricGraceBinding: Binding<Int> {
+        Binding(
+            get: { store.biometricLockGraceMinutes },
+            set: { store.setBiometricLockGraceMinutes($0) }
+        )
+    }
+
+    private static func graceLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0:
+            return "立即"
+        case 60:
+            return "1 小時"
+        default:
+            return "\(minutes) 分鐘"
+        }
     }
 
     private var syncStatusDescription: String {
