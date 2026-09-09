@@ -16,3 +16,15 @@
 .overlap-notice{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;margin-top:18px;border-radius:8px;background:#f6f8fc;color:#73829a}.overlap-notice strong{font-size:12px;color:#445a7d}.overlap-notice p{font-size:11px;line-height:1.7;margin-top:4px}.overlap-notice.lottery{background:#f0f4ff;color:#6881b7}.course-block.multi-course strong{font-size:11px;line-height:1.45}.course-block.multi-course{padding:7px 4px}.course-block.multi-course small{font-size:9px;line-height:1.5}.course-block.preview{pointer-events:none}
 @media(max-width:1190px){.phase-bar{align-items:flex-start;flex-direction:column;gap:8px}.phase-controls .segmented button span{display:inline}}
 @media(max-width:600px){.phase-controls{gap:8px}.phase-controls .segmented button{font-size:12px;padding:8px 10px}.phase-bar{margin-bottom:20px}.overlap-notice{padding:11px;gap:8px}.overlap-notice strong{font-size:11px}.overlap-notice p{font-size:10px}.summary>div{flex-wrap:wrap}}
+
+/* Expanded search shares filters and draft state with the timetable sidebar. */
+.panel-actions{display:flex;align-items:center;gap:3px}.expand-search{font-size:11px;white-space:nowrap;padding:6px}.panel-heading{flex-wrap:wrap}.panel-heading .panel-actions{margin-left:auto}
+.search-expanded .calendar-section{display:none}.search-expanded .search-panel{width:100%;border-left:0;min-height:610px}
+.search-expanded .panel-heading{padding:24px 28px}.search-expanded .panel-heading h2{font-size:22px}
+.search-expanded .search-controls{padding:0 28px;display:grid;grid-template-columns:minmax(220px,1fr) minmax(210px,.6fr);gap:0 24px}
+.search-expanded .filter-line{margin:0}.search-expanded .filter-check,.search-expanded .results-heading{grid-column:1/-1}.search-expanded .results-heading{margin-top:18px}
+.comparison-heading{display:grid;grid-template-columns:1.3fr .8fr 1fr 1fr;gap:20px;padding:13px 28px;background:#f7f9fc;color:#7c899e;font-size:11px;border-block:1px solid var(--line)}
+.search-expanded .result{display:grid;grid-template-columns:1.3fr .8fr 1fr 1fr;grid-template-rows:auto auto;column-gap:20px;row-gap:8px;padding:21px 28px;align-items:center}
+.search-expanded .result-title{grid-column:1;grid-row:1;margin:0}.search-expanded .result-title svg{display:none}.search-expanded .result>p{grid-column:1;grid-row:2}
+.search-expanded .result-top{grid-column:2;grid-row:1/3;flex-direction:column;align-items:flex-start;gap:8px}.search-expanded .result-time{grid-column:3;grid-row:1/3;margin:0;font-size:12px;line-height:1.7}
+.search-expanded .result-bottom{grid-column:4;grid-row:1/3;flex-direction:column;align-items:flex-start;gap:8px}.search-expanded .detail{width:100%;max-width:720px;align-self:center;padding:0 28px 32px}.search-expanded .empty{padding:60px 20px}

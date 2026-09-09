@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Compass, CalendarDays, Search, Plus, X, ArrowLeft, ArrowRight, Check, SlidersHorizontal, Clock3, MapPin, UserRound, BookOpen, RotateCcw, List, AlertTriangle, CheckCircle2, FlaskConical, ChevronRight, PanelRightClose } from 'lucide-react';
+import { Compass, CalendarDays, Search, Plus, X, ArrowLeft, ArrowRight, Check, SlidersHorizontal, Clock3, MapPin, UserRound, BookOpen, RotateCcw, List, AlertTriangle, CheckCircle2, FlaskConical, ChevronRight, PanelRightClose, Maximize2 } from 'lucide-react';
 import { courses, official, defaultPlans, weekdays, times, storageKey, conflicts, slotText, restorePlans, restoreMode, modeStorageKey, canPlan, layoutMeetings } from './model.js';
 import './style.css';
 
@@ -13,6 +13,7 @@ function App() {
   const [category, setCategory] = useState('全部課程');
   const [onlyFree, setOnlyFree] = useState(false);
   const [advanced, setAdvanced] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 900px)').matches);
   const [panel, setPanel] = useState(() => !window.matchMedia('(max-width: 900px)').matches);
   const [detail, setDetail] = useState(null);
@@ -38,10 +39,10 @@ function App() {
   useEffect(() => { if (detail) backRef.current?.focus(); }, [detail]);
   useEffect(() => {
     function key(event) {
-      if (event.key === 'Escape') { if (detail) { setDetail(null); setTimeout(() => searchRef.current?.focus(), 0); } else { setPanel(false); } setHovered(null); }
+      if (event.key === 'Escape') { if (detail) { setDetail(null); setTimeout(() => searchRef.current?.focus(), 0); } else if (expanded) { setExpanded(false); } else { setPanel(false); } setHovered(null); }
     }
     window.addEventListener('keydown',key); return () => window.removeEventListener('keydown',key);
-  }, [detail]);
+  }, [detail, expanded]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)');
@@ -66,6 +67,7 @@ function App() {
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener('keydown', trap); if (previous?.isConnected) previous.focus(); };
   }, [compact, panel]);
 
+  function returnToSchedule() { setExpanded(false); setDetail(null); setHovered(null); setPanel(true); setTimeout(() => searchRef.current?.focus(), 0); }
   function openSearch() { setDetail(null); setPanel(true); setTimeout(() => searchRef.current?.focus(), 0); }
   function openDetail(course) { setDetail(course); setHovered(null); setPanel(true); }
   function add(course) {
@@ -78,12 +80,12 @@ function App() {
   function reset() { setPlans(defaultPlans); setDetail(null); setHovered(null); setQuery(''); setCategory('全部課程'); setOnlyFree(false); setNotice('已還原示範課表。'); }
   const plannedCredits = planned.reduce((sum,c) => sum+c.credits,0);
 
-  return <div className={`app ${panel ? 'panel-open' : ''}`}>
+  return <div className={`app ${panel ? 'panel-open' : ''} ${panel && expanded && !compact ? 'search-expanded' : ''}`}>
     <a className="skip" href="#main">跳至課表</a>
     <nav className="rail" aria-label="主要導覽">
       <a className="brand" href="#main" aria-label="修課羅盤首頁"><Compass size={28}/></a>
-      <button className="rail-item active" onClick={() => { setPanel(false); setDetail(null); }} aria-label="本學期"><CalendarDays size={21}/><span>本學期</span></button>
-      <button className={`rail-item ${panel ? 'selected' : ''}`} onClick={openSearch} aria-label="找課"><Search size={21}/><span>找課</span></button>
+      <button className={`rail-item ${expanded && panel && !compact ? '' : 'active'}`} onClick={() => { setExpanded(false); setPanel(false); setDetail(null); }} aria-label="本學期"><CalendarDays size={21}/><span>本學期</span></button>
+      <button className={`rail-item ${expanded && panel && !compact ? 'active' : panel ? 'selected' : ''}`} onClick={openSearch} aria-label="找課"><Search size={21}/><span>找課</span></button>
       <div className="rail-bottom"><FlaskConical size={19}/><span>原型</span></div>
     </nav>
     <div className="shell">
@@ -112,14 +114,14 @@ function App() {
             <div className="calendar-footer"><span><Check size={14}/>{storageError?'暫時無法儲存，重整後可能遺失預排':'預排自動儲存在此瀏覽器'}</span><span>點選課程查看詳情</span></div>
             <div className="planning-note"><div className="note-icon"><BookOpen size={20}/></div><div><strong>{isLottery?'先保留選擇，再看抽選結果。':'先試排，再做決定。'}</strong><p>{isLottery?'初選上機登記可放入同時段志願；抽選後的繼續選課已是先選先上，請切換加退選規劃模式。':'預排課程只用來比較時間安排，不代表已選上，也不計入已完成學分。'}</p></div></div>
           </section>
-          {panel && <><button className="mobile-backdrop" aria-label="關閉找課側欄" onClick={() => { setPanel(false); setDetail(null); }}/><aside ref={panelRef} role={compact ? "dialog" : undefined} aria-modal={compact ? true : undefined} className="search-panel" aria-label={detail?'課程詳情':'找課側欄'}>
-            <div className="panel-heading"><div><span className="eyebrow">{detail?'COURSE DETAILS':'FIND YOUR NEXT COURSE'}</span><h2>{detail?'課程詳情':'下一門，想學什麼？'}</h2></div><button className="icon-button" aria-label="關閉側欄" onClick={() => {setPanel(false);setDetail(null);setHovered(null);}}><PanelRightClose size={19}/></button></div>
+          {panel && <><button className="mobile-backdrop" aria-label="關閉找課側欄" onClick={() => { setPanel(false); setDetail(null); }}/><aside ref={panelRef} role={compact ? "dialog" : undefined} aria-modal={compact ? true : undefined} className="search-panel" aria-label={detail?'課程詳情':expanded&&!compact?'完整找課':'找課側欄'}>
+            <div className="panel-heading"><div><span className="eyebrow">{detail?'COURSE DETAILS':'FIND YOUR NEXT COURSE'}</span><h2>{detail?'課程詳情':expanded&&!compact?'探索本學期課程':'下一門，想學什麼？'}</h2></div><div className="panel-actions">{!compact && <button className="subtle expand-search" onClick={() => expanded ? returnToSchedule() : (setExpanded(true), setHovered(null))}>{expanded?<ArrowLeft size={16}/>:<Maximize2 size={16}/>} {expanded?'回到課表':'展開找課'}</button>}<button className="icon-button" aria-label="關閉側欄" onClick={() => {setExpanded(false);setPanel(false);setDetail(null);setHovered(null);}}><PanelRightClose size={19}/></button></div></div>
             {detail ? <div className="detail"><button ref={backRef} className="back subtle" onClick={openSearch}><ArrowLeft size={16}/>回到找課</button><div className={`detail-symbol ${detail.color}`}><BookOpen size={26}/></div><div className="detail-category">{detail.category} · {detail.id}</div><h3>{detail.name}</h3><span className={`badge ${detail.official?'neutral':plans.includes(detail.id)?'amber':'blue'}`}>{detail.official?'已選上':plans.includes(detail.id)?planLabel:'尚未加入'}</span><dl><div><dt><UserRound size={16}/>授課教師</dt><dd>{detail.teacher}</dd></div><div><dt><BookOpen size={16}/>學分</dt><dd>{detail.credits} 學分</dd></div><div><dt><Clock3 size={16}/>上課時間</dt><dd>{slotText(detail)}</dd></div><div><dt><MapPin size={16}/>教室</dt><dd>{detail.room}</dd></div></dl><h4>這門課在學什麼</h4><p className="description">{detail.description}</p>
             {!selectedIds.includes(detail.id) && <div className={`fit-box ${previewConflicts.length&&!isLottery?'warning':'success'}`}>{previewConflicts.length?<AlertTriangle size={19}/>:<CheckCircle2 size={19}/>}<div><strong>{previewConflicts.length?(isLottery?'同時段志願，可以加入':'與目前課表衝堂'):'時間剛剛好'}</strong><p>{previewConflicts.length?`與「${previewConflicts.map(c=>c.name).join('、')}」時段重疊。${isLottery?'初選登記可保留多個選擇；最終結果以學校抽選為準。':'請選擇其他課程，或先移除衝突的預排課程。'}`:'與已選及預排課程皆無衝突，可加入課表比較。'}</p></div></div>}
             {detail.seats === 0 && <p className="capacity-note">模擬名額：已額滿。仍可預排，但不代表能完成官方選課。</p>}
             <div className="detail-action">{detail.official?<div className="official-note"><CheckCircle2 size={17}/>官方已選示範資料 · 僅供檢視</div>:plans.includes(detail.id)?<button className="danger-button" onClick={() => remove(detail)}>{isLottery?'移除志願草稿':'移除預排'}</button>:<button className="primary wide" disabled={!canPlan(detail,selected,mode)} onClick={() => add(detail)}><Plus size={17}/>{previewConflicts.length&&!isLottery?'衝堂，暫時無法預排':isLottery?'加入志願草稿':'加入預排'}</button>}<small>這裡的所有課程與名額皆為示範資料</small></div></div> : <>
             <div className="search-controls"><label className="search-input"><Search size={18}/><input ref={searchRef} aria-label="搜尋課名、課碼或教師" placeholder="搜尋課名、課碼或教師" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button className="icon-button" aria-label="清除搜尋" onClick={() => setQuery('')}><X size={15}/></button>}</label><div className="filter-line"><select aria-label="課程類別" value={category} onChange={e => setCategory(e.target.value)}>{['全部課程','本系選修','雙主修','通識'].map(c=><option key={c}>{c}</option>)}</select><button className={`filter-button ${advanced?'on':''}`} aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={15}/>篩選</button></div>{advanced && <label className="filter-check"><input type="checkbox" checked={onlyFree} onChange={e => setOnlyFree(e.target.checked)}/>{isLottery?'只顯示無時段重疊課程':'只顯示不衝堂課程'}</label>}<div className="results-heading"><span>{query?'搜尋結果':'探索本學期課程'}</span><small>{results.length} 門</small></div></div>
-            <div className="results">{results.length===0?<div className="empty"><Search size={28}/><h3>還沒找到符合的課程</h3><p>試試其他關鍵字，或放寬篩選條件。</p><button className="subtle" onClick={()=>{setQuery('');setCategory('全部課程');setOnlyFree(false);}}>清除所有條件</button></div>:results.map(course => {const clash=conflicts(course, selected); const isSelected=selectedIds.includes(course.id); return <button key={course.id} className="result" onClick={()=>openDetail(course)} onMouseEnter={()=>setHovered(course)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(course)} onBlur={()=>setHovered(null)}><div className="result-top"><span className={`category-label ${course.color}`}>{course.category}</span><span className="credits">{course.credits} 學分</span></div><div className="result-title"><h3>{course.name}</h3><ArrowRight size={16}/></div><p>{course.teacher} <span>·</span> {course.id}</p><div className="result-time"><Clock3 size={13}/>{slotText(course)}</div><div className="result-bottom"><span className={isSelected?'planned-text':clash.length?'warning-text':'success-text'}>{isSelected?<Check size={13}/>:clash.length?<AlertTriangle size={13}/>:<CheckCircle2 size={13}/>} {isSelected?(isLottery?'已加入志願草稿':'已加入預排'):clash.length?(isLottery?'同時段可登記':'與課表衝堂'):'無時段重疊'}</span><span>{course.seats===0?'模擬：額滿':`模擬餘額 ${course.seats} 人`}</span></div></button>;})}</div><div className="panel-footnote">選取課程，在左側課表預覽時段。</div></>}
+            {expanded && !compact && <div className="comparison-heading" aria-hidden="true"><span>課程／教師</span><span>類別／學分</span><span>上課時間</span><span>規劃狀態／模擬名額</span></div>}<div className="results">{results.length===0?<div className="empty"><Search size={28}/><h3>還沒找到符合的課程</h3><p>試試其他關鍵字，或放寬篩選條件。</p><button className="subtle" onClick={()=>{setQuery('');setCategory('全部課程');setOnlyFree(false);}}>清除所有條件</button></div>:results.map(course => {const clash=conflicts(course, selected); const isSelected=selectedIds.includes(course.id); return <button key={course.id} className="result" onClick={()=>openDetail(course)} onMouseEnter={()=>setHovered(course)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(course)} onBlur={()=>setHovered(null)}><div className="result-top"><span className={`category-label ${course.color}`}>{course.category}</span><span className="credits">{course.credits} 學分</span></div><div className="result-title"><h3>{course.name}</h3><ArrowRight size={16}/></div><p>{course.teacher} <span>·</span> {course.id}</p><div className="result-time"><Clock3 size={13}/>{slotText(course)}</div><div className="result-bottom"><span className={isSelected?'planned-text':clash.length?'warning-text':'success-text'}>{isSelected?<Check size={13}/>:clash.length?<AlertTriangle size={13}/>:<CheckCircle2 size={13}/>} {isSelected?(isLottery?'已加入志願草稿':'已加入預排'):clash.length?(isLottery?'同時段可登記':'與課表衝堂'):'無時段重疊'}</span><span>{course.seats===0?'模擬：額滿':`模擬餘額 ${course.seats} 人`}</span></div></button>;})}</div><div className="panel-footnote">{expanded&&!compact?'選取課程查看詳情；回到課表可比較實際時段。':'選取課程，在課表預覽時段。'}</div></>}
           </aside></>}
         </div>
         <footer className="page-footer">設計探索 01 <span>本學期工作區</span><span>本機原型，不連接校務系統</span></footer>
