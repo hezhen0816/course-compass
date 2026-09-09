@@ -6,3 +6,13 @@
 @media(prefers-reduced-motion:no-preference){button{transition:background .13s,box-shadow .13s}.toast{animation:appear .18s ease-out}@keyframes appear{from{opacity:0;bottom:16px}to{opacity:1;bottom:25px}}}
 /* Keep supporting text readable without competing with course names. */
 .result p,.result-time,.result-bottom,.category-label,.credits{font-size:11px}.result-title h3{font-size:16px}.course-block strong{font-size:12px}.course-block span,.course-block small{font-size:10px}.detail dl>div,.description{font-size:12px}.detail h4{font-size:13px}.detail-category,.fit-box p{font-size:12px}
+/* Clip visual corners without creating nested vertical scroll containers. */
+.workspace,.calendar,.course-block{overflow:clip}
+.calendar-scroll{overflow:visible}
+@media(max-width:600px),(min-width:901px) and (max-width:1050px){.calendar-scroll{overflow-x:auto}}
+/* Enrollment-phase semantics stay visible beside the planning surface. */
+.phase-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:-3px 0 21px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.phase-controls{display:flex;align-items:center;gap:12px;flex-shrink:0;font-size:12px;color:#687b96}.phase-controls .segmented button{font-size:12px;padding:9px 12px}.phase-controls .segmented .chosen{color:var(--brand);font-weight:600}.phase-bar p{font-size:11px;color:#748299;line-height:1.7}
+.overlap-notice{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;margin-top:18px;border-radius:8px;background:#f6f8fc;color:#73829a}.overlap-notice strong{font-size:12px;color:#445a7d}.overlap-notice p{font-size:11px;line-height:1.7;margin-top:4px}.overlap-notice.lottery{background:#f0f4ff;color:#6881b7}.course-block.multi-course strong{font-size:11px;line-height:1.45}.course-block.multi-course{padding:7px 4px}.course-block.multi-course small{font-size:9px;line-height:1.5}.course-block.preview{pointer-events:none}
+@media(max-width:1190px){.phase-bar{align-items:flex-start;flex-direction:column;gap:8px}.phase-controls .segmented button span{display:inline}}
+@media(max-width:600px){.phase-controls{gap:8px}.phase-controls .segmented button{font-size:12px;padding:8px 10px}.phase-bar{margin-bottom:20px}.overlap-notice{padding:11px;gap:8px}.overlap-notice strong{font-size:11px}.overlap-notice p{font-size:10px}.summary>div{flex-wrap:wrap}}
