@@ -41,6 +41,9 @@ export function useCourseSearch() {
   // 由日期推算，等 /api/courses/semesters 回來再校正；寫死會過期
   const [querySemester, setQuerySemester] = useState(guessCurrentSemester);
   const [courseSemesters, setCourseSemesters] = useState<CourseSemesterInfo[]>([]);
+  // 清單載不到時只剩推算出來的當學期一個選項，看起來像「只能查這學期」，
+  // 所以要把失敗原因留下來顯示，不要吞掉。
+  const [courseSemestersError, setCourseSemestersError] = useState('');
   const [manualQuery, setManualQuery] = useState('');
   const [manualMode, setManualMode] = useState<SearchMode>('name');
   const [exactCourseNameSearch, setExactCourseNameSearch] = useState(false);
@@ -63,11 +66,14 @@ export function useCourseSearch() {
       .then((semesters) => {
         if (!isActive) return;
         setCourseSemesters(semesters);
+        setCourseSemestersError('');
         const current = semesters.find((semester) => semester.current) || semesters[0];
         if (current?.semester) setQuerySemester(current.semester);
       })
-      .catch(() => {
-        if (isActive) setCourseSemesters([]);
+      .catch((error: unknown) => {
+        if (!isActive) return;
+        setCourseSemesters([]);
+        setCourseSemestersError(error instanceof Error ? error.message : '學期清單載入失敗。');
       });
     return () => {
       isActive = false;
@@ -204,6 +210,7 @@ export function useCourseSearch() {
 
   return {
     courseSemesters,
+    courseSemestersError,
     querySemester,
     currentCourseSemesterLabel,
     manualMode,

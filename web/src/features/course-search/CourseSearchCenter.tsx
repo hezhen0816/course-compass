@@ -22,6 +22,7 @@ import {
 type CourseSearchCenterProps = {
   data: AppData;
   courseSemesters: CourseSemesterInfo[];
+  courseSemestersError: string;
   querySemester: string;
   currentCourseSemesterLabel: string;
   manualMode: SearchMode;
@@ -78,6 +79,7 @@ const COURSE_DEPARTMENT_LIST = listCourseDepartments();
 export function CourseSearchCenter({
   data,
   courseSemesters,
+  courseSemestersError,
   querySemester,
   currentCourseSemesterLabel,
   manualMode,
@@ -182,7 +184,16 @@ export function CourseSearchCenter({
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-slate-500">目前查詢：{currentCourseSemesterLabel}</p>
+              {courseSemestersError ? (
+                <p className="mt-1 text-xs text-red-600">
+                  學期清單載入失敗，目前只能查 {querySemester}。{courseSemestersError}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">
+                  目前查詢：{currentCourseSemesterLabel}
+                  {courseSemesters.length > 1 ? `（可查 ${courseSemesters.length} 個學期，含歷年）` : ''}
+                </p>
+              )}
             </div>
 
             <div className="md:col-span-2 xl:col-span-2">

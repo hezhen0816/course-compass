@@ -40,6 +40,19 @@
 
 使用者同意先做可操作的「本學期課表＋找課側欄」，看完整主畫面後逐區完善。第一階段放在 `prototypes/semester-workspace/`，使用模擬資料與獨立瀏覽器儲存，不修改正式選課、監控或畢業認列流程；確認方向後才整合。使用者初看回饋「感覺還不錯」。
 
+## 2026-09-10 「只能查 1151」其實是學期清單載入失敗
+
+課程查詢本來就查得到歷年：`/api/courses/semesters` 回 61 個學期，實測 1142 查「物件導向程式設計」
+回 5 筆、1131 回 2 筆，學校的 querycourse API 對舊學期一樣有資料。
+
+看起來只剩 1151 是因為 `useCourseSearch` 的 `.catch(() => setCourseSemesters([]))` 把錯誤吞了，
+清單空掉後畫面只剩 `<option>{querySemester}</option>` 這個推算出來的當學期，
+使用者看到的是「這個系統只支援本學期」而不是「後端連不到」。後端在家用 Windows 上，
+9/9 就觀察到離線 2 小時，這個誤會會一直重演。
+
+改成把失敗原因留下來顯示（沿用 `api.ts` 既有的「無法連線到校務同步後端…」訊息），
+成功時則在下方標出「可查 N 個學期，含歷年」。
+
 ## 2026-09-09 iOS Face ID 每次回來都要掃：鎖在 `.inactive` 觸發
 
 `AppShellView` 原本 `case .inactive, .background:` 都呼叫 `lockForBiometricUnlockIfNeeded()`。

@@ -178,6 +178,7 @@ export default function CoursePlannerWebApp() {
   const [activeSemesterId, setActiveSemesterId] = useState('1-1');
   const {
     courseSemesters,
+    courseSemestersError,
     querySemester,
     currentCourseSemesterLabel,
     manualMode,
@@ -878,6 +879,7 @@ export default function CoursePlannerWebApp() {
           <CourseSearchCenter
             data={selectionData}
             courseSemesters={courseSemesters}
+            courseSemestersError={courseSemestersError}
             querySemester={querySemester}
             currentCourseSemesterLabel={currentCourseSemesterLabel}
             manualMode={manualMode}
