@@ -108,7 +108,7 @@ type UserDataRecord = {
   content: StoredAppData;
 };
 
-export function useCourseData(session: Session | null, readOnly = false) {
+export function useCourseData(session: Session | null) {
   const [data, setData] = useState<AppData>(() => createEmptyAppData());
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [loadError, setLoadError] = useState('');
@@ -166,7 +166,7 @@ export function useCourseData(session: Session | null, readOnly = false) {
   }, [userID]);
 
   useEffect(() => {
-    if (readOnly || !userID || !supabase || loadedUserID !== userID) {
+    if (!userID || !supabase || loadedUserID !== userID) {
       return;
     }
 
@@ -215,7 +215,7 @@ export function useCourseData(session: Session | null, readOnly = false) {
         window.clearTimeout(resetStatusTimer);
       }
     };
-  }, [data, loadedUserID, userID, readOnly]);
+  }, [data, loadedUserID, userID]);
 
   return { data, setData, syncStatus, isLoading, loadError };
 }

@@ -22,22 +22,6 @@
 
 詳細說明在 [web/README.md](web/README.md)。
 
-### 本機新版預覽
-
-新版使用獨立入口，先以既有帳號的雲端資料做唯讀比較：
-
-```bash
-VITE_BACKEND_URL=https://hezhen.taile9e4a0.ts.net npm --prefix web run dev:next
-```
-
-開啟 `http://127.0.0.1:4318/preview.html`，登入原有帳號；不同 origin 需要重新登入。也可「先看空白介面」，不會帶入原型的範例課程。根目錄 `.env` 沿用既有 `VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY`。
-
-- 六頁入口在 `web/src/features/next/`，讀取 `user_data` 與使用者範圍內的 `monitored_courses`。官方課表與志願顯示上次保存快照。
-- 課程查詢沿用後端 API，需要 Windows 後端在線及同一個 tailnet。
-- 不會自動保存修課資料；選課、匯入、監控設定與筆記編輯尚未開放。
-- 預覽未列入 production build 入口；既有首頁保留，沒有新舊切換按鈕。
-- 唯讀持久化回歸檢查：`node --test tests/web/read-only-course-data.test.cjs`。桌面及手機空白流程已驗證；真實帳號顯示與在線課程查詢仍待驗證。
-
 ### iOS
 
 - 原生 SwiftUI App

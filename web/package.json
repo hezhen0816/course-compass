@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "dev:next": "vite --host 127.0.0.1 --port 4318 --strictPort --open /preview.html"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
