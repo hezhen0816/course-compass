@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, Course, CourseProgram, CourseSearchResult, GpaApiKeyStatus, OfficialSelectionSyncResponse, PendingRequirement } from '../shared/types';
 import {
   addOfficialInitialSelectionWaitlistCourse,
@@ -22,7 +22,8 @@ import { Navbar, type AppPage } from './Navbar';
 import { UpdateNotice } from './UpdateNotice';
 import { CourseSearchCenter } from '../features/course-search/CourseSearchCenter';
 import { useCourseSearch } from '../features/course-search/useCourseSearch';
-import { CourseTimelinePage } from '../features/history/CourseTimelinePage';
+import { RecordPage } from '../features/history/RecordPage';
+import { ThresholdsPage } from '../features/thresholds/ThresholdsPage';
 import { PlanningWorkspace } from '../features/planning/PlanningWorkspace';
 import { usePlannerStats } from '../features/planning/usePlannerStats';
 import { useSchoolSync } from '../features/school-sync/useSchoolSync';
@@ -117,6 +118,15 @@ function scrollToWhenReady(id: string, retries = 40, intervalMs = 50) {
   window.setTimeout(tick, 0);
 }
 
+const PAGE_HASHES: AppPage[] = ['semester', 'course-search', 'planning', 'monitor', 'record', 'thresholds', 'settings'];
+
+/** 分頁與網址同步：拆成多頁後來回切換變頻繁，重新整理或上一頁不該掉回預設頁。 */
+function pageFromHash(hash: string): AppPage {
+  const value = hash.replace(/^#/, '');
+  if (value === 'schedule-preview') return 'planning';
+  return (PAGE_HASHES as string[]).includes(value) ? (value as AppPage) : 'course-search';
+}
+
 export default function CoursePlannerWebApp() {
   const { session, loading: authLoading } = useAuth();
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -169,9 +179,29 @@ export default function CoursePlannerWebApp() {
     }
   };
   const { data, setData, syncStatus, isLoading: dataLoading } = useCourseData(session);
-  const [activePage, setActivePage] = useState<AppPage>(() => (
-    window.location.hash === '#schedule-preview' ? 'planning' : 'course-search'
-  ));
+  const [activePage, setActivePage] = useState<AppPage>(() => pageFromHash(window.location.hash));
+  const scrollByPage = useRef<Partial<Record<AppPage, number>>>({});
+  const changePage = useCallback((next: AppPage) => {
+    setActivePage((current) => {
+      if (current === next) return current;
+      scrollByPage.current[current] = window.scrollY;
+      return next;
+    });
+    if (window.location.hash.replace(/^#/, '') !== next) {
+      window.history.pushState(null, '', `#${next}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => setActivePage(pageFromHash(window.location.hash));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    window.scrollTo(0, scrollByPage.current[activePage] ?? 0);
+  }, [activePage]);
+
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
     return !localStorage.getItem('hasSeenOnboarding');
   });
@@ -868,7 +898,7 @@ export default function CoursePlannerWebApp() {
         isDemoMode={isDemoMode}
         activePage={activePage}
         pendingCount={(officialSelection?.registered_count || 0) + (officialSelection?.available_count || 0) + selectionCourses.length}
-        onPageChange={setActivePage}
+        onPageChange={changePage}
         onOpenHelp={() => setIsOnboardingOpen(true)}
         onExitDemo={() => setIsDemoMode(false)}
       />
@@ -922,7 +952,7 @@ export default function CoursePlannerWebApp() {
             onAddMonitorCourse={(offering) => void addMonitorCourse(offering)}
             monitorActionCourseNo={monitorActionCourseNo}
             onDeleteVirtualCourse={deleteSelectionCourse}
-            onOpenPlanning={() => setActivePage('planning')}
+            onOpenPlanning={() => changePage('planning')}
           />
         )}
 
@@ -949,17 +979,17 @@ export default function CoursePlannerWebApp() {
         {activePage === 'semester' && (
           <SemesterPage
             data={data}
-            onGoToCourseSearch={() => setActivePage('course-search')}
-            onGoToPlanning={() => setActivePage('planning')}
+            onGoToCourseSearch={() => changePage('course-search')}
+            onGoToPlanning={() => changePage('planning')}
           />
         )}
 
         {activePage === 'monitor' && (
           <MonitorPage
-            onGoToCourseSearch={() => setActivePage('course-search')}
+            onGoToCourseSearch={() => changePage('course-search')}
             onGoToSettings={() => {
               // 從監控頁過來的人要找的是監控設定，不是設定頁最上面的同步狀態
-              setActivePage('settings');
+              changePage('settings');
               scrollToWhenReady('monitor-settings');
             }}
           />
@@ -1005,15 +1035,21 @@ export default function CoursePlannerWebApp() {
           />
         )}
 
-        {activePage === 'history' && (
-          <CourseTimelinePage
+        {activePage === 'record' && (
+          <RecordPage
+            data={data}
+            onOpenCourseDetail={(semesterId: string, semesterName: string, course: Course) => {
+              setDetailCourse({ semesterId, semesterName, course });
+            }}
+          />
+        )}
+
+        {activePage === 'thresholds' && (
+          <ThresholdsPage
             data={data}
             stats={stats}
             onAddRecognitionRequirement={addRecognitionRequirement}
             onDeleteRecognitionRequirement={deleteRecognitionRequirement}
-            onOpenCourseDetail={(semesterId, semesterName, course) => {
-              setDetailCourse({ semesterId, semesterName, course });
-            }}
           />
         )}
       </main>

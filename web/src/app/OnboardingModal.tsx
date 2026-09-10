@@ -32,7 +32,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
     },
     {
       title: "畢業門檻追蹤",
-      description: "側邊欄會即時顯示你的學分統計與各項畢業門檻進度，幫助你掌握修課狀況。",
+      description: "「畢業門檻」頁顯示各項門檻的完成度，並可自訂雙主修／輔系的認列規則；「修課紀錄」頁看八個學期修過什麼。",
       icon: <div className="text-5xl font-bold text-orange-500">133</div>,
       color: "bg-orange-50"
     }

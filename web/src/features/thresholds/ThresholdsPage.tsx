@@ -1,16 +1,11 @@
-import { Info, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import type { AppData, Course, CourseProgram, PendingRequirement, PlannerStats, RequirementKind } from '../../shared/types';
-import { CATEGORY_LABELS, PROGRAM_LABELS } from '../../shared/constants';
+import type { AppData, CourseProgram, PendingRequirement, PlannerStats, RequirementKind } from '../../shared/types';
 import {
   DOUBLE_MAJOR_RECOGNITION_SET_ID,
   MINOR_RECOGNITION_SET_ID,
-  displayClassroom,
-  displaySlots,
   formatCredits,
   getRequirementStatus,
-  isFailedImportedHistoryCourse,
-  isHistoryImportedCourse,
   normalizeName,
 } from '../../shared/domain/planner';
 
@@ -24,138 +19,37 @@ type RecognitionRequirementDraft = {
   note?: string;
 };
 
-type CourseTimelinePageProps = {
+export type { RecognitionRequirementDraft };
+
+type ThresholdsPageProps = {
   data: AppData;
   stats: PlannerStats;
   onAddRecognitionRequirement: (draft: RecognitionRequirementDraft) => void;
   onDeleteRecognitionRequirement: (requirementId: string) => void;
-  onOpenCourseDetail: (semesterId: string, semesterName: string, course: Course) => void;
 };
 
-export function CourseTimelinePage({
+/**
+ * 畢業門檻：門檻完成度 ＋ 雙主修／輔系認列規則。
+ *
+ * 從「修課軌跡 / 畢業進度」拆出來的那一半。數字一律沿用 `usePlannerStats`，
+ * 不在這裡重算，否則拆頁就會改到使用者原本看到的進度。
+ */
+export function ThresholdsPage({
   data,
   stats,
   onAddRecognitionRequirement,
   onDeleteRecognitionRequirement,
-  onOpenCourseDetail,
-}: CourseTimelinePageProps) {
-  // 原本只留歷史匯入的課，於是「正在修」的整批看不到——那正是使用者現在最想看的一群。
-  const timelineSemesters = data.semesters.map((semester) => ({
-    ...semester,
-    courses: semester.courses,
-    plannedSourceLabel: '',
-  }));
-  const plannedCourses = data.selectionPlan?.courses || [];
-  const plannedSemesterName = plannedSemesterNameFromLabel(data.selectionPlan?.targetLabel);
-  const plannedTargetIndex = plannedCourses.length > 0 && plannedSemesterName
-    ? timelineSemesters.findIndex((semester) => semester.name === plannedSemesterName)
-    : -1;
-  const displaySemesters = plannedCourses.length === 0
-    ? timelineSemesters
-    : plannedTargetIndex >= 0
-      ? timelineSemesters.map((semester, index) => (
-          index === plannedTargetIndex
-            ? {
-                ...semester,
-                courses: [...semester.courses, ...plannedCourses],
-                plannedSourceLabel: data.selectionPlan?.targetLabel || '未來規劃',
-              }
-            : semester
-        ))
-      : [
-          ...timelineSemesters,
-          {
-            id: '__selection_plan__',
-            name: data.selectionPlan?.targetLabel || '未來規劃',
-            courses: plannedCourses,
-            plannedSourceLabel: data.selectionPlan?.targetLabel || '未來規劃',
-          },
-        ];
-  const historyCount = timelineSemesters.reduce((sum, semester) => (
-    sum + semester.courses.filter(isHistoryImportedCourse).length
-  ), 0);
-  const inProgressCount = timelineSemesters.reduce((sum, semester) => (
-    sum + semester.courses.filter((course) => !isHistoryImportedCourse(course)).length
-  ), 0);
-  const plannedCount = plannedCourses.length;
-  const totalCourses = historyCount + inProgressCount + plannedCount;
-  const requirementById = new Map(data.pendingRequirements.map((requirement) => [requirement.id, requirement]));
-  const failedCount = timelineSemesters.reduce((sum, semester) => (
-    sum + semester.courses.filter(isFailedImportedHistoryCourse).length
-  ), 0);
-
+}: ThresholdsPageProps) {
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">修課軌跡</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-950">歷史修課與未來規劃</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          這裡集中查看已修、修課中、未通過與從課程查詢加入的未來規劃；未來規劃只代表草稿或待加簽，不代表已選上。
-        </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-5">
-          <SummaryBox label="總課程" value={`${totalCourses} 門`} tone="slate" />
-          <SummaryBox label="歷史匯入" value={`${historyCount} 門`} tone="blue" />
-          <SummaryBox label="修課中" value={`${inProgressCount} 門`} tone="emerald" />
-          <SummaryBox label="未來規劃" value={`${plannedCount} 門`} tone="amber" />
-          <SummaryBox label="未通過" value={`${failedCount} 門`} tone={failedCount > 0 ? 'red' : 'emerald'} />
-        </div>
-      </section>
-
       <GraduationProgressPanel data={data} stats={stats} />
-
       <RecognitionRequirementsPanel
         data={data}
         onAddRecognitionRequirement={onAddRecognitionRequirement}
         onDeleteRecognitionRequirement={onDeleteRecognitionRequirement}
       />
-
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {displaySemesters.map((semester) => {
-          const semesterCredits = semester.courses.reduce((sum, course) => (
-            sum + (course.category === 'pe' ? 0 : course.credits)
-          ), 0);
-          return (
-            <div key={semester.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">{semester.name}</h2>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {semester.courses.length} 門課 · {formatCredits(semesterCredits)} 學分
-                  </p>
-                  {semester.plannedSourceLabel && (
-                    <p className="mt-1 text-xs font-medium text-blue-600">
-                      含 {semester.plannedSourceLabel} 的未來規劃
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2 p-4">
-                {semester.courses.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-                    尚未有修課或未來規劃資料。
-                  </div>
-                ) : (
-                  semester.courses.map((course) => (
-                    <TimelineCourseCard
-                      key={course.id}
-                      course={course}
-                      recognitionLabel={course.sourceRequirementId ? requirementById.get(course.sourceRequirementId)?.title : undefined}
-                      onOpen={() => onOpenCourseDetail(semester.id, semester.name, course)}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </section>
     </div>
   );
-}
-
-function plannedSemesterNameFromLabel(label: string | undefined): string | null {
-  const matched = label?.match(/推定([^·\s]+)/);
-  return matched?.[1] || null;
 }
 
 function GraduationProgressPanel({ data, stats }: { data: AppData; stats: PlannerStats }) {
@@ -529,107 +423,4 @@ function matchedRecognitionCourses(requirement: PendingRequirement, data: AppDat
   });
 
   return Array.from(labels);
-}
-
-function SummaryBox({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: 'slate' | 'blue' | 'emerald' | 'red' | 'amber';
-}) {
-  const toneClass = {
-    slate: 'border-slate-200 bg-slate-50 text-slate-700',
-    blue: 'border-blue-200 bg-blue-50 text-blue-700',
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    red: 'border-red-200 bg-red-50 text-red-700',
-    amber: 'border-amber-200 bg-amber-50 text-amber-700',
-  }[tone];
-
-  return (
-    <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
-      <p className="text-xs font-medium opacity-80">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
-    </div>
-  );
-}
-
-function TimelineCourseCard({
-  course,
-  recognitionLabel,
-  onOpen,
-}: {
-  course: Course;
-  recognitionLabel?: string;
-  onOpen: () => void;
-}) {
-  const isHistory = isHistoryImportedCourse(course);
-  const isFailed = isFailedImportedHistoryCourse(course);
-  const isRejected = course.virtualSelection?.status === 'rejected';
-  // 校務同步寫入、還沒有成績的課＝正在修；未來規劃是本地加的，帶 virtualSelection
-  const isInProgress = !isHistory && !course.virtualSelection;
-  const slots = course.scheduledOffering?.slots || [];
-  const teacher = course.scheduledOffering?.teacher || course.details?.professor || '未列教師';
-  const location = displayClassroom(course.scheduledOffering?.classroom || course.details?.location);
-  const toneClass = isFailed
-    ? 'border-red-200 bg-red-50 hover:bg-red-100'
-    : isHistory
-      ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
-      : isInProgress
-        ? 'border-sky-200 bg-sky-50 hover:bg-sky-100'
-        : isRejected
-          ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
-          : 'border-blue-200 bg-blue-50 hover:bg-blue-100';
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`w-full rounded-md border p-3 text-left transition-colors ${toneClass}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-slate-900">{course.name}</h3>
-            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-              {CATEGORY_LABELS[course.category]}
-            </span>
-            {course.program && course.program !== 'home' && !recognitionLabel && (
-              <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                {PROGRAM_LABELS[course.program]}
-              </span>
-            )}
-            {isHistory && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isFailed ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                {isFailed ? '未通過' : '歷史修課'}
-              </span>
-            )}
-            {recognitionLabel && course.program && course.program !== 'home' && (
-              <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                {PROGRAM_LABELS[course.program]}・{recognitionLabel}
-              </span>
-            )}
-            {!isHistory && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                isInProgress ? 'bg-sky-100 text-sky-700' : isRejected ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-              }`}>
-                {isInProgress ? '修課中' : isRejected ? '待加簽' : '未來規劃'}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-slate-600">
-            {formatCredits(course.credits)} 學分
-            {course.grade ? `・成績 ${course.grade}` : ''}
-            {teacher ? `・${teacher}` : ''}
-          </p>
-          <p className="mt-1 truncate text-xs text-slate-500">
-            {slots.length > 0 ? `${displaySlots(slots)}・${location}` : location}
-          </p>
-        </div>
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-      </div>
-    </button>
-  );
 }

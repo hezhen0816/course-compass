@@ -2,7 +2,7 @@ import React from 'react';
 import { GraduationCap, LogOut, CircleHelp, BookOpen } from 'lucide-react';
 import { supabase } from '../shared/supabase';
 
-export type AppPage = 'semester' | 'course-search' | 'planning' | 'monitor' | 'history' | 'settings';
+export type AppPage = 'semester' | 'course-search' | 'planning' | 'monitor' | 'record' | 'thresholds' | 'settings';
 
 interface NavbarProps {
   userEmail: string;
@@ -40,7 +40,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     { page: 'course-search', label: '課程查詢' },
     { page: 'planning', label: `選課工作台 ${pendingCount}` },
     { page: 'monitor', label: '選課監控' },
-    { page: 'history', label: '修課軌跡 / 畢業進度' },
+    { page: 'record', label: '修課紀錄' },
+    { page: 'thresholds', label: '畢業門檻' },
     { page: 'settings', label: '設定' },
   ];
 
@@ -93,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div className="grid grid-cols-3 items-center gap-1 sm:flex sm:w-auto">
               <button
-                onClick={() => alert('平台分成課程查詢、選課工作台、修課軌跡與設定。修課軌跡整合歷史修課、未來規劃與畢業進度；選課工作台只輔助目前選課學期，不會自動搶課。')}
+                onClick={() => alert('本學期看這週的課表與還沒定的事；課程查詢找課；選課工作台輔助目前選課學期，不會自動搶課；選課監控盯名額；修課紀錄看八個學期的課；畢業門檻看各項進度與雙主修／輔系認列規則；設定放同步、帳號與門檻數字。')}
                 className="flex items-center justify-center rounded-lg p-2 text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 title="匯入說明"
               >
