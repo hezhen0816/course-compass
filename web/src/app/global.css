@@ -1,5 +1,31 @@
 @import "tailwindcss";
 
+/* 新版設計語言：製圖紙底＋墨色字，朱批紅只給「現在」與擋路的東西。
+   舊頁面仍用既有的藍灰樣式，兩者共存到全部移植完為止。 */
+@theme {
+  --font-sans: "Noto Sans TC", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-paper: #E9ECE6;
+  --color-sheet: #FAFBF8;
+  --color-band: #DFE4DA;
+  --color-ink: #171C19;
+  --color-ink-2: #5C6763;
+  --color-ink-3: #8A938D;
+  --color-rule: #CDD4C9;
+  --color-mark: #B23A2C;
+  --color-mark-soft: #F0DCD6;
+  --color-good: #2C6E63;
+
+  /* 課程類別各一個墨色，同明度，不搶朱批紅 */
+  --color-cat-major: #1F5566;    /* 本系必修 */
+  --color-cat-double: #5B4C82;   /* 雙主修 */
+  --color-cat-minor: #3F5E8C;    /* 輔系 */
+  --color-cat-gened: #6E5A2E;    /* 通識 */
+  --color-cat-pe: #2C6E63;       /* 體育 */
+  --color-cat-elective: #566268; /* 選修 */
+}
+
 html,
 body,
 #root {

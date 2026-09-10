@@ -2,7 +2,7 @@ import React from 'react';
 import { GraduationCap, LogOut, CircleHelp, BookOpen } from 'lucide-react';
 import { supabase } from '../shared/supabase';
 
-export type AppPage = 'course-search' | 'planning' | 'monitor' | 'history' | 'settings';
+export type AppPage = 'semester' | 'course-search' | 'planning' | 'monitor' | 'history' | 'settings';
 
 interface NavbarProps {
   userEmail: string;
@@ -36,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const navItems: Array<{ page: AppPage; label: string }> = [
+    { page: 'semester', label: '本學期' },
     { page: 'course-search', label: '課程查詢' },
     { page: 'planning', label: `選課工作台 ${pendingCount}` },
     { page: 'monitor', label: '選課監控' },

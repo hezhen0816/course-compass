@@ -26,6 +26,7 @@ import { CourseTimelinePage } from '../features/history/CourseTimelinePage';
 import { PlanningWorkspace } from '../features/planning/PlanningWorkspace';
 import { usePlannerStats } from '../features/planning/usePlannerStats';
 import { useSchoolSync } from '../features/school-sync/useSchoolSync';
+import { SemesterPage } from '../features/semester/SemesterPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { MonitorPage } from '../features/monitor/MonitorPage';
 import MonitorSettingsView from '../features/monitor/MonitorSettingsView';
@@ -942,6 +943,14 @@ export default function CoursePlannerWebApp() {
             onRemoveOfficialCourse={(courseNo, courseName) => void submitOfficialSelectionCourse('remove', courseNo, courseName)}
             onSaveOfficialOrder={(orderedCourseNos) => void saveOfficialSelectionOrder(orderedCourseNos)}
             onDeleteCourse={deleteSelectionCourse}
+          />
+        )}
+
+        {activePage === 'semester' && (
+          <SemesterPage
+            data={data}
+            onGoToCourseSearch={() => setActivePage('course-search')}
+            onGoToPlanning={() => setActivePage('planning')}
           />
         )}
 
