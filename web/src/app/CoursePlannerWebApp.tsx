@@ -118,6 +118,8 @@ function scrollToWhenReady(id: string, retries = 40, intervalMs = 50) {
   window.setTimeout(tick, 0);
 }
 
+const NEW_DESIGN_PAGES: AppPage[] = ['semester', 'record', 'thresholds'];
+
 const PAGE_HASHES: AppPage[] = ['semester', 'course-search', 'planning', 'monitor', 'record', 'thresholds', 'settings'];
 
 /** 分頁與網址同步：拆成多頁後來回切換變頻繁，重新整理或上一頁不該掉回預設頁。 */
@@ -890,8 +892,11 @@ export default function CoursePlannerWebApp() {
     return <AuthPage onDemoLogin={() => setIsDemoMode(true)} />;
   }
 
+  // 已移植到新設計的頁面換成製圖紙底，sheet 卡片才浮得出來；還沒移植的頁面留原本的藍灰。
+  const onNewDesign = NEW_DESIGN_PAGES.includes(activePage);
+
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`min-h-screen ${onNewDesign ? 'bg-paper text-ink' : 'bg-slate-50'}`}>
       <Navbar
         userEmail={session?.user?.email || '略過登入'}
         syncStatus={session ? syncStatus : 'idle'}

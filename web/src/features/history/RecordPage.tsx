@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import type { AppData, Course } from '../../shared/types';
+import type { AppData, Course, CourseCategory, CourseProgram } from '../../shared/types';
 import { CATEGORY_LABELS, PROGRAM_LABELS } from '../../shared/constants';
 import {
   displayClassroom,
@@ -66,21 +66,23 @@ export function RecordPage({ data, onOpenCourseDetail }: RecordPageProps) {
   ), 0);
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">修課紀錄</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-950">歷年、修課中與未來規劃</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          這裡集中查看已修、修課中、未通過與從課程查詢加入的未來規劃；未來規劃只代表草稿或待加簽，不代表已選上。
-          畢業門檻與雙主修／輔系認列規則移到「畢業門檻」頁。
-        </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-5">
-          <SummaryBox label="總課程" value={`${totalCourses} 門`} tone="slate" />
-          <SummaryBox label="歷史匯入" value={`${historyCount} 門`} tone="blue" />
-          <SummaryBox label="修課中" value={`${inProgressCount} 門`} tone="emerald" />
-          <SummaryBox label="未來規劃" value={`${plannedCount} 門`} tone="amber" />
-          <SummaryBox label="未通過" value={`${failedCount} 門`} tone={failedCount > 0 ? 'red' : 'emerald'} />
+    <div className="space-y-5">
+      <section className="grid gap-x-8 gap-y-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+        <div>
+          <p className="font-mono text-[11px] tracking-[.14em] text-ink-2">修課紀錄</p>
+          <h1 className="mt-0.5 text-[19px] font-bold">歷年、修課中與未來規劃</h1>
+          <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-ink-2">
+            已修、修課中、未通過與從課程查詢加入的未來規劃都在這裡；未來規劃只代表草稿或待加簽，不代表已選上。
+            畢業門檻與雙主修／輔系認列規則在「畢業門檻」頁。
+          </p>
         </div>
+        <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          <Stat label="總課程" value={totalCourses} />
+          <Stat label="歷史匯入" value={historyCount} />
+          <Stat label="修課中" value={inProgressCount} />
+          <Stat label="未來規劃" value={plannedCount} />
+          <Stat label="未通過" value={failedCount} tone={failedCount > 0 ? 'mark' : 'good'} />
+        </dl>
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -88,38 +90,42 @@ export function RecordPage({ data, onOpenCourseDetail }: RecordPageProps) {
           const semesterCredits = semester.courses.reduce((sum, course) => (
             sum + (course.category === 'pe' ? 0 : course.credits)
           ), 0);
+          const semesterFailed = semester.courses.filter(isFailedImportedHistoryCourse).length;
           return (
-            <div key={semester.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">{semester.name}</h2>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {semester.courses.length} 門課 · {formatCredits(semesterCredits)} 學分
+            <section key={semester.id} className="overflow-hidden rounded-lg border border-rule bg-sheet">
+              <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule px-4 py-3">
+                <h2 className="text-[15px] font-bold">{semester.name}</h2>
+                <p className="font-mono text-[11px] tracking-wide tabular-nums text-ink-2">
+                  {semester.courses.length} 門課・{formatCredits(semesterCredits)} 學分
+                </p>
+                {(semester.plannedSourceLabel || semesterFailed > 0) && (
+                  <p className="basis-full font-mono text-[11px] tracking-wide">
+                    {semesterFailed > 0 && <span className="tabular-nums text-mark">{semesterFailed} 門未通過</span>}
+                    {semesterFailed > 0 && semester.plannedSourceLabel && <span className="text-ink-2">{'　'}</span>}
+                    {semester.plannedSourceLabel && (
+                      <span className="text-ink-2">含 {semester.plannedSourceLabel} 的未來規劃</span>
+                    )}
                   </p>
-                  {semester.plannedSourceLabel && (
-                    <p className="mt-1 text-xs font-medium text-blue-600">
-                      含 {semester.plannedSourceLabel} 的未來規劃
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2 p-4">
-                {semester.courses.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-                    尚未有修課或未來規劃資料。
-                  </div>
-                ) : (
-                  semester.courses.map((course) => (
-                    <TimelineCourseCard
-                      key={course.id}
-                      course={course}
-                      recognitionLabel={course.sourceRequirementId ? requirementById.get(course.sourceRequirementId)?.title : undefined}
-                      onOpen={() => onOpenCourseDetail(semester.id, semester.name, course)}
-                    />
-                  ))
                 )}
-              </div>
-            </div>
+              </header>
+              {semester.courses.length === 0 ? (
+                <p className="m-4 rounded-sm border border-dashed border-rule px-4 py-6 text-center text-[13px] text-ink-2">
+                  尚未有修課或未來規劃資料。
+                </p>
+              ) : (
+                <ul className="flex flex-col">
+                  {semester.courses.map((course) => (
+                    <li key={course.id} className="border-t border-rule first:border-t-0">
+                      <TimelineCourseCard
+                        course={course}
+                        recognitionLabel={course.sourceRequirementId ? requirementById.get(course.sourceRequirementId)?.title : undefined}
+                        onOpen={() => onOpenCourseDetail(semester.id, semester.name, course)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           );
         })}
       </section>
@@ -132,30 +138,37 @@ function plannedSemesterNameFromLabel(label: string | undefined): string | null 
   return matched?.[1] || null;
 }
 
-function SummaryBox({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: 'slate' | 'blue' | 'emerald' | 'red' | 'amber';
-}) {
-  const toneClass = {
-    slate: 'border-slate-200 bg-slate-50 text-slate-700',
-    blue: 'border-blue-200 bg-blue-50 text-blue-700',
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    red: 'border-red-200 bg-red-50 text-red-700',
-    amber: 'border-amber-200 bg-amber-50 text-amber-700',
-  }[tone];
-
+function Stat({ label, value, tone }: { label: string; value: number; tone?: 'mark' | 'good' }) {
   return (
-    <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
-      <p className="text-xs font-medium opacity-80">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    <div>
+      <dt className="font-mono text-[11px] tracking-wide text-ink-2">{label}</dt>
+      <dd className={`font-mono text-[21px] font-semibold tabular-nums ${
+        tone === 'mark' ? 'text-mark' : tone === 'good' ? 'text-good' : 'text-ink'
+      }`}>
+        {value}
+        <span className="ml-0.5 text-[11px] font-normal text-ink-2">門</span>
+      </dd>
     </div>
   );
 }
+
+/** 課卡左緣的墨色跟著畫面上顯示的類別走，同一列的字與顏色才不會各說各話。 */
+const CATEGORY_INK: Record<CourseCategory, string> = {
+  compulsory: 'var(--color-cat-major)',
+  elective: 'var(--color-cat-elective)',
+  chinese: 'var(--color-cat-gened)',
+  english: 'var(--color-cat-gened)',
+  gen_ed: 'var(--color-cat-gened)',
+  pe: 'var(--color-cat-pe)',
+  social: 'var(--color-cat-pe)',
+  other: 'var(--color-cat-elective)',
+  unclassified: 'var(--color-cat-elective)',
+};
+
+const PROGRAM_INK: Partial<Record<CourseProgram, string>> = {
+  double_major: 'var(--color-cat-double)',
+  minor: 'var(--color-cat-minor)',
+};
 
 function TimelineCourseCard({
   course,
@@ -174,63 +187,55 @@ function TimelineCourseCard({
   const slots = course.scheduledOffering?.slots || [];
   const teacher = course.scheduledOffering?.teacher || course.details?.professor || '未列教師';
   const location = displayClassroom(course.scheduledOffering?.classroom || course.details?.location);
-  const toneClass = isFailed
-    ? 'border-red-200 bg-red-50 hover:bg-red-100'
+  const ink = isFailed
+    ? 'var(--color-mark)'
+    : (course.program && PROGRAM_INK[course.program]) || CATEGORY_INK[course.category];
+  const status = isFailed
+    ? { label: '未通過', className: 'text-mark' }
     : isHistory
-      ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
+      ? { label: '歷史修課', className: 'text-ink-3' }
       : isInProgress
-        ? 'border-sky-200 bg-sky-50 hover:bg-sky-100'
+        ? { label: '修課中', className: 'text-good' }
         : isRejected
-          ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
-          : 'border-blue-200 bg-blue-50 hover:bg-blue-100';
+          ? { label: '待加簽', className: 'text-mark' }
+          : { label: '未來規劃', className: 'text-ink-2' };
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className={`w-full rounded-md border p-3 text-left transition-colors ${toneClass}`}
+      style={{ borderLeftColor: ink }}
+      className={`flex w-full items-start gap-3 border-l-[3px] px-4 py-2.5 text-left transition-colors hover:bg-paper focus-visible:[outline-offset:-3px] ${
+        isFailed ? 'bg-mark/[.06]' : ''
+      }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-slate-900">{course.name}</h3>
-            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-              {CATEGORY_LABELS[course.category]}
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <b className="truncate text-sm font-medium">{course.name}</b>
+          {/* 認列歸屬得自己換行，塞進下面那條 truncate 的話長名稱會被切掉 */}
+          {course.program && course.program !== 'home' && (
+            <span className="rounded-sm bg-band px-1.5 py-0.5 font-mono text-[10px] text-ink-2">
+              {recognitionLabel
+                ? `${PROGRAM_LABELS[course.program]}・${recognitionLabel}`
+                : PROGRAM_LABELS[course.program]}
             </span>
-            {course.program && course.program !== 'home' && !recognitionLabel && (
-              <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                {PROGRAM_LABELS[course.program]}
-              </span>
-            )}
-            {isHistory && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isFailed ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                {isFailed ? '未通過' : '歷史修課'}
-              </span>
-            )}
-            {recognitionLabel && course.program && course.program !== 'home' && (
-              <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                {PROGRAM_LABELS[course.program]}・{recognitionLabel}
-              </span>
-            )}
-            {!isHistory && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                isInProgress ? 'bg-sky-100 text-sky-700' : isRejected ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-              }`}>
-                {isInProgress ? '修課中' : isRejected ? '待加簽' : '未來規劃'}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-slate-600">
-            {formatCredits(course.credits)} 學分
-            {course.grade ? `・成績 ${course.grade}` : ''}
-            {teacher ? `・${teacher}` : ''}
-          </p>
-          <p className="mt-1 truncate text-xs text-slate-500">
-            {slots.length > 0 ? `${displaySlots(slots)}・${location}` : location}
-          </p>
-        </div>
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-      </div>
+          )}
+        </span>
+        <span className="mt-0.5 block font-mono text-[11px] tracking-wide tabular-nums text-ink-2">
+          {CATEGORY_LABELS[course.category]}
+          {'・'}
+          {formatCredits(course.credits)} 學分
+          {course.grade ? `・成績 ${course.grade}` : ''}
+          {teacher ? `・${teacher}` : ''}
+        </span>
+        <span className="block truncate font-mono text-[11px] text-ink-2">
+          {slots.length > 0 ? `${displaySlots(slots)}・${location}` : location}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5">
+        <span className={`font-mono text-[11px] tracking-wide ${status.className}`}>{status.label}</span>
+        <Info className="h-3.5 w-3.5 text-ink-3" aria-hidden />
+      </span>
     </button>
   );
 }
