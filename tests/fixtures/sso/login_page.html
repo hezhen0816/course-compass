@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><title>測試登入</title></head>
+<body>
+  <form method="POST" action="/">
+    <input type="hidden" name="__RequestVerificationToken" value="TEST_TOKEN">
+    <label>帳號 <input name="Username" autocomplete="username"></label>
+    <label>密碼 <input type="password" name="Password" autocomplete="current-password"></label>
+    <div style="display: none">
+      <input type="hidden" name="cf-turnstile-response" value="">
+    </div>
+    <button type="submit">登入</button>
+  </form>
+</body>
+</html>

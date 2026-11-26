@@ -1,0 +1,45 @@
+# Local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.xcconfig.local
+*.pem
+*.p8
+
+# Web / Node.js
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+.vercel/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Xcode
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+
+# Local data, logs and editor state
+logs/
+*.log
+/config/
+/debug_responses/
+/personal/
+.DS_Store
+.idea/
+.vscode/
