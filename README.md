@@ -4,6 +4,10 @@ Course Compass is an unofficial NTUST course and credit planner with a React web
 
 修課羅盤用來規劃國立臺灣科技大學（台科大）的課表、學分與畢業門檻。校務整合會在使用者操作時，代表使用者存取台科大系統。本專案由個人開發，與台科大無隸屬或合作關係。
 
+
+<p align="center"><img src="docs/images/thresholds.webp" width="720" alt="畢業門檻頁：國文、英文、通識等共同門檻的進度條、總學分與匯入的應修科目表"></p>
+<p align="center"><sub>畢業門檻頁（範例資料）</sub></p>
+
 ## 功能
 
 - Web 可搜尋課程、編排單學期與多學期課表、檢查時段衝突與學分進度，並匯入支援格式的應修科目表 PDF。
